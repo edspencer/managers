@@ -302,9 +302,8 @@ export function today(): string {
 /**
  * Minimal seed for a per-project CLAUDE.md (issue #177): the durable-identity
  * layer of the two-level native-context model (instance-wide + per-project
- * CLAUDE.md, loaded natively once #176 lands). Deliberately terse — the sweeper
- * amends it conservatively over time under "Curated notes"; everything a human
- * writes is preserved. OVERVIEW.md holds current state, CHANGELOG.md holds
+ * CLAUDE.md, loaded natively once #176 lands). Deliberately terse. Managers M3:
+ * the sweeper never writes it — it is entirely the human's. OVERVIEW.md holds current state, CHANGELOG.md holds
  * history; this file holds only what the project durably IS and how we work on it.
  */
 export function claudeTemplate(name: string, summary: string): string {
@@ -316,9 +315,8 @@ export function claudeTemplate(name: string, summary: string): string {
     "<!--",
     "Durable project identity & conventions — what this project fundamentally is,",
     "key long-lived facts, and how we work on it. Changes rarely. Current state",
-    "lives in OVERVIEW.md; per-turn history lives in CHANGELOG.md. Content you",
-    "write here is preserved; the curator only APPENDS newly-discovered durable",
-    'facts under the "Curated notes" heading below.',
+    "lives in OVERVIEW.md; per-turn history lives in CHANGELOG.md, both kept by",
+    "the curator. This file is yours: Managers never rewrites it.",
     "-->",
     "",
   ].join("\n");
