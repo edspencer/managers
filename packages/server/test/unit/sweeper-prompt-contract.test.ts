@@ -44,7 +44,7 @@ describe("sweeper system_prompt ↔ writer contract (#480)", () => {
 
   it("tells the model the CHANGELOG it returns replaces the whole file", () => {
     const p = systemPrompt();
-    const changelog = p.slice(p.indexOf("<<<CHANGELOG>>>"), p.indexOf("<<<CLAUDE>>>"));
+    const changelog = p.slice(p.indexOf("<<<CHANGELOG>>>"), p.indexOf("<<<END>>>"));
     expect(changelog).toMatch(/full markdown CHANGELOG\.md/i);
     expect(changelog).toMatch(/REPLACES the current one wholesale/i);
     // Existing history must be preserved — the failure mode was losing it.
@@ -52,26 +52,21 @@ describe("sweeper system_prompt ↔ writer contract (#480)", () => {
     expect(changelog).toMatch(/NOCHANGE/);
   });
 
-  it("describes CLAUDE.md as a wholesale section replace, not amend-only", () => {
+  // Managers M3: the sweeper no longer curates CLAUDE.md at all.
+  it("never asks for a CLAUDE section, nor mentions a Curated notes section", () => {
     const p = systemPrompt();
-    const claude = p.slice(p.indexOf("<<<CLAUDE>>>"), p.indexOf("<<<END>>>"));
-    // `writeClaudeMd` replaces the managed `## Curated notes` section, so an
-    // "amend-only / never rewrite existing content" instruction is now false.
-    expect(claude).not.toMatch(/amend-only/i);
-    expect(claude).not.toMatch(/never rewrite existing content/i);
-    expect(claude).not.toMatch(/to APPEND to CLAUDE\.md/i);
-    expect(claude).toMatch(/REPLACES that managed section/i);
-    expect(claude).toMatch(/DEDUP/);
+    expect(p).not.toContain("<<<CLAUDE>>>");
+    expect(p).not.toMatch(/Curated notes/i);
+    expect(String(buildSweeperConfig(cfg, project).default_prompt)).not.toMatch(/CLAUDE\.md/);
   });
 
   it("promises the same number of sections it actually emits", () => {
     const p = systemPrompt();
-    const markers = ["<<<OVERVIEW>>>", "<<<CHANGELOG>>>", "<<<CLAUDE>>>"];
+    const markers = ["<<<OVERVIEW>>>", "<<<CHANGELOG>>>"];
     for (const m of markers) expect(p).toContain(m);
     expect(p).toContain("<<<END>>>");
-    // The stale prompt said "the two sections" while emitting three.
-    expect(p).toMatch(/ONLY the three sections/i);
-    expect(p).not.toMatch(/ONLY the two sections/i);
+    expect(p).toMatch(/ONLY the two sections/i);
+    expect(p).not.toMatch(/ONLY the three sections/i);
   });
 
   it("keeps the sweeper tool-less, so the writer stays the only file mutator", () => {
@@ -111,7 +106,6 @@ describe("curation prompt ↔ adoption filter (#658)", () => {
       project: { slug: "demo", name: "Demo", summary: "", ...over } as unknown as Project,
       overview: "# Overview",
       changelog: "# Changelog",
-      claudeMd: "# CLAUDE",
       digest: "some recent activity",
       extraInstructions: "",
       budget: DEFAULT_CURATION,

@@ -9,6 +9,7 @@
  * This is a testability seam only — the wiring is identical to the prior inline
  * bootstrap; no behavior changed.
  */
+import { describeRetentionOverrides, findRetentionOverrides } from "./managers/claude-overlay.js";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
@@ -290,6 +291,18 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
 
   const rootWorkspace = await projects.get(ROOT_KEY);
   const initialProjects = [...(await projects.list()), rootWorkspace];
+  // Managers M3: a project-level `.claude/settings.json` outranks the retention
+  // overlay in the Claude home's settings.json, and cleanup is global — so one
+  // small `cleanupPeriodDays` anywhere shortens retention for everyone. Say so.
+  const retentionOverrides = await findRetentionOverrides(
+    initialProjects.flatMap((p) => [p.dir, p.workingDir]),
+  );
+  if (retentionOverrides.length > 0) {
+    app.log.warn(
+      { retentionOverrides: retentionOverrides.length },
+      describeRetentionOverrides(retentionOverrides),
+    );
+  }
   try {
     await herdctl.init(initialProjects);
     await herdctl.start();

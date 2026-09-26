@@ -66,7 +66,7 @@ import { sweeperWorkingDir } from "../herdctl-agent-config.js";
 import { quiesceProject, turnRunningError } from "../turn-interlock.js";
 import {
   buildMigrationPlan,
-  probeMigration,
+  type MigrationProbe,
   resetMigrationProbeCache,
   TRANSCRIPTS_ENV_VAR,
   type MigrationInput,
@@ -297,6 +297,26 @@ export function resetMigrationSingleFlight(): void {
 /** Same guard as `readFirstUserText`: a session id must stay inside `.chats/`. */
 const SAFE_SESSION_ID = /^[A-Za-z0-9._-]+$/;
 
+/**
+ * Managers M3: the own → host transcript migration (#882) is switched off. Its
+ * commit point writes `claude.transcripts: host`, which `config.ts` now refuses
+ * at load. The code stays (upstream reference, and so a later sync applies);
+ * the routes refuse before reaching it.
+ */
+const MIGRATION_NOT_SUPPORTED = true;
+
+function MIGRATION_NOT_SUPPORTED_PROBE(mode: MigrationProbe["mode"]): MigrationProbe {
+  return {
+    mode,
+    eligible: false,
+    reason: "not-supported",
+    pendingChats: 0,
+    pendingProjects: 0,
+    scannedProjects: 0,
+    computedAt: new Date().toISOString(),
+  };
+}
+
 export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): void {
   const { cfg, projects, herdctl } = ctx;
 
@@ -364,6 +384,7 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
               reason: {
                 type: "string",
                 enum: [
+                  "not-supported",
                   "already-host",
                   "env-shadowed",
                   "profile-paranoid",
@@ -394,7 +415,10 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
         },
       },
     },
-    async () => probeMigration(await input()),
+    // Managers M3: the own → host migration is not supported — `transcripts:
+    // host` is refused at config load, so the config this would write could not
+    // boot. The probe says so first and never scans.
+    async () => MIGRATION_NOT_SUPPORTED_PROBE(cfg.claude.transcripts),
   );
 
   app.get<{ Querystring: { slug?: string } }>(
@@ -693,7 +717,7 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
             required: ["error", "code"],
             properties: {
               error: { type: "string" },
-              code: { type: "string", enum: ["env_shadowed", "invalid"] },
+              code: { type: "string", enum: ["not_supported", "env_shadowed", "invalid"] },
               envVar: { type: "string" },
             },
           },
@@ -725,6 +749,16 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
       },
     },
     async (req, reply) => {
+      // STEP 0 (Managers M3) — refused outright, before any lock or scan: the
+      // commit point writes `claude.transcripts: host`, which Managers refuses to
+      // boot with, so a "successful" run would brick the next start.
+      if (MIGRATION_NOT_SUPPORTED) {
+        return reply.code(400).send({
+          error:
+            "Managers does not support moving transcripts into ~/.claude (claude.transcripts: host). They stay in Managers' own Claude home, where they never expire. Nothing was moved.",
+          code: "not_supported",
+        });
+      }
       // STEP 1 — single-flight. Checked and armed with no `await` between, so
       // two simultaneous requests cannot both pass.
       if (migrationInFlight !== null) {

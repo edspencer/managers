@@ -44,6 +44,21 @@ import {
   KEEPER_MAX_CONCURRENT,
   KEEPER_SESSION_TIMEOUT,
 } from "./herdctl-agent-names.js";
+import { MANAGERS_SETTING_SOURCES } from "./managers/claude-overlay.js";
+
+/**
+ * Managers M3: every agent (keeper, trigger, sweeper) loads the `user` setting
+ * source as well as `project`, so the Managers-generated
+ * `<claudeHome>/settings.json` — the retention/auto-memory overlay — is read on
+ * every runtime path. herdctl's `toSDKOptions` honours `agent.setting_sources`
+ * for the SDK runtime (batch AND `openChatSession`/session drive mode, which
+ * builds its options through the same `SDKRuntime.buildSdkOptions`), and the CLI
+ * runtime passes it as `--setting-sources`. Without it the SDK path defaults to
+ * `["project"]` and the CLI path to all sources. See `managers/claude-overlay.ts`.
+ */
+function settingSources(): ("user" | "project")[] {
+  return [...MANAGERS_SETTING_SOURCES];
+}
 
 
 /**
@@ -117,15 +132,15 @@ export function buildAgentConfig(
     // Allow parallel chats per project (forks, and just multiple open chats)
     // instead of herdctl's serialize-by-default max_concurrent: 1.
     instances: { max_concurrent: KEEPER_MAX_CONCURRENT },
-    // Session retention (Paddock#111): keep an agent-level session alive long
-    // enough that a scheduler-fired wake can still resume its transcript. Note
-    // Paddock always resumes by EXPLICIT session id, which bypasses this
-    // timeout — and the transcript itself is governed by Claude Code's
-    // `cleanupPeriodDays` (default 30d, adequate for realistic wake horizons;
-    // set out-of-band via .claude/settings.json if longer horizons are needed).
-    // So this is defense-in-depth for the fallback-resume path, sized to the
-    // reaper's 7-day recurring-wake expiry.
+    // herdctl's agent-level session pointer (Paddock#111): how long a
+    // scheduler-fired wake may fall back to resuming the agent's LAST session.
+    // Paddock always resumes by EXPLICIT session id, which bypasses this, so it
+    // is defense-in-depth sized to the reaper's 7-day recurring-wake expiry. It
+    // has nothing to do with whether the transcript FILE survives: that is
+    // Claude Code's `cleanupPeriodDays`, which Managers pins to ~100 years in
+    // its own settings.json and loads via `setting_sources` below (M3).
     session: { timeout: KEEPER_SESSION_TIMEOUT },
+    setting_sources: settingSources(),
     default_prompt: "Summarize the current state of this project.",
   };
   // Docker isolation: only set it when the project opts in, so a project that
@@ -232,8 +247,9 @@ export function sweeperWorkingDir(cfg: PaddockConfig, slug: string): string {
  * A project's sweeper (curator) agent config. TOOL-LESS BY DESIGN: it declares
  * `allowed_tools: []` and never reads or writes files. Instead it RETURNS the
  * curated content as plain assistant text in marked sections (OVERVIEW /
- * CHANGELOG / optional CLAUDE, issue #177); SweepService parses that text and
- * writes OVERVIEW.md / CHANGELOG.md / CLAUDE.md itself.
+ * CHANGELOG); SweepService parses that text and writes OVERVIEW.md /
+ * CHANGELOG.md itself. Managers M3: it no longer curates CLAUDE.md at all —
+ * that file is Ed's (and, in M7+, the manager protocol's), never the curator's.
  *
  * This is cheaper and far more predictable than letting a Haiku agent drive
  * file edits: no tool-loop turns, no partial writes, no permission_mode /
@@ -272,6 +288,9 @@ export function buildSweeperConfig(
     // A handful of turns is plenty since there are no tool loops — and this, not
     // the empty allow-list below, is one of the things actually bounding the run.
     max_turns: 4,
+    // The sweeper is a `claude -p` too, and cleanup runs at the start of ANY
+    // claude process: it must load the retention overlay like everyone else.
+    setting_sources: settingSources(),
     // Declares NO tools: the sweeper returns text only; SweepService does the
     // writing. Note herdctl does not emit an empty allow-list at all, so this
     // restricts nothing on its own (#647) — see the doc comment above for the
@@ -279,10 +298,9 @@ export function buildSweeperConfig(
     allowed_tools: [],
     system_prompt:
       "You are a concise project curator. You DO NOT use any tools — you only " +
-      "return text. From the recent activity, the current OVERVIEW.md, the " +
-      "recent CHANGELOG.md, and the current CLAUDE.md provided in the user " +
-      "message, produce these three sections wrapped in these literal markers, " +
-      "and NOTHING else:\n" +
+      "return text. From the recent activity, the current OVERVIEW.md and the " +
+      "recent CHANGELOG.md provided in the user message, produce these two " +
+      "sections wrapped in these literal markers, and NOTHING else:\n" +
       "\n" +
       "<<<OVERVIEW>>>\n" +
       "<the full markdown OVERVIEW.md, which REPLACES the current one wholesale: " +
@@ -298,15 +316,6 @@ export function buildSweeperConfig(
       "the ENTIRE file, so never emit a bare sentence or a lone bullet here — that " +
       "would destroy the file's history. If this activity is already captured by a " +
       "recent entry, output exactly NOCHANGE and change nothing.>\n" +
-      "<<<CLAUDE>>>\n" +
-      "<the full curated-notes body for CLAUDE.md — everything that belongs under " +
-      "the `## Curated notes` heading — which REPLACES that managed section " +
-      "wholesale (human-authored content above it is preserved for you). ONLY " +
-      "long-lived identity/conventions: what the project fundamentally is, key " +
-      "decisions, how we work on it. You are shown the whole current file, so " +
-      "DEDUP — fold near-duplicate notes into one and drop stale ones. Never " +
-      "restate current state/tasks/history (those are OVERVIEW/CHANGELOG). If " +
-      "nothing durable changed, output exactly NOCHANGE.>\n" +
       "<<<END>>>\n" +
       "\n" +
       "OVERVIEW.md describes the PROJECT, not the box it runs on: never record " +
@@ -316,9 +325,9 @@ export function buildSweeperConfig(
       "re-described or contradicted here.\n" +
       "\n" +
       "Be factual and terse. Do not invent details not present in the provided " +
-      "activity. Output ONLY the three sections between the markers — no preamble, " +
+      "activity. Output ONLY the two sections between the markers — no preamble, " +
       "no explanation, no tool use.",
-    default_prompt: "Curate OVERVIEW.md, CHANGELOG.md and CLAUDE.md from recent activity.",
+    default_prompt: "Curate OVERVIEW.md and CHANGELOG.md from recent activity.",
   };
 }
 
@@ -355,6 +364,7 @@ export function buildTriggerConfig(
     model: trigger.run.model ?? project.model ?? DEFAULT_MODEL,
     // run → tool config (allowed tools, permission mode, model, max_turns).
     ...triggerToAgentToolConfig(trigger.run),
+    setting_sources: settingSources(),
   };
   if (project.docker) config.docker = { enabled: true };
   const browser = browserMcpServers(cfg.browserMcp);

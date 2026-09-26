@@ -96,14 +96,6 @@ describe("integration: claude.credentials decides the runtime's environment (#69
     expect(await childSees()).toBeNull();
   });
 
-  it("is independent of transcripts: sharing one shares nothing of the other", async () => {
-    // The point of splitting the levers (#691). `transcripts: host` used to imply
-    // a shared login and vice versa, because both were the same Claude home.
-    t = await startTestApp({
-      env: { MANAGERS_CLAUDE_TRANSCRIPTS: "host", MANAGERS_CLAUDE_CREDENTIALS: "own" },
-    });
-    expect(t.cfg.claude.transcripts).toBe("host");
-    expect(t.cfg.claude.credentials).toBe("own");
-    expect(await childSees()).toBeNull();
-  });
+  // Managers M3: "independent of transcripts: host" was removed — `host` is
+  // refused at config load, so there is no shared-transcripts case to pair with.
 });

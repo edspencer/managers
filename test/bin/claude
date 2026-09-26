@@ -333,6 +333,7 @@ function parseArgs(argv) {
     permissionMode: undefined,
     allowedTools: undefined,
     mcpConfig: undefined,
+    settingSources: undefined,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -345,7 +346,7 @@ function parseArgs(argv) {
     else if (a === "--allowedTools") flags.allowedTools = argv[++i];
     else if (a === "--disallowedTools") argv[++i];
     else if (a === "--mcp-config") flags.mcpConfig = argv[++i];
-    else if (a === "--setting-sources") argv[++i];
+    else if (a === "--setting-sources") flags.settingSources = argv[++i];
     else if (a === "--tools") argv[++i];
     // Unknown bare flags are ignored.
   }
@@ -462,7 +463,9 @@ function sweeperReply(prompt) {
   const existing = extractPromptSection(
     prompt,
     "=== CURRENT CHANGELOG.md (full) ===",
-    "=== CURRENT CLAUDE.md",
+    // Managers M3 dropped the CLAUDE.md section, so the changelog now runs up to
+    // the task list; older prompts still end at the CLAUDE.md header.
+    prompt.includes("=== CURRENT CLAUDE.md") ? "=== CURRENT CLAUDE.md" : "=== YOUR TASKS ===",
   );
   const priorBody =
     existing && existing !== "(empty)" ? existing.replace(/^#[^\n]*\n+/, "").trim() : "";
@@ -559,6 +562,9 @@ function recordInvocation(flags, prompt) {
         // so a test can observe what herdctl actually puts on the command line
         // rather than infer it from core's source (#691 step 6).
         mcpConfig: flags.mcpConfig ?? null,
+        // Managers M3: the `--setting-sources` value herdctl passed (null when
+        // none), so a test can prove the retention overlay's source is loaded.
+        settingSources: flags.settingSources ?? null,
         // Managers M1: how many inherited PADDOCK_* vars reached this child. The
         // server's boot scrub (env-scrub.ts) should make this 0. A count, never names.
         paddockEnvCount: Object.keys(process.env).filter((k) => k.startsWith("PADDOCK_")).length,

@@ -18,15 +18,14 @@
  *     recursion.
  *
  * The sweeper is TOOL-LESS: it returns the curated content as plain text in
- * marked sections (`<<<OVERVIEW>>> ... <<<CHANGELOG>>> ... <<<CLAUDE>>> ...
- * <<<END>>>`), and THIS service parses that text and writes the files itself.
+ * marked sections (`<<<OVERVIEW>>> ... <<<CHANGELOG>>> ... <<<END>>>`), and THIS service parses that text and writes the files itself.
  * Each section is either a FULL replacement for that file or the literal
  * NOCHANGE (issue #379): the sweeper is shown each file IN FULL (bounded only by
  * a generous per-file TOKEN BUDGET) and maintains it like a human maintainer —
  * regenerating OVERVIEW.md wholesale, rewriting CHANGELOG.md (add a dated entry
  * only for genuinely-new activity, coalesce duplicates, drop the oldest to fit
- * budget), and rewriting the CLAUDE.md "Curated notes" section (dedup against the
- * whole file; human-authored content above the heading is preserved). This
+ * budget). Managers M3: CLAUDE.md is no longer curated or shown — it belongs to
+ * Ed, and a stray `<<<CLAUDE>>>` section in a reply is parsed and ignored. This
  * replaces the old design where the sweeper saw only the first 2000 chars of
  * CHANGELOG/CLAUDE and blind-appended — which grew both files (and the per-chat
  * context they feed) without bound. `SweepService` enforces each budget as a
@@ -290,11 +289,10 @@ export class SweepService {
     sessions: Awaited<ReturnType<HerdctlService["recentSessions"]>>,
     sinceMtime: string | null,
   ): Promise<void> {
-    const [overview, changelog, claudeMd, digest, fileInstructions, triggerInstructions] =
+    const [overview, changelog, digest, fileInstructions, triggerInstructions] =
       await Promise.all([
         this.projects.readOverview(project.slug),
         this.projects.readFile(project.slug, "CHANGELOG.md").catch(() => ""),
-        this.projects.readClaudeMd(project.slug).catch(() => ""),
         this.buildDigest(project, sessions, sinceMtime),
         this.readSweepInstructions(project.slug),
         this.readTriggerInstructions(project),
@@ -315,7 +313,6 @@ export class SweepService {
       project,
       overview,
       changelog,
-      claudeMd,
       digest,
       extraInstructions,
       budget,
@@ -363,27 +360,11 @@ export class SweepService {
       await this.projects.writeChangelog(project.slug, bounded);
     }
 
-    // CLAUDE.md — the sweeper now sees the FULL file and returns the entire
-    // curated-notes body (dedup'd/pruned), which replaces only that managed
-    // section; human-authored content above `## Curated notes` is preserved.
-    // NOCHANGE leaves it untouched. A write failure is non-fatal (OVERVIEW/
-    // CHANGELOG already landed; the watermark should still advance) → warn.
-    //
-    // UNMANAGED projects (issue #206, formerly keyed on `repoBacked`): the
-    // CLAUDE.md belongs to the working directory's own source control — the
-    // sweeper must NEVER write it (that would dirty the checkout and, if pushed,
-    // leak curation upstream). OVERVIEW.md + CHANGELOG.md are still curated
-    // (sidecarred into the metadata dir), just not CLAUDE.md.
-    //
-    // `managed` is the precise fact here, where `repoBacked` was a proxy for it:
-    // what decides this is whether Paddock looks after the project's files, not
-    // whether a git repo happens to sit behind them.
-    if (parsed.claude !== null && project.managed) {
-      const bounded = enforceHeadBudget(parsed.claude, budgetChars(budget, "claudeMaxTokens"));
-      await this.projects.writeClaudeCurated(project.slug, bounded).catch((err) => {
-        this.log.warn({ err, slug: project.slug }, "sweep: CLAUDE.md write failed (non-fatal)");
-      });
-    }
+    // CLAUDE.md — NEVER written (Managers M3). Upstream Paddock curated a
+    // "## Curated notes" section of it; in Managers CLAUDE.md is Ed's, and the
+    // manager's durable knowledge lives in memory/ instead. The prompt no longer
+    // asks for a <<<CLAUDE>>> section, and one that arrives anyway (an old
+    // prompt, a stray model) is parsed and then ignored here.
 
     this.log.info(
       {
@@ -392,7 +373,6 @@ export class SweepService {
         jobId: result.jobId,
         wroteOverview: parsed.overview !== null,
         wroteChangelog: parsed.changelog !== null,
-        wroteClaude: parsed.claude !== null,
       },
       "sweep: completed",
     );
@@ -515,26 +495,24 @@ export class SweepService {
     project: Project;
     overview: string;
     changelog: string;
-    claudeMd: string;
     digest: string;
     /** Optional per-project curator instructions (`.managers/hooks/sweep.md`). */
     extraInstructions: string;
     /** Effective (per-project-resolved) budgets for this sweep (issue #384). */
     budget: CurationConfig;
   }): string {
-    const { project, overview, changelog, claudeMd, digest, extraInstructions, budget } = args;
+    const { project, overview, changelog, digest, extraInstructions, budget } = args;
     const today = new Date().toISOString().slice(0, 10);
     // Budgets in tokens (for the instructions the model reads) and the matching
     // char bound for the FULL-FILE views below. Generous vs the old flat 2000-char
     // truncation, so the model can actually see (and therefore dedup) its files.
     const b = budget;
     const changelogView = boundedView(changelog, budgetChars(budget, "changelogMaxTokens"));
-    const claudeView = boundedView(claudeMd, budgetChars(budget, "claudeMaxTokens"));
     return [
       `Project: ${project.name} (slug: ${project.slug})`,
       project.summary ? `Summary: ${project.summary}` : "",
       "",
-      "You are curating this project's three context files from recent chat " +
+      "You are curating this project's two context files from recent chat " +
         "activity. You are shown each file IN FULL (a curator that only sees a " +
         "fragment re-adds things it already wrote). For each file you return " +
         "either its complete new contents OR the literal NOCHANGE — never a " +
@@ -550,11 +528,8 @@ export class SweepService {
       "=== CURRENT CHANGELOG.md (full) ===",
       changelogView || "(empty)",
       "",
-      "=== CURRENT CLAUDE.md (full — durable identity & conventions) ===",
-      claudeView || "(none yet)",
-      "",
       "=== YOUR TASKS ===",
-      "Do NOT use any tools. Output ONLY the three sections below, nothing else " +
+      "Do NOT use any tools. Output ONLY the two sections below, nothing else " +
         "(no preamble, no explanation). Use these LITERAL markers exactly:",
       "",
       "<<<OVERVIEW>>>",
@@ -573,15 +548,6 @@ export class SweepService {
         "nothing. COALESCE near-duplicate recent bullets into one. Keep the whole " +
         `file under ~${b.changelogMaxTokens} tokens by summarizing or dropping the ` +
         "OLDEST entries; preserve the rest verbatim. Do NOT re-log unchanged state.",
-      "<<<CLAUDE>>>",
-      "The FULL curated-notes body for CLAUDE.md (everything that should appear " +
-        "under the `## Curated notes` heading) — ONLY genuinely durable facts " +
-        "about the project's identity/conventions (what it fundamentally is, key " +
-        "architectural decisions, how we work on it). You can see the whole file " +
-        "above, so DEDUP: fold repeated/near-duplicate notes into one, drop stale " +
-        `ones, and keep it under ~${b.claudeMaxTokens} tokens. Do NOT restate ` +
-        "current state/tasks/history (those are OVERVIEW/CHANGELOG). If nothing " +
-        "durable changed, output exactly NOCHANGE and nothing else in this section.",
       "<<<END>>>",
       "",
       "IMPORTANT — OVERVIEW.md describes the PROJECT, not the box it runs on. Do " +

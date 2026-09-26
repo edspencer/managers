@@ -222,7 +222,8 @@ describe("instance-config (#385)", () => {
     it.each([
       ["paranoid", "own", "own", false, 1],
       ["balanced", "own", "host", true, 1],
-      ["yolo", "host", "host", true, 2],
+      // Managers M3: yolo keeps transcripts `own` (`host` is refused at load).
+      ["yolo", "own", "host", true, 2],
     ] as const)(
       "reports %s's levers, and credits the profile for each",
       (name, transcripts, instructions, selfMcp, depth) => {

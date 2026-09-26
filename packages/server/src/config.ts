@@ -1528,6 +1528,14 @@ function loadClaudeConfig(file: PaddockConfigFile["claude"] = {}, p: Posture): C
   const mcpServers = (
     envOpt("MANAGERS_CLAUDE_MCP_SERVERS") ?? fileOpt(file.mcpServers)
   )?.toLowerCase();
+  // Managers M3: transcripts must live in Managers' own Claude home, where the
+  // retention overlay governs them and every manager can read them back.
+  // `host` puts them in the user's `~/.claude/projects/`, where the user's own
+  // `claude` (default cleanupPeriodDays 30) deletes them — so it is refused
+  // outright rather than quietly downgraded to `own`.
+  if (transcripts === "host") {
+    throw new Error(transcriptsHostRefusal(envOpt("MANAGERS_CLAUDE_TRANSCRIPTS") !== undefined));
+  }
   return {
     transcripts:
       transcripts && isKnownTranscriptsMode(transcripts) ? transcripts : p.transcripts,
@@ -1539,6 +1547,20 @@ function loadClaudeConfig(file: PaddockConfigFile["claude"] = {}, p: Posture): C
     mcpServers:
       mcpServers && isKnownMcpServersMode(mcpServers) ? mcpServers : p.mcpServers,
   };
+}
+
+/**
+ * Managers M3: the config error for `claude.transcripts: host`. Exported so the
+ * CLI/tests can match on it.
+ */
+export function transcriptsHostRefusal(fromEnv: boolean): string {
+  return (
+    `refusing to start: \`claude.transcripts: host\` is not supported by Managers ` +
+    `(${fromEnv ? "set by MANAGERS_CLAUDE_TRANSCRIPTS" : "set in managers.config.yaml"}). ` +
+    `Managers keeps every transcript in its own Claude home so they never expire and every ` +
+    `manager can read them back; under \`host\` they would live in your ~/.claude, where ` +
+    `your own \`claude\` deletes them after 30 days. Remove the setting (or set it to \`own\`).`
+  );
 }
 
 /**
@@ -1620,10 +1642,9 @@ export function claudeHomeRefusal(
       ? `CLAUDE_CONFIG_DIR is what points it there: unset it, or point it at a directory ` +
         `of paddock's own. `
       : `The \`claudeHome:\` key in managers.config.yaml points it there: remove it, or name a ` +
-        `directory of paddock's own. `) +
-    `To SHARE your Claude Code transcripts, set \`claude: { transcripts: host }\` (or ` +
-    `MANAGERS_CLAUDE_TRANSCRIPTS=host) — that shares the files themselves and keeps ` +
-    `paddock's home where it belongs.`
+        `directory of paddock's own.`)
+    // Managers M3: upstream suggested `claude.transcripts: host` here as the way
+    // to share transcripts. Managers refuses that setting, so it offers nothing.
   );
 }
 

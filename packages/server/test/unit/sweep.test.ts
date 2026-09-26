@@ -164,17 +164,35 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("appends to CLAUDE.md when the reply carries a <<<CLAUDE>>> section (#177)", async () => {
+  it("NEVER writes CLAUDE.md, even when the reply carries a <<<CLAUDE>>> section (Managers M3)", async () => {
+    // Upstream #177 appended this to CLAUDE.md's "Curated notes". In Managers
+    // CLAUDE.md is Ed's: a stray CLAUDE section (an old prompt, a model that
+    // ignores instructions) is parsed — so it still delimits the changelog —
+    // and then dropped.
     const reply =
       "<<<OVERVIEW>>>\n# Overview\nState.\n<<<CHANGELOG>>>\nDid a thing.\n" +
       "<<<CLAUDE>>>\n- Durable: the API is versioned under /v2.\n<<<END>>>";
     const { svc } = makeService({ sweeperText: reply });
     svc.enqueue("demo");
-    await vi.waitFor(() => expect(claudeAppends.length).toBe(1), { timeout: 2000 });
-    expect(claudeAppends[0]).toBe("- Durable: the API is versioned under /v2.");
+    await vi.waitFor(() => expect(overviewWrites.length).toBe(1), { timeout: 2000 });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(claudeAppends).toEqual([]);
     // The changelog must NOT absorb the CLAUDE marker/section.
     expect(changelogAppends[0]).toBe("Did a thing.");
     expect(overviewWrites[0]).toContain("# Overview");
+    svc.stop();
+  });
+
+  it("does not read or show CLAUDE.md in the curation prompt (Managers M3)", async () => {
+    const { svc, runSweeper } = makeService({ claudeMd: "# CLAUDE\nSECRET-CLAUDE-BODY" });
+    svc.enqueue("demo");
+    await vi.waitFor(() => expect(runSweeper).toHaveBeenCalled(), { timeout: 2000 });
+    const prompt = runSweeper.mock.calls[0][1] as string;
+    expect(prompt).not.toContain("SECRET-CLAUDE-BODY");
+    expect(prompt).not.toContain("<<<CLAUDE>>>");
+    expect(prompt).not.toContain("CURRENT CLAUDE.md");
+    expect(prompt).toContain("<<<OVERVIEW>>>");
+    expect(prompt).toContain("<<<CHANGELOG>>>");
     svc.stop();
   });
 
@@ -576,7 +594,8 @@ describe("SweepService", () => {
     // The prompt states the resolved budgets: changelog overridden to 500, others inherited.
     expect(prompt).toContain("under ~500 tokens"); // changelog override surfaced
     expect(prompt).toContain("under ~2000 tokens"); // overview inherited
-    expect(prompt).toContain("under ~6000 tokens"); // claude inherited
+    // Managers M3: no CLAUDE section, so its budget is never stated.
+    expect(prompt).not.toContain("under ~6000 tokens");
     svc.stop();
   });
 

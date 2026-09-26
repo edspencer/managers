@@ -41,6 +41,10 @@ describe("integration: post-turn sweep curates OVERVIEW + CHANGELOG", () => {
   });
 
   it("writes a curated OVERVIEW.md and appends a CHANGELOG bullet after a project turn", async () => {
+    const dir = (
+      await t.app.inject({ method: "GET", url: "/api/projects/sweep-proj" })
+    ).json().project.dir as string;
+    const claudeBefore = await fs.readFile(path.join(dir, "CLAUDE.md"), "utf8");
     // A normal project chat turn — its completion enqueues a sweep.
     const mark = ws.mark();
     ws.send({
@@ -74,13 +78,12 @@ describe("integration: post-turn sweep curates OVERVIEW + CHANGELOG", () => {
     ).json().project;
     expect(project.hasOverview).toBe(true);
 
-    // CLAUDE.md (issue #177): seeded at creation, then AMENDED by the sweep with
-    // the fake's <<<CLAUDE>>> durable note under a "Curated notes" heading — the
-    // seed header (identity) is preserved above it (amend-only, no clobber).
+    // Managers M3: CLAUDE.md is NEVER written by the sweep. The fake still emits
+    // a <<<CLAUDE>>> durable note (it answers any sweeper-shaped prompt), which
+    // makes this non-vacuous: upstream would have appended it here.
     const claude = await fs.readFile(path.join(project.dir, "CLAUDE.md"), "utf8");
-    expect(claude).toContain("# Sweep Proj");
-    expect(claude).toContain("## Curated notes");
-    expect(claude).toContain("A durable convention discovered from recent activity.");
+    expect(claude).toBe(claudeBefore);
+    expect(claude).not.toContain("A durable convention discovered from recent activity.");
   });
 
   it("fires the curate trigger EXACTLY ONCE per turn via afterTurn (no double-sweep) (T5)", async () => {

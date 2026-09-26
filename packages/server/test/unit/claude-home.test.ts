@@ -92,6 +92,12 @@ describe("claude-home (#620)", () => {
       const report = await ensureClaudeHome(every, {});
       expect(report.bridged).toEqual([]);
       for (const entry of BRIDGEABLE_ENTRIES) {
+        // Managers M3: settings.json is never bridged but ALWAYS generated —
+        // with no host file it is the retention overlay alone.
+        if (entry === SETTINGS_ENTRY) {
+          expect((await fs.lstat(path.join(ownHome, entry))).isSymbolicLink()).toBe(false);
+          continue;
+        }
         await expect(fs.lstat(path.join(ownHome, entry))).rejects.toBeTruthy();
       }
     });
@@ -354,14 +360,17 @@ describe("claude-home (#620)", () => {
         expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(false);
       });
 
-      it("host symlinks the file whole, hooks included", async () => {
+      it("host copies the file whole, hooks included — plus the overlay (Managers M3)", async () => {
         await seedSettings();
         const report = await ensureClaudeHome(cfg({ hooks: "host" }), {});
 
-        expect(report.bridged).toContain(SETTINGS_ENTRY);
-        expect(report.generated).toEqual([]);
-        expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(true);
+        // Never a symlink in Managers: a link to the user's file cannot carry
+        // the retention overlay.
+        expect(report.bridged).not.toContain(SETTINGS_ENTRY);
+        expect(report.generated).toContain(SETTINGS_ENTRY);
+        expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(false);
         expect((await ownSettings()).hooks).toEqual(HOOKS);
+        expect((await ownSettings()).cleanupPeriodDays).toBe(36500);
       });
 
       it("defaults to own — a security lever must not need opting into", async () => {
@@ -370,14 +379,20 @@ describe("claude-home (#620)", () => {
         expect((await ownSettings()).hooks).toBeUndefined();
       });
 
-      it("prefers a symlink when there is nothing to filter", async () => {
-        // Most settings.json files have no hooks. Copying them would buy nothing
-        // and cost staleness, so only the files that need filtering get copied.
+      it("copies (never links) even when there is nothing to filter (Managers M3)", async () => {
+        // Upstream preferred a symlink here. Managers' file must carry the
+        // overlay, so it is always a generated copy.
         await seedSettings({ model: "opus" });
         const report = await ensureClaudeHome(cfg({ hooks: "own" }), {});
-        expect(report.bridged).toContain(SETTINGS_ENTRY);
-        expect(report.generated).toEqual([]);
-        expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(true);
+        expect(report.bridged).not.toContain(SETTINGS_ENTRY);
+        expect(report.generated).toContain(SETTINGS_ENTRY);
+        expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(false);
+        expect(await ownSettings()).toEqual({
+          model: "opus",
+          cleanupPeriodDays: 36500,
+          autoMemoryEnabled: false,
+          autoDreamEnabled: false,
+        });
       });
 
       it("REGENERATES from the user's file on the next boot", async () => {
@@ -415,13 +430,14 @@ describe("claude-home (#620)", () => {
         expect((await ownSettings()).model).toBe("opus");
       });
 
-      it("replaces a generated file with the link when switched back to host", async () => {
+      it("regenerates WITH the hooks when switched back to host", async () => {
         await seedSettings();
         await ensureClaudeHome(cfg({ hooks: "own" }), {});
         const report = await ensureClaudeHome(cfg({ hooks: "host" }), {});
-        expect(report.bridged).toContain(SETTINGS_ENTRY);
-        expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(true);
+        expect(report.generated).toContain(SETTINGS_ENTRY);
+        expect((await fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).isSymbolicLink()).toBe(false);
         expect((await ownSettings()).hooks).toEqual(HOOKS);
+        expect((await ownSettings()).autoMemoryEnabled).toBe(false);
       });
 
       it("never clobbers a settings.json a human put in paddock's home, and warns", async () => {
@@ -434,10 +450,22 @@ describe("claude-home (#620)", () => {
           '{"from":"operator"}',
         );
         expect(report.generated).toEqual([]);
-        // Silence here would be dangerous: `hooks: own` is NOT in force for
-        // whatever that file says, and an operator should not have to infer it.
+        // Silence here would be dangerous: the retention overlay is NOT in force
+        // for whatever that file says, and an operator should not have to infer it.
         const warning = report.notices.find((n) => n.level === "warn")!;
-        expect(warning.message).toContain("claude.hooks: own` cannot take effect");
+        expect(warning.message).toContain("Managers did not write");
+        expect(warning.message).toContain("cleanupPeriodDays is unset");
+      });
+
+      it("stays quiet about a human's file that already holds the overlay's guarantees", async () => {
+        await fs.mkdir(ownHome, { recursive: true });
+        await fs.writeFile(
+          path.join(ownHome, SETTINGS_ENTRY),
+          JSON.stringify({ cleanupPeriodDays: 99999, autoMemoryEnabled: false }),
+          "utf8",
+        );
+        const report = await ensureClaudeHome(cfg(), {});
+        expect(report.notices.some((n) => n.message.includes("Managers did not write"))).toBe(false);
       });
 
       it("treats a file it generated and a human then EDITED as the human's", async () => {
@@ -451,27 +479,36 @@ describe("claude-home (#620)", () => {
         expect((await ownSettings()).model).toBe("edited");
       });
 
-      it("plants NOTHING when the user's settings.json will not parse", async () => {
-        // Fail closed. Falling back to a symlink would hand over exactly the
-        // hooks this lever withholds, and it would do it when something is
-        // already wrong.
+      it("writes the overlay ALONE when the user's settings.json will not parse", async () => {
+        // Fail closed on the user's file — falling back to it unfiltered would
+        // hand over exactly the hooks this lever withholds — but never on the
+        // overlay (Managers M3).
         await fs.writeFile(path.join(legacyHome, SETTINGS_ENTRY), "{ not json", "utf8");
         const report = await ensureClaudeHome(cfg({ hooks: "own" }), {});
-        await expect(fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).rejects.toBeTruthy();
+        expect(await ownSettings()).toEqual({
+          cleanupPeriodDays: 36500,
+          autoMemoryEnabled: false,
+          autoDreamEnabled: false,
+        });
         const warned = report.notices.some(
           (n) => n.level === "warn" && n.message.includes("not valid JSON"),
         );
         expect(warned).toBe(true);
       });
 
-      it("withdraws its copy when the user deletes their settings.json", async () => {
+      it("falls back to the overlay alone when the user deletes their settings.json", async () => {
         await seedSettings();
         await ensureClaudeHome(cfg({ hooks: "own" }), {});
         await fs.rm(path.join(legacyHome, SETTINGS_ENTRY));
 
         const report = await ensureClaudeHome(cfg({ hooks: "own" }), {});
-        expect(report.withdrawn).toContain(SETTINGS_ENTRY);
-        await expect(fs.lstat(path.join(ownHome, SETTINGS_ENTRY))).rejects.toBeTruthy();
+        expect(report.withdrawn).not.toContain(SETTINGS_ENTRY);
+        expect(report.generated).toContain(SETTINGS_ENTRY);
+        expect(await ownSettings()).toEqual({
+          cleanupPeriodDays: 36500,
+          autoMemoryEnabled: false,
+          autoDreamEnabled: false,
+        });
       });
 
       it("says which hooks it drops, and that a restart is what applies an edit", async () => {

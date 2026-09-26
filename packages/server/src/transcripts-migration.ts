@@ -67,6 +67,7 @@ export type MigrationState = "new" | "fast-forward" | "diverged" | "unknown";
 
 /** Why the banner is not offered. */
 export type MigrationIneligibleReason =
+  | "not-supported"
   | "already-host"
   | "env-shadowed"
   | "profile-paranoid"

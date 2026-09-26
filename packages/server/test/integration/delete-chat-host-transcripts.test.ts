@@ -50,100 +50,10 @@ async function oneTurn(ws: WsClient, slug: string, message: string): Promise<str
   return complete.payload?.sessionId as string;
 }
 
-describe("integration: deleting a chat under claude.transcripts: host (#689)", () => {
-  let t: TestApp;
-  let ws: WsClient;
-  let sessionId: string;
-  let transcript: string;
-
-  const SLUG = "unowned-del";
-
-  let userHome: string;
-
-  beforeAll(async () => {
-    // A HOME of our own, so `~/.claude` is a real directory this test owns:
-    // `opts.env` is applied last, so it wins over the harness's HOME, and
-    // `userClaudeHome()` reads `os.homedir()` at config-build time. Paddock's own
-    // home stays where it always is, `<dataDir>/claude-home` — the point of #691
-    // is that sharing no longer means moving it.
-    userHome = await makeTmpDir("paddock-userhome-");
-    t = await startTestApp({
-      env: { HOME: userHome, MANAGERS_CLAUDE_TRANSCRIPTS: "host" },
-    });
-    const { port } = await listen(t.app);
-    ws = await connectWs(port);
-    await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: SLUG } });
-    sessionId = await oneTurn(ws, SLUG, "history worth keeping");
-
-    // Where the engine actually put it: through paddock's own home, out into the
-    // user's real folder for that working directory.
-    transcript = path.join(
-      userHome,
-      ".claude",
-      "projects",
-      encodeProjectDir(path.join(t.projectsRoot, SLUG)),
-      `${sessionId}.jsonl`,
-    );
-  }, 60_000);
-
-  afterAll(async () => {
-    ws?.close();
-    await t?.teardown();
-    await rmTmpDir(userHome);
-  });
-
-  it("puts the transcript in the USER's home, reached through paddock's own", async () => {
-    // Guards the fixture itself. If this stops holding, the assertions below
-    // would be deleting a paddock-owned copy and would pass for the wrong reason.
-    expect(await fs.stat(transcript).then((s) => s.isFile())).toBe(true);
-    // The user's own folder is a real directory — paddock did not plant a link
-    // over it (#682); it planted one POINTING at it, in its own home.
-    expect((await fs.lstat(path.dirname(transcript))).isSymbolicLink()).toBe(false);
-    const link = path.join(
-      t.cfg.claudeHome,
-      "projects",
-      encodeProjectDir(path.join(t.projectsRoot, SLUG)),
-    );
-    expect((await fs.lstat(link)).isSymbolicLink()).toBe(true);
-    expect(await fs.realpath(link)).toBe(await fs.realpath(path.dirname(transcript)));
-    // …and the literal path handed to the agent has no `.claude` component, which
-    // is what keeps agent memory writable (#690).
-    expect(link.split(path.sep)).not.toContain(".claude");
-  });
-
-  it("releases the chat instead of removing it, leaving the transcript on disk", async () => {
-    const before = await fs.readFile(transcript, "utf8");
-
-    const del = await t.app.inject({
-      method: "DELETE",
-      url: `/api/projects/${SLUG}/chats/${sessionId}`,
-    });
-
-    expect(del.statusCode).toBe(200);
-    expect(del.json()).toMatchObject({ ok: true, removed: false, retained: true });
-
-    // The assertion the bug was: byte-identical, still there.
-    expect(await fs.readFile(transcript, "utf8")).toBe(before);
-  });
-
-  // KNOWN GAP, asserted so it cannot change silently: the chat is still listed.
-  //
-  // `unadoptSession` only drops an adoption record, and a chat paddock CREATED
-  // in an unowned home is discovered structurally — the engine scans
-  // `<claudeHome>/projects/<enc-cwd>/`, finds the file, and lists it again. So
-  // the transcript is safe (the assertions above) but the user's actual intent,
-  // "take this out of my chat list", is not yet honoured.
-  //
-  // Closing it needs a tombstone: paddock filtering a session it must not
-  // delete. That is deliberately NOT built here — it is #693, and it belongs
-  // with the `transcripts` lever rather than being smuggled in alongside it.
-  it("does NOT yet remove it from the list (the tombstone is still owed)", async () => {
-    t.herdctl.invalidateSessions(`keeper-${SLUG}`);
-    const chats = (await t.app.inject({ method: "GET", url: `/api/projects/${SLUG}/chats` })).json()
-      .chats;
-    expect(chats.map((c: { sessionId: string }) => c.sessionId)).toContain(sessionId);
-  });
-});
+// Managers M3: the `claude.transcripts: host` case (#689) was removed — Managers
+// refuses `host` at config load (see config.test.ts "Managers M3"), so there is
+// no unowned transcript to release. The `own` cases below still pin that a
+// delete removes Managers' own copy and never follows a stale link out.
 
 describe("integration: deleting a chat under claude.transcripts: own (the default)", () => {
   let t: TestApp;

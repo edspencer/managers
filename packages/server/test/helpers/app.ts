@@ -115,6 +115,7 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
     CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
     CLAUDE_SECURESTORAGE_CONFIG_DIR: process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
     MANAGERS_CLAUDE_CREDENTIALS: process.env.MANAGERS_CLAUDE_CREDENTIALS,
+    MANAGERS_CLAUDE_TRANSCRIPTS: process.env.MANAGERS_CLAUDE_TRANSCRIPTS,
     MANAGERS_CLAUDE_INSTRUCTIONS: process.env.MANAGERS_CLAUDE_INSTRUCTIONS,
     MANAGERS_CLAUDE_HOOKS: process.env.MANAGERS_CLAUDE_HOOKS,
     MANAGERS_CLAUDE_MCP_SERVERS: process.env.MANAGERS_CLAUDE_MCP_SERVERS,
@@ -272,15 +273,29 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
     await initGitRepo(projectsRoot);
   }
 
-  const built = await buildApp({ serveStatic: false });
-  await built.app.ready();
-
-  const teardown = async () => {
-    await built.close().catch(() => undefined);
+  const restoreEnv = () => {
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
+  };
+
+  // A boot that THROWS (a refused config — e.g. Managers M3's `transcripts:
+  // host`) has no teardown for the caller to run, and the suite runs every file
+  // in one fork, so restore the env here or it poisons every later file.
+  let built: Awaited<ReturnType<typeof buildApp>>;
+  try {
+    built = await buildApp({ serveStatic: false });
+    await built.app.ready();
+  } catch (err) {
+    restoreEnv();
+    await rmTmpDir(tmp).catch(() => undefined);
+    throw err;
+  }
+
+  const teardown = async () => {
+    await built.close().catch(() => undefined);
+    restoreEnv();
     await rmTmpDir(tmp);
   };
 

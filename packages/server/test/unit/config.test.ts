@@ -771,10 +771,27 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
     expect(cfg.legacyClaudeHome).toBe(path.join(process.env.HOME!, ".claude"));
   });
 
-  it("reads transcripts: host from the file, and env still wins over it", () => {
+  // Managers M3: `transcripts: host` is a config ERROR, from either layer —
+  // transcripts must live in Managers' own home, where they never expire.
+  it("REJECTS transcripts: host from the file (Managers M3)", () => {
     writeConfig("claude:\n  transcripts: host\n");
-    expect(loadPaddockConfig().claude.transcripts).toBe("host");
+    expect(() => loadPaddockConfig()).toThrow(/claude\.transcripts: host` is not supported/);
+    expect(() => loadPaddockConfig()).toThrow(/managers\.config\.yaml/);
+  });
+
+  it("REJECTS MANAGERS_CLAUDE_TRANSCRIPTS=host, and names the env var (Managers M3)", () => {
+    process.env.MANAGERS_CLAUDE_TRANSCRIPTS = "HOST";
+    expect(() => loadPaddockConfig()).toThrow(/MANAGERS_CLAUDE_TRANSCRIPTS/);
+  });
+
+  it("an env `own` overrides a file `host` — env wins, and own is fine", () => {
+    writeConfig("claude:\n  transcripts: host\n");
     process.env.MANAGERS_CLAUDE_TRANSCRIPTS = "own";
+    expect(loadPaddockConfig().claude.transcripts).toBe("own");
+  });
+
+  it("the yolo profile no longer implies transcripts: host (Managers M3)", () => {
+    writeConfig("profile: yolo\n");
     expect(loadPaddockConfig().claude.transcripts).toBe("own");
   });
 
@@ -886,11 +903,12 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
 
   it("keeps all five keys independent — that separation is the whole point", () => {
     writeConfig(
-      "claude:\n  transcripts: host\n  credentials: own\n  instructions: host\n" +
+      "claude:\n  transcripts: own\n  credentials: own\n  instructions: host\n" +
         "  hooks: own\n  mcpServers: host\n",
     );
     const cfg = loadPaddockConfig();
-    expect(cfg.claude.transcripts).toBe("host");
+    // Managers M3: `transcripts` can only be `own` now; the other four still vary.
+    expect(cfg.claude.transcripts).toBe("own");
     expect(cfg.claude.credentials).toBe("own");
     expect(cfg.claude.instructions).toBe("host");
     expect(cfg.claude.hooks).toBe("own");
@@ -919,8 +937,8 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
   it("REFUSES to start when the home resolves to the user's own ~/.claude", () => {
     process.env.CLAUDE_CONFIG_DIR = path.join(process.env.HOME!, ".claude");
     expect(() => loadPaddockConfig()).toThrow(/refusing to start/);
-    // …and the message names the lever that does what they actually wanted.
-    expect(() => loadPaddockConfig()).toThrow(/transcripts: host/);
+    // Managers M3: the message no longer recommends `transcripts: host`.
+    expect(() => loadPaddockConfig()).not.toThrow(/transcripts: host/);
   });
 
   it("refuses the same value from the config file, not just from env", () => {

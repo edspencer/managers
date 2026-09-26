@@ -221,7 +221,9 @@ export const PROFILES: Record<ProfileName, Posture> = {
    * address or auth (see the guardrail in this file's header).
    */
   yolo: {
-    transcripts: "host",
+    // Managers M3: `host` is refused at config load (transcripts must live in
+    // Managers' own home, where they never expire), so even yolo keeps `own`.
+    transcripts: "own",
     credentials: "host",
     instructions: "host",
     hooks: "host",

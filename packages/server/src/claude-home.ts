@@ -46,12 +46,12 @@ import { encodePathForCli } from "@herdctl/core";
 import type { PaddockConfig } from "./config.js";
 import { applyCredentialsMode, SECURE_STORAGE_DIR_VAR } from "./claude-credentials.js";
 import { INSTRUCTION_ENTRIES } from "./claude-instructions.js";
+import { GENERATED_MARKER_FILE, SETTINGS_ENTRY, type HooksMode } from "./claude-settings.js";
 import {
-  planHostSettings,
-  GENERATED_MARKER_FILE,
-  SETTINGS_ENTRY,
-  type HooksMode,
-} from "./claude-settings.js";
+  MANAGERS_SETTINGS_OVERLAY,
+  overlayViolations,
+  planManagedSettings,
+} from "./managers/claude-overlay.js";
 
 /**
  * The user's file-based Claude Code login, bridged in only under
@@ -356,38 +356,24 @@ async function classifyOwnEntry(
   return recorded !== undefined && recorded === sha256(content) ? "generated" : "foreign";
 }
 
-/** Remove a file paddock generated, and forget it. Returns whether it went. */
-async function removeGenerated(home: string, entry: string): Promise<boolean> {
-  const ok = await fs.rm(path.join(home, entry), { force: true }).then(
-    () => true,
-    () => false,
-  );
-  if (ok) await recordGenerated(home, entry, null);
-  return ok;
-}
-
 /**
- * Put the right `settings.json` in paddock's home for the `claude.hooks` mode
- * (#691 step 4).
+ * Put Managers' own `settings.json` in its home (#691 step 4, reworked by
+ * Managers M3 — see `managers/claude-overlay.ts`).
  *
- * Four states have to compose, and all four are reachable by editing one config
- * key on a running instance:
+ * Upstream Paddock chose between a symlink to the user's file, a filtered copy,
+ * and nothing. Managers never links and never withdraws: the file is ALWAYS one
+ * Managers generated, because it is where the retention/auto-memory overlay
+ * lives and every agent loads it (`setting_sources: ["user","project"]`).
  *
- * | own home has | `hooks: host` | `hooks: own` |
- * |---|---|---|
- * | nothing | symlink the user's | symlink, or write the filtered copy |
- * | paddock's bridge symlink | leave it | replace with the filtered copy |
- * | paddock's generated file | delete it, symlink | regenerate from the user's |
- * | a human's file | leave it | leave it, and say so if hooks were in play |
+ * | own home has | result |
+ * |---|---|
+ * | nothing / a bridge symlink / Managers' generated file | (re)write host-filtered-per-`claude.hooks` + overlay |
+ * | a human's file (`foreign`) | leave it; warn if it lacks the overlay's guarantees |
  *
- * The last row is the existing non-clobbering bridge behaviour, extended to a
- * file rather than a name — with one addition, because silence there is
- * dangerous: if the user's settings define hooks and paddock is not allowed to
- * write the filtered copy, `hooks: own` is NOT in force for whatever that file
- * says, so it warns rather than leaving an operator to believe a guarantee that
- * is not holding.
+ * Ownership of a real file is still decided by the recorded hash, so a file an
+ * operator put there (or edited) is never overwritten.
  *
- * Never throws; a home it cannot write just keeps whatever it had.
+ * Never throws; a home it cannot write just keeps whatever it had, and says so.
  */
 async function materializeSettings(
   cfg: Pick<PaddockConfig, "claudeHome" | "legacyClaudeHome">,
@@ -399,54 +385,32 @@ async function materializeSettings(
   const state = await classifyOwnEntry(cfg, entry);
   const raw = await fs.readFile(path.join(cfg.legacyClaudeHome, entry), "utf8").catch(() => null);
 
-  if (raw === null) {
-    // The user has no settings.json at all — including the case where they
-    // deleted one paddock had already bridged or filtered. Withdraw ours.
-    if (state === "bridge" && (await unbridgeEntry(cfg, entry))) report.withdrawn.push(entry);
-    else if (state === "generated" && (await removeGenerated(cfg.claudeHome, entry)))
-      report.withdrawn.push(entry);
-    return;
-  }
-
-  const plan = planHostSettings(hooks, raw);
-
   if (state === "foreign") {
-    if (plan.action === "write") {
+    const content = await fs.readFile(own, "utf8").catch(() => null);
+    const violations = content === null ? ["it cannot be read"] : overlayViolations(content);
+    if (violations.length > 0) {
       report.notices.push({
         level: "warn",
         message:
-          `\`claude.hooks: own\` cannot take effect: ${own} is a file paddock did not write, ` +
-          `so it is left alone (as any entry of your own always is). Your ` +
-          `~/.claude/${entry} defines hooks, and whatever THAT file says is what runs. ` +
-          `Move or delete it to let paddock generate the filtered copy.`,
+          `${own} is a file Managers did not write, so it is left alone — but ` +
+          `${violations.join("; ")}. Every agent loads this file, so transcripts may expire and ` +
+          `auto-memory may run. Delete it to let Managers generate its own (it keeps your other ` +
+          `keys), or set cleanupPeriodDays: ${MANAGERS_SETTINGS_OVERLAY.cleanupPeriodDays} and ` +
+          `autoMemoryEnabled: false in it yourself.`,
       });
     }
     return;
   }
 
-  if (plan.action === "skip") {
-    // Fail closed: a settings.json that will not parse cannot be filtered, and
-    // linking it instead would hand over exactly the hooks `own` withholds.
-    if (state === "bridge" && (await unbridgeEntry(cfg, entry))) report.withdrawn.push(entry);
-    else if (state === "generated" && (await removeGenerated(cfg.claudeHome, entry)))
-      report.withdrawn.push(entry);
+  const plan = planManagedSettings(hooks, raw);
+  if (plan.hostUnusable !== undefined) {
     report.notices.push({
       level: "warn",
       message:
-        `not using your ~/.claude/${entry}: ${plan.reason}. Managers could not filter it, and ` +
-        `\`claude.hooks: own\` means it must not be used unfiltered — so this instance runs ` +
-        `with no user-level settings at all. Fix the JSON and restart.`,
+        `not using your ~/.claude/${entry}: ${plan.hostUnusable}. Managers could not filter it, ` +
+        `so its own ${entry} carries only the retention/auto-memory overlay. Fix the JSON and ` +
+        `restart.`,
     });
-    return;
-  }
-
-  if (plan.action === "link") {
-    // Nothing to filter (no hooks, or `hooks: host`): the symlink is strictly
-    // better than a copy, so prefer it even under `own`. Only users who actually
-    // have hooks pay the staleness of a copy.
-    if (state === "generated") await removeGenerated(cfg.claudeHome, entry);
-    if (await bridgeEntry(cfg, entry)) report.bridged.push(entry);
-    return;
   }
 
   if (state === "bridge") await fs.unlink(own).catch(() => {});
@@ -460,22 +424,33 @@ async function materializeSettings(
       report.notices.push({
         level: "warn",
         message:
-          `could not write ${own}, so \`claude.hooks: own\` is not in force — this instance ` +
-          `has no user-level settings rather than filtered ones.`,
+          `could not write ${own}: transcript retention (cleanupPeriodDays) and the auto-memory ` +
+          `switch are NOT in force for this instance's agents.`,
       });
       return;
     }
     report.generated.push(entry);
   }
   await recordGenerated(cfg.claudeHome, entry, sha256(plan.content));
-  report.notices.push({
-    level: "info",
-    message:
-      `Claude hooks: your ~/.claude/${entry} defines ${plan.dropped.join(", ")}, which this ` +
-      `instance does NOT run (\`claude.hooks: own\`). Managers writes its own ${entry} carrying ` +
-      `every other key of yours — permissions, model, statusline — and regenerates it at ` +
-      `startup, so restart paddock after editing yours. Set \`claude.hooks: host\` to run them.`,
-  });
+  if (plan.dropped.length > 0) {
+    report.notices.push({
+      level: "info",
+      message:
+        `Claude hooks: your ~/.claude/${entry} defines ${plan.dropped.join(", ")}, which this ` +
+        `instance does NOT run (\`claude.hooks: own\`). Managers writes its own ${entry} carrying ` +
+        `every other key of yours — permissions, model, statusline — and regenerates it at ` +
+        `startup, so restart Managers after editing yours. Set \`claude.hooks: host\` to run them.`,
+    });
+  }
+  if (plan.overridden.length > 0) {
+    report.notices.push({
+      level: "info",
+      message:
+        `your ~/.claude/${entry} sets ${plan.overridden.join(", ")}; Managers' own ${entry} ` +
+        `overrides ${plan.overridden.length === 1 ? "it" : "them"} (transcripts never expire, no ` +
+        `auto-memory).`,
+    });
+  }
 }
 
 /**

@@ -9,12 +9,17 @@
  */
 import { buildApp } from "./app.js";
 import { describeScrub, scrubInheritedEnv } from "./env-scrub.js";
+import { applyRuntimeEnv } from "./managers/claude-overlay.js";
 
 export async function start(): Promise<void> {
   // FIRST, before any config is resolved or any child can be spawned: drop every
   // inherited `PADDOCK_*` variable so none of them reaches a keeper, sweeper or
   // trigger subprocess (see env-scrub.ts). Only the count is logged.
   const scrubbed = scrubInheritedEnv();
+  // Managers M3: CLAUDE_CODE_DISABLE_AUTO_MEMORY=1, process-wide, so every
+  // keeper/trigger/sweeper child inherits it (belt-and-braces with the
+  // `autoMemoryEnabled: false` in the generated settings.json).
+  applyRuntimeEnv();
   const { app, cfg, close } = await buildApp();
   // warn, not info, when anything was removed: it means this process was started
   // from a shell configured for Paddock, which is worth seeing even at LOG_LEVEL=warn.
