@@ -33,10 +33,13 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
   The interval counts from the last sweep, and a never-swept project counts as swept
   at epoch 0, so `seed.mjs` also writes `sweep-state.json` stamping every workspace
   as swept at seed time. Without it, the first turn in each project rewrites its
-  seeded `OVERVIEW.md`/`CHANGELOG.md` and adds a `CLAUDE.md`;
+  seeded `OVERVIEW.md`/`CHANGELOG.md` (since M3 the sweeper never touches
+  `CLAUDE.md`). A project created in QA has no watermark, so IT is swept after its
+  first turn — which is how M3's QA checks curation;
 - `MANAGERS_FAKE_SCRIPT=<rig>/fake-script.json`, and
   `MANAGERS_FAKE_INVOCATION_LOG=<rig>/invocations.jsonl` (one line per fake-claude
-  spawn, including its `--mcp-config` and `paddockEnvCount`, a count and never names).
+  spawn, including its `--mcp-config`, its `--setting-sources` (`settingSources`,
+  M3) and `paddockEnvCount`, a count and never names).
 
 Server output goes to `<rig>/server.log` and to `pm logs`.
 

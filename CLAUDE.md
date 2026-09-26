@@ -23,6 +23,27 @@ What changed from Paddock, and what did not:
   projects root that already holds `*/project.yaml` but no `.managers-data` marker
   is **refused** unless `MANAGERS_ADOPT_DATA_DIR=1`. A fresh root is claimed (the
   marker is written). This is what stops a rig from ever touching real data.
+- **Runtime posture (M3, `managers/claude-overlay.ts`).** Transcripts never
+  expire and there is no Claude Code auto-memory:
+  - `<claudeHome>/settings.json` is ALWAYS a file Managers generated (never a
+    symlink, never absent): the host's settings (hooks filtered per `claude.hooks`)
+    or nothing, plus the overlay `{cleanupPeriodDays: 36500, autoMemoryEnabled:
+    false, autoDreamEnabled: false}`. Never use `cleanupPeriodDays: 0` — it is a
+    Claude Code validation error.
+  - Every agent (keeper, trigger, sweeper) declares `setting_sources:
+    ["user","project"]`, so that file loads on the CLI runtime (`--setting-sources`)
+    and on the SDK runtime, batch and `openChatSession` alike (herdctl
+    `toSDKOptions`). Pinned by `test/integration/retention-settings.test.ts`.
+  - `start.ts` sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; boot warns about any
+    project `.claude/settings.json` with a lower `cleanupPeriodDays` (project beats
+    user, and the cleanup is global over the Claude home).
+  - `claude.transcripts: host` is a config ERROR, and the own→host transcript
+    migration (#882) routes refuse (`not_supported`).
+  - The sweeper curates OVERVIEW.md/CHANGELOG.md only — never CLAUDE.md.
+  - Projects are notebooks: the New Project modal has no clone/directory option
+    (the server still accepts `repo`/`path`); a GitHub repo is stored as a link.
+    Discover lost its sidebar button and the empty-Home takeover; `/discover` and
+    its footer link remain.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
