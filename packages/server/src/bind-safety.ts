@@ -73,7 +73,7 @@ export function evaluateBindSafety(input: BindSafetyInput): BindSafetyDecision {
       action: "warn",
       message:
         `SECURITY: binding ${host} with MANAGERS_AUTH_MODE=none and ` +
-        `MANAGERS_DANGEROUSLY_ALLOW_OPEN set — Paddock is OPEN and UNAUTHENTICATED ` +
+        `MANAGERS_DANGEROUSLY_ALLOW_OPEN set — Managers is OPEN and UNAUTHENTICATED ` +
         `on a routable interface. Anyone who can reach this port can run code and ` +
         `spend Claude tokens as you. Put an auth mode / reverse proxy in front of it.`,
     };
@@ -83,7 +83,7 @@ export function evaluateBindSafety(input: BindSafetyInput): BindSafetyDecision {
     action: "refuse",
     message:
       `refusing to start: bind host "${host}" is not loopback and ` +
-      `MANAGERS_AUTH_MODE=none, which would expose an unauthenticated Paddock (it ` +
+      `MANAGERS_AUTH_MODE=none, which would expose an unauthenticated Managers (it ` +
       `runs code and spends Claude tokens) on a routable interface. Choose one: ` +
       `set an auth mode behind a reverse proxy (MANAGERS_AUTH_MODE=trusted-header|jwt); ` +
       `bind loopback (HOST=127.0.0.1) and reach it via a proxy/sidecar; or — only ` +

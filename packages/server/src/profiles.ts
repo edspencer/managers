@@ -9,7 +9,7 @@
  *
  * Config resolves as code default < YAML file < `MANAGERS_*` env. A profile
  * implemented as "the installer materialises concrete values into
- * `paddock.config.yaml`" only ever touches the FILE layer — so it only works on
+ * `managers.config.yaml`" only ever touches the FILE layer — so it only works on
  * the one distribution that runs an installer. Docker and bare `node dist` would
  * keep falling through to code defaults and the distributions would stay
  * divergent, which is the actual complaint #878 opens with. Resolving `profile`

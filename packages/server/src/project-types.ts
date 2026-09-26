@@ -169,7 +169,7 @@ export interface ProjectYaml {
   maxSpawnDepth?: number;
   /**
    * Per-project override for the hook-management MCP gate (Epic G / G5, GG-4) —
-   * whether this project's turns get the `mcp__paddock_manage__{list,set,remove}_hook`
+   * whether this project's turns get the `mcp__managers__{list,set,remove}_hook`
    * tools. Optional on disk: absent inherits the instance default
    * (`MANAGERS_HOOKS_MCP`, else OFF), resolved at dispatch via
    * {@link import("./hook-config.js").resolveHooksMcpEnabled} — the same
@@ -285,7 +285,7 @@ export interface ProjectYaml {
   /**
    * Event hooks for this project (Epic G / G1), keyed by a stable hook name. Each
    * value is a {@link PaddockHook} — a lifecycle event + a capability set + a prompt
-   * (inline or `.paddock/hooks/*.md`) + `enabled`. Unlike schedules, a hook is NOT
+   * (inline or `.managers/hooks/*.md`) + `enabled`. Unlike schedules, a hook is NOT
    * forwarded into the keeper agent's config: each hook is registered as its OWN
    * herdctl agent `hook-<slug>-<name>` whose tool config IS its capability (GG-1).
    * Absent/empty ⇒ the project has no hooks (unchanged behaviour). New hooks default

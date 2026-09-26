@@ -34,20 +34,20 @@ describe("ui config resolution (issue #914)", () => {
   const saved: Record<string, string | undefined> = {};
   let dir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     for (const k of ENV_KEYS) {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    dir = makeTmpDir("ui-config");
+    dir = await makeTmpDir("ui-config");
     process.env.MANAGERS_DATA_DIR = dir;
   });
-  afterEach(() => {
+  afterEach(async () => {
     for (const k of ENV_KEYS) {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     }
-    rmTmpDir(dir);
+    await rmTmpDir(dir);
   });
 
   const limit = () => loadPaddockConfig().ui.transcriptRenderLimit;

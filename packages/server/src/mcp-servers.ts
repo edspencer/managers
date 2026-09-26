@@ -1,5 +1,5 @@
 /**
- * The top-level `mcpServers:` block of `paddock.config.yaml` (#691 step 6):
+ * The top-level `mcpServers:` block of `managers.config.yaml` (#691 step 6):
  * MCP servers a user declares **to paddock itself**.
  *
  * ## Why this is not another `claude:` key
@@ -132,7 +132,7 @@ export const ENV_REF_PREFIX = "env:";
  * config resolution stays free of the runtime modules — `mcp-servers-reserved`
  * in the unit tests asserts the two spellings still agree.
  */
-export const RESERVED_MCP_SERVER_NAMES: readonly string[] = ["paddock", "paddock_manage"];
+export const RESERVED_MCP_SERVER_NAMES: readonly string[] = ["managers", "managers_files"];
 
 /**
  * `mcp__<server>__<tool>` is the tool name both runtimes match against, and the

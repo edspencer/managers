@@ -152,7 +152,7 @@ export function NewProjectModal({
           />
           <span className="mt-1 block text-xs text-fg-subtle">
             Where this project's content lives. An existing checkout is used in
-            place — its real history, branches and remotes — and Paddock writes
+            place — its real history, branches and remotes — and Managers writes
             nothing into it. Absolute path; created for you if it doesn't exist.
           </span>
         </label>
@@ -167,7 +167,7 @@ export function NewProjectModal({
           />
           <span className="mt-1 block text-xs text-fg-subtle">
             {!linkPath.trim()
-              ? "Paddock clones this repo into the project and works in the checkout. Leave both blank for a notes project."
+              ? "Managers clones this repo into the project and works in the checkout. Leave both blank for a notes project."
               : "Cloned into the directory above if it doesn't exist yet; otherwise the directory is used as-is and this just records which repo it is."}
           </span>
         </label>
@@ -188,10 +188,10 @@ export function NewProjectModal({
               onChange={(e) => setManagedNotes(e.target.checked)}
             />
             <span className="text-xs text-fg-muted">
-              <span className="font-medium">These are notes — let Paddock curate them.</span>{" "}
+              <span className="font-medium">These are notes — let Managers curate them.</span>{" "}
               Its OVERVIEW.md, CHANGELOG.md and CLAUDE.md are written into that
               directory. Leave unticked for a code checkout you version yourself,
-              and Paddock will write nothing into it.
+              and Managers will write nothing into it.
             </span>
           </label>
         )}

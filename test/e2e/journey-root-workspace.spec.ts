@@ -24,7 +24,7 @@ import {
  *   `/chat`      → a root chat.
  *   `/settings`  → the root workspace's Settings tab — its `project.yaml`, and
  *                  nothing else. Instance-wide config is `/config`, a separate
- *                  screen, because it writes `paddock.config.yaml` and is frozen
+ *                  screen, because it writes `managers.config.yaml` and is frozen
  *                  at boot. The two were one stacked tab until they were split.
  *
  * The last one is the regression that shipped in v0.50.0: "New chat" from the
@@ -284,7 +284,7 @@ test("the root's Settings tab is an ordinary workspace tab — one pane, and it 
   await page.goto("/settings");
 
   // The root's own project.yaml settings, and ONLY those. The instance-wide
-  // paddock.config.yaml form used to render beneath this as a second section —
+  // managers.config.yaml form used to render beneath this as a second section —
   // two save bars, one page inside another — and, being a fragment that only
   // works as a flex-column child, it was also what stopped this tab scrolling:
   // it grew to full content height, refused to shrink, and squashed the
@@ -292,7 +292,7 @@ test("the root's Settings tab is an ordinary workspace tab — one pane, and it 
   const workspaceForm = page.getByRole("main").locator("form").first();
   await expect(workspaceForm).toBeVisible();
   expect((await workspaceForm.boundingBox())!.height).toBeGreaterThan(100);
-  await expect(page.getByText(/paddock\.config\.yaml/i)).toHaveCount(0);
+  await expect(page.getByText(/managers\.config\.yaml/i)).toHaveCount(0);
 
   // Exactly one save bar on the tab, not two.
   await expect(page.getByRole("button", { name: /Save changes/i })).toHaveCount(1);
@@ -317,7 +317,7 @@ test("/config is the instance config screen, separate from any workspace's setti
 
   // Its own page, titled for the file it writes.
   await expect(page.getByRole("heading", { name: "Config", level: 1 })).toBeVisible();
-  await expect(page.getByText(/paddock\.config\.yaml/i).first()).toBeVisible();
+  await expect(page.getByText(/managers\.config\.yaml/i).first()).toBeVisible();
   // Instance config is frozen at boot, so the restart notice is always up.
   await expect(page.getByText(/take effect only after the server restarts/i)).toBeVisible();
   // Branding lives here — the thing you actually come to this screen for.
@@ -345,7 +345,7 @@ test("/config is the instance config screen, separate from any workspace's setti
  * Issue #722, in a real browser: nothing in the suite had ever SAVED a value on
  * `/config`, which is how a screen that visibly threw away every save shipped.
  *
- * The screen edits `paddock.config.yaml` while the process keeps its boot-frozen
+ * The screen edits `managers.config.yaml` while the process keeps its boot-frozen
  * config, so a save must leave the SAVED value on screen (it used to re-fetch
  * and render the boot value, which looked exactly like the write had failed) and
  * a reload — this tab or any other — must still see it.
@@ -407,7 +407,7 @@ test("a project's Settings tab still scrolls (the non-root path)", async ({ page
 
   await expect(page.getByRole("main").locator("form").first()).toBeVisible();
   // No instance config here — that section is the root's alone.
-  await expect(page.getByText(/paddock\.config\.yaml/i)).toHaveCount(0);
+  await expect(page.getByText(/managers\.config\.yaml/i)).toHaveCount(0);
 
   const maxScroll = await page.evaluate(() => {
     const el = [...document.querySelectorAll("main *")].find((e) => {

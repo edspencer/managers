@@ -51,7 +51,7 @@ export function DeleteProjectMessage({ project }: { project: DeletableProject })
   if (deleteUnlinksOnly(project)) {
     return (
       <>
-        {name} will be unlinked. Paddock’s notes, settings and chats for it are permanently
+        {name} will be unlinked. Managers’ notes, settings and chats for it are permanently
         removed, and this cannot be undone — but the directory it works in is left alone:
         <span className="mt-1.5 block break-all font-mono text-xs text-fg">
           {project.workingDir}

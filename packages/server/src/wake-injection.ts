@@ -3,13 +3,13 @@
  * @herdctl/core 5.22.1).
  *
  * ── The bug ───────────────────────────────────────────────────────────────────
- * Paddock injects in-process MCP servers — `mcp__paddock_manage__*` (self-
- * management, #214) and `mcp__paddock__*` (send_file, #113) — into keeper turns via
+ * Paddock injects in-process MCP servers — `mcp__managers__*` (self-
+ * management, #214) and `mcp__managers_files__*` (send_file, #113) — into keeper turns via
  * `injectedMcpServers`. These are per-turn runtime values Paddock supplies only when
  * IT drives a turn (the human socket path and every server-initiated `startAgentTurn`
  * fire). herdctl's session WAKE path — a `ScheduleWakeup` / `/loop` / `CronCreate`
  * re-fire of an idle/reaped session — drives the turn INSIDE herdctl and, before
- * 5.22.1, re-spawned the `claude` subprocess with the `mcp__paddock*__*` tools still
+ * 5.22.1, re-spawned the `claude` subprocess with the `mcp__managers*__*` tools still
  * "allowed" (they're on `agent.allowed_tools`) but with NO in-process server behind
  * them. Result: the injected tools vanish from the catalog for the whole autonomous
  * stretch (observed multi-hour episodes; permanent after a host restart, since the

@@ -5,7 +5,7 @@
  *     part #722 was missing — what a SUBSEQUENT GET reports about a write that
  *     already landed (`pendingValue` / `pendingRestart` / `restartRequired`).
  *   - PUT /api/instance-config → writes only the editable allowlist to
- *     paddock.config.yaml (comment-preserving), rejects invalid + read-only,
+ *     managers.config.yaml (comment-preserving), rejects invalid + read-only,
  *     returns { restartRequired: true }, creates the file on first write, clears
  *     a key on `null` (#723), and refuses a stale conditional write (409).
  */
@@ -32,7 +32,7 @@ describe("integration: instance-config (#385)", () => {
       delete process.env[k];
     }
     t = await startTestApp();
-    configPath = path.join(t.cfg.dataDir, "paddock.config.yaml");
+    configPath = path.join(t.cfg.dataDir, "managers.config.yaml");
   });
   afterAll(async () => {
     await t.teardown();

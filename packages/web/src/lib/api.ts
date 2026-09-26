@@ -277,7 +277,7 @@ export const api = {
   },
 
   /**
-   * Write a patch of editable instance-config fields to `paddock.config.yaml`
+   * Write a patch of editable instance-config fields to `managers.config.yaml`
    * (comment-preserving, atomic). Keyed by the field's dotted `key`; a `null`
    * clears that key back to its built-in default. Writes do NOT hot-apply — the
    * config is frozen at boot — so this resolves `{ restartRequired: true }` and
@@ -608,7 +608,7 @@ export const api = {
 
   /**
    * The URL that streams the RAW BYTES of a file the agent shared via
-   * `mcp__paddock__send_file` (issue #112). The bytes were copied into the
+   * `mcp__managers_files__send_file` (issue #112). The bytes were copied into the
    * attachment store at send time and are addressed by an opaque id.
    */
   chatFileRawUrl(attachmentId: string): string {

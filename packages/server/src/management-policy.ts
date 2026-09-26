@@ -70,7 +70,7 @@ export interface ManagementPrincipal {
 // ── The operation catalogue ────────────────────────────────────────────────
 // The canonical names policy is written against. These deliberately match the
 // self-MCP tool names one-for-one, so an operator writing `allow: ["read_chat"]`
-// names the same thing the agent sees as `mcp__paddock_manage__read_chat`, and
+// names the same thing the agent sees as `mcp__managers__read_chat`, and
 // so a future REST route can reuse the identifier unchanged.
 
 /** Read-only operations: no state change, no turn started. */

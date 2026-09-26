@@ -13,8 +13,8 @@ export interface Brand {
 }
 
 export const DEFAULT_BRAND: Brand = {
-  name: "Paddock",
-  logo: "🐎",
+  name: "Managers",
+  logo: "🧭",
   accent: "#c2603c",
 };
 

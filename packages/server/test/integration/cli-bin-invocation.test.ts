@@ -1,5 +1,5 @@
 /**
- * Regression test: the `paddock` bin must run when invoked through a SYMLINK.
+ * Regression test: the `managers` bin must run when invoked through a SYMLINK.
  *
  * npm installs a `bin` as a symlink at `node_modules/.bin/<name>`. A previous
  * version guarded `main()` with
@@ -22,7 +22,7 @@ import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 
 const run = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const entry = path.resolve(here, "../../src/cli/paddock.ts");
+const entry = path.resolve(here, "../../src/cli/managers.ts");
 const tsx = path.resolve(here, "../../node_modules/.bin/tsx");
 
 let tmp: string;
@@ -37,7 +37,7 @@ afterAll(async () => {
   await rmTmpDir(tmp);
 });
 
-describe("paddock bin invocation (#638 regression)", () => {
+describe("managers bin invocation (#638 regression)", () => {
   it("prints its version when run through a symlink", async () => {
     const { stdout } = await run(tsx, [link, "--version"], { timeout: 60_000 });
     expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
@@ -45,7 +45,7 @@ describe("paddock bin invocation (#638 regression)", () => {
 
   it("prints usage when run through a symlink", async () => {
     const { stdout } = await run(tsx, [link, "--help"], { timeout: 60_000 });
-    expect(stdout).toContain("paddock — run a Paddock instance locally");
+    expect(stdout).toContain("managers — run a Managers instance locally");
     expect(stdout).toContain("--data-dir");
     // #798: the usage text must not advertise a flag `parseArgs` now rejects.
     expect(stdout).not.toContain("--here");

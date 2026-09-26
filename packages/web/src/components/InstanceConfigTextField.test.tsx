@@ -35,7 +35,7 @@ const BUILT_IN = "You are running in Paddock, a web app.\n\n- Show, don't descri
 
 function configWith(value: unknown, envOverridden = false): InstanceConfig {
   return {
-    configPath: "/data/paddock.config.yaml",
+    configPath: "/data/managers.config.yaml",
     restartRequired: false,
     configVersion: "v1",
     groups: [
@@ -73,7 +73,7 @@ describe("InstanceConfigForm — multi-line `text` field (#635)", () => {
     updateInstanceConfig.mockReset();
     updateInstanceConfig.mockResolvedValue({
       restartRequired: true,
-      configPath: "/data/paddock.config.yaml",
+      configPath: "/data/managers.config.yaml",
     });
   });
 

@@ -41,7 +41,7 @@ export const OPENAPI_TAGS = [
 ] as const;
 
 const BASE_DESCRIPTION = [
-  "HTTP API for Paddock — the Claude Code workspace platform (persistent chats, projects, unified triggers).",
+  "HTTP API for Managers — the Claude Code workspace platform (persistent chats, projects, unified triggers).",
   "",
   "This document is **generated from the server's route schemas** via `@fastify/swagger`, so it",
   "tracks the code: a new or changed route with a schema shows up here automatically.",
@@ -79,8 +79,8 @@ function authDoc(auth: AuthConfig): {
 } {
   const header = "\n\n## Authentication\n\n";
   const shared =
-    "Paddock has no built-in login — authentication is provider-agnostic and handled at the edge " +
-    "(reverse proxy / IdP). **When these docs are served by the Paddock instance itself, behind your " +
+    "Managers has no built-in login — authentication is provider-agnostic and handled at the edge " +
+    "(reverse proxy / IdP). **When these docs are served by the Managers instance itself, behind your " +
     "proxy, a `Try it out` request is a same-origin call that inherits your existing SSO session — it " +
     "authenticates automatically, nothing to paste here.** Use the **Authorize** button only for the " +
     "explicit-token path (a different origin, a programmatic client, or testing without the proxy).";
@@ -96,7 +96,7 @@ function authDoc(auth: AuthConfig): {
             `Trusted-header auth (\`MANAGERS_AUTH_MODE=trusted-header\`). The identity header your ` +
             `reverse proxy injects after SSO — here \`${auth.userHeader}\` ` +
             `(configurable via \`MANAGERS_AUTH_USER_HEADER\`). In production the proxy sets this and ` +
-            `Paddock trusts it, so the app MUST be reachable only through the proxy (a direct client ` +
+            `Managers trusts it, so the app MUST be reachable only through the proxy (a direct client ` +
             `could otherwise forge the header).`,
         },
       },
@@ -164,7 +164,7 @@ export function buildSwaggerOptions(version: string, auth: AuthConfig): SwaggerO
     openapi: {
       openapi: "3.0.3",
       info: {
-        title: "Paddock HTTP API",
+        title: "Managers HTTP API",
         description: BASE_DESCRIPTION + a.paragraph,
         version,
       },
@@ -222,7 +222,7 @@ export function buildSwaggerUiOptions(brand: SwaggerUiBranding): FastifySwaggerU
       persistAuthorization: true,
     },
     theme: {
-      title: "Paddock HTTP API",
+      title: "Managers HTTP API",
       css: [{ filename: "paddock.css", content: brandCss(brand.accent) }],
       ...(brand.favicon
         ? {

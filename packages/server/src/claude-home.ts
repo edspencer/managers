@@ -433,7 +433,7 @@ async function materializeSettings(
     report.notices.push({
       level: "warn",
       message:
-        `not using your ~/.claude/${entry}: ${plan.reason}. Paddock could not filter it, and ` +
+        `not using your ~/.claude/${entry}: ${plan.reason}. Managers could not filter it, and ` +
         `\`claude.hooks: own\` means it must not be used unfiltered — so this instance runs ` +
         `with no user-level settings at all. Fix the JSON and restart.`,
     });
@@ -472,7 +472,7 @@ async function materializeSettings(
     level: "info",
     message:
       `Claude hooks: your ~/.claude/${entry} defines ${plan.dropped.join(", ")}, which this ` +
-      `instance does NOT run (\`claude.hooks: own\`). Paddock writes its own ${entry} carrying ` +
+      `instance does NOT run (\`claude.hooks: own\`). Managers writes its own ${entry} carrying ` +
       `every other key of yours — permissions, model, statusline — and regenerates it at ` +
       `startup, so restart paddock after editing yours. Set \`claude.hooks: host\` to run them.`,
   });
@@ -568,7 +568,7 @@ export async function ensureClaudeHome(
     }
     if (present.length > 0) {
       report.notices.push({
-        // `warn`, not `info`, and deliberately (#706). `cli/paddock.ts` sets
+        // `warn`, not `info`, and deliberately (#706). `cli/managers.ts` sets
         // LOG_LEVEL=warn unless `--verbose`, so at `info` this was filtered out
         // on the `npx` path — the documented install route, and the one
         // population the notice exists for. It is not noise at `warn` because it
@@ -627,7 +627,7 @@ export async function ensureClaudeHome(
         level: "info",
         message:
           `Claude login: this machine's own, from the macOS Keychain ` +
-          `(\`claude.credentials: host\`). Paddock sets ${SECURE_STORAGE_DIR_VAR}="" so Claude ` +
+          `(\`claude.credentials: host\`). Managers sets ${SECURE_STORAGE_DIR_VAR}="" so Claude ` +
           `Code reads the same unsuffixed entry your own \`claude\` does, while its config dir ` +
           `stays at ${cfg.claudeHome}. Set \`claude.credentials: own\` to use only a login of ` +
           `this instance's.`,
@@ -832,7 +832,7 @@ export interface PlantedChatsLink {
  *
  * The ones this finds are the poisoned kind. Under `--here` — removed in #798,
  * but the residue outlives it — the workspace's `.chats/` sat at `<dir>/.chats`
- * while the data dir was `<dir>/.paddock`, so a link planted by an affected build
+ * while the data dir was `<dir>/.managers`, so a link planted by an affected build
  * points somewhere no `dataDir` prefix match will ever catch. While it exists, every `claude` session the user starts in
  * that directory writes into paddock's store instead of their own history, and
  * anything that expects `~/.claude/projects/<enc>` to be a real directory

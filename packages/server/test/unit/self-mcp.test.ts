@@ -80,13 +80,13 @@ function fakeContext(over: Partial<SelfMcpContext> = {}): SelfMcpContext {
 }
 
 describe("self-management MCP (Phase 1, read-only)", () => {
-  it("names the server + tools as mcp__paddock_manage__*", () => {
-    expect(SELF_MCP_SERVER_KEY).toBe("paddock_manage");
-    expect(SELF_MCP_TOOL_NAMES.listProjects).toBe("mcp__paddock_manage__list_projects");
-    expect(SELF_MCP_TOOL_NAMES.listChats).toBe("mcp__paddock_manage__list_chats");
-    expect(SELF_MCP_TOOL_NAMES.readChat).toBe("mcp__paddock_manage__read_chat");
+  it("names the server + tools as mcp__managers__*", () => {
+    expect(SELF_MCP_SERVER_KEY).toBe("managers");
+    expect(SELF_MCP_TOOL_NAMES.listProjects).toBe("mcp__managers__list_projects");
+    expect(SELF_MCP_TOOL_NAMES.listChats).toBe("mcp__managers__list_chats");
+    expect(SELF_MCP_TOOL_NAMES.readChat).toBe("mcp__managers__read_chat");
     const def = selfMcpServerDef(fakeContext());
-    expect(def.name).toBe("paddock_manage");
+    expect(def.name).toBe("managers");
     expect(def.tools.map((t) => t.name).sort()).toEqual(["list_chats", "list_projects", "read_chat"]);
   });
 
@@ -571,13 +571,13 @@ describe("self-management MCP (Phase 2, write tools)", () => {
     ]);
   });
 
-  it("names the write tools as mcp__paddock_manage__*", () => {
-    expect(SELF_MCP_WRITE_TOOL_NAMES.createChat).toBe("mcp__paddock_manage__create_chat");
-    expect(SELF_MCP_WRITE_TOOL_NAMES.forkChat).toBe("mcp__paddock_manage__fork_chat");
-    expect(SELF_MCP_WRITE_TOOL_NAMES.sendMessage).toBe("mcp__paddock_manage__send_message");
-    expect(SELF_MCP_WRITE_TOOL_NAMES.archiveChat).toBe("mcp__paddock_manage__archive_chat");
-    expect(SELF_MCP_WRITE_TOOL_NAMES.unarchiveChat).toBe("mcp__paddock_manage__unarchive_chat");
-    expect(SELF_MCP_WRITE_TOOL_NAMES.forkChatBatch).toBe("mcp__paddock_manage__fork_chat_batch");
+  it("names the write tools as mcp__managers__*", () => {
+    expect(SELF_MCP_WRITE_TOOL_NAMES.createChat).toBe("mcp__managers__create_chat");
+    expect(SELF_MCP_WRITE_TOOL_NAMES.forkChat).toBe("mcp__managers__fork_chat");
+    expect(SELF_MCP_WRITE_TOOL_NAMES.sendMessage).toBe("mcp__managers__send_message");
+    expect(SELF_MCP_WRITE_TOOL_NAMES.archiveChat).toBe("mcp__managers__archive_chat");
+    expect(SELF_MCP_WRITE_TOOL_NAMES.unarchiveChat).toBe("mcp__managers__unarchive_chat");
+    expect(SELF_MCP_WRITE_TOOL_NAMES.forkChatBatch).toBe("mcp__managers__fork_chat_batch");
   });
 
   it("create_chat defaults project to current and passes name/preload through", async () => {
@@ -1134,11 +1134,11 @@ describe("self-management MCP (trigger tools + per-project gate)", () => {
     expect(def.tools.map((t) => t.name)).not.toContain("set_trigger");
   });
 
-  it("names the trigger tools as mcp__paddock_manage__*", () => {
-    expect(SELF_MCP_TRIGGER_TOOL_NAMES.listTriggers).toBe("mcp__paddock_manage__list_triggers");
-    expect(SELF_MCP_TRIGGER_TOOL_NAMES.setTrigger).toBe("mcp__paddock_manage__set_trigger");
-    expect(SELF_MCP_TRIGGER_TOOL_NAMES.removeTrigger).toBe("mcp__paddock_manage__remove_trigger");
-    expect(SELF_MCP_TRIGGER_TOOL_NAMES.runTrigger).toBe("mcp__paddock_manage__run_trigger");
+  it("names the trigger tools as mcp__managers__*", () => {
+    expect(SELF_MCP_TRIGGER_TOOL_NAMES.listTriggers).toBe("mcp__managers__list_triggers");
+    expect(SELF_MCP_TRIGGER_TOOL_NAMES.setTrigger).toBe("mcp__managers__set_trigger");
+    expect(SELF_MCP_TRIGGER_TOOL_NAMES.removeTrigger).toBe("mcp__managers__remove_trigger");
+    expect(SELF_MCP_TRIGGER_TOOL_NAMES.runTrigger).toBe("mcp__managers__run_trigger");
   });
 });
 
@@ -1162,8 +1162,8 @@ describe("self-management MCP (create_project)", () => {
     expect(def.tools.map((t) => t.name)).not.toContain("create_project");
   });
 
-  it("names the project tool as mcp__paddock_manage__create_project", () => {
-    expect(SELF_MCP_PROJECT_TOOL_NAMES.createProject).toBe("mcp__paddock_manage__create_project");
+  it("names the project tool as mcp__managers__create_project", () => {
+    expect(SELF_MCP_PROJECT_TOOL_NAMES.createProject).toBe("mcp__managers__create_project");
   });
 
   it("creates a MANAGED project from just a name, deriving the slug", async () => {
@@ -1324,9 +1324,9 @@ describe("self-management MCP (promote_project)", () => {
     expect(def.tools.map((t) => t.name)).not.toContain("promote_project");
   });
 
-  it("names the tool as mcp__paddock_manage__promote_project", () => {
+  it("names the tool as mcp__managers__promote_project", () => {
     expect(SELF_MCP_PROJECT_TOOL_NAMES.promoteProject).toBe(
-      "mcp__paddock_manage__promote_project",
+      "mcp__managers__promote_project",
     );
   });
 

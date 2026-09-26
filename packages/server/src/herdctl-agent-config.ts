@@ -382,8 +382,8 @@ export async function ensureConfigFile(cfg: PaddockConfig): Promise<void> {
   const doc = {
     version: 1,
     fleet: {
-      name: "paddock",
-      description: "Paddock agent fleet (agents registered at runtime).",
+      name: "managers",
+      description: "Managers agent fleet (agents registered at runtime).",
     },
     defaults: {
       // Currently INERT: core's `DefaultsSchema` has no `runtime` key, so this is

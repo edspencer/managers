@@ -93,14 +93,14 @@ const DEFAULT_MIN_INTERVAL_MS = 5 * 60 * 1000;
  * and keeper-editable. When present, its content is appended to the sweeper's
  * curation prompt; when absent, sweep behaviour is unchanged.
  */
-const SWEEP_INSTRUCTIONS_FILE = ".paddock/hooks/sweep.md";
+const SWEEP_INSTRUCTIONS_FILE = ".managers/hooks/sweep.md";
 
 /**
  * Generous size cap (chars) for the appended sweep-instruction file. Every other
  * project-controlled field folded into the curation prompt is bounded
  * (changelog/claudeMd via `trim(_, 2000)`, digest via `slice(-40)`/`trim(_, 600)`)
  * so prompt/token cost stays predictable; this keeps a pathologically large
- * `.paddock/hooks/sweep.md` from bloating every sweep. The cap is large enough
+ * `.managers/hooks/sweep.md` from bloating every sweep. The cap is large enough
  * that any realistic instruction file passes through untouched — and unlike the
  * `trim(...)` helper (which flattens all whitespace to single spaces), it
  * preserves the file's markdown line structure and only truncates the overflow.
@@ -301,7 +301,7 @@ export class SweepService {
       ]);
 
     // The curator trigger's own prompt extension (design §2.1 #4) and the git-tracked
-    // `.paddock/hooks/sweep.md` are two channels of the SAME per-project curator
+    // `.managers/hooks/sweep.md` are two channels of the SAME per-project curator
     // guidance — fold both under the one `=== EXTRA … ===` heading (trigger first).
     const extraInstructions = [triggerInstructions, fileInstructions]
       .filter((s) => s.length > 0)
@@ -445,7 +445,7 @@ export class SweepService {
 
   /**
    * Read the OPTIONAL per-project sweeper-instruction file
-   * (`.paddock/hooks/sweep.md`, issue #G2) — extra curator guidance a
+   * (`.managers/hooks/sweep.md`, issue #G2) — extra curator guidance a
    * user/keeper commits to shape THIS project's OVERVIEW/CHANGELOG curation.
    *
    * The file is git-tracked and keeper-editable, and lives alongside the
@@ -470,7 +470,7 @@ export class SweepService {
     if (text.length > SWEEP_INSTRUCTIONS_MAX) {
       this.log.warn(
         { slug, length: text.length, cap: SWEEP_INSTRUCTIONS_MAX },
-        "sweep: .paddock/hooks/sweep.md exceeds cap — truncating for the prompt",
+        "sweep: .managers/hooks/sweep.md exceeds cap — truncating for the prompt",
       );
       return text.slice(0, SWEEP_INSTRUCTIONS_MAX) + "\n…[truncated]";
     }
@@ -480,9 +480,9 @@ export class SweepService {
   /**
    * Read the OPTIONAL curator-trigger prompt extension (T5) — the `run.prompt` /
    * `run.promptFile` of the project's `curate-overview` (event/afterTurn) trigger,
-   * appended to the sweeper's curation prompt exactly like `.paddock/hooks/sweep.md`.
+   * appended to the sweeper's curation prompt exactly like `.managers/hooks/sweep.md`.
    * This is how the design's #4 example (`"Also maintain GLOSSARY.md of domain terms."`)
-   * extends the built-in sweep. `run.promptFile` resolves under `.paddock/triggers/`
+   * extends the built-in sweep. `run.promptFile` resolves under `.managers/triggers/`
    * (traversal-guarded, `.md`-only) and is read fresh at fire time, exactly as the
    * generic trigger fire path does. Absent trigger / neither field / a read error ⇒ ""
    * (no extra instructions), so curation is never broken by a bad/removed file. Capped
@@ -517,7 +517,7 @@ export class SweepService {
     changelog: string;
     claudeMd: string;
     digest: string;
-    /** Optional per-project curator instructions (`.paddock/hooks/sweep.md`). */
+    /** Optional per-project curator instructions (`.managers/hooks/sweep.md`). */
     extraInstructions: string;
     /** Effective (per-project-resolved) budgets for this sweep (issue #384). */
     budget: CurationConfig;
@@ -593,7 +593,7 @@ export class SweepService {
         "specific port or a localhost URL is NOT a project fact to record. Capture " +
         "what the project IS plus its decisions, open questions, and next steps.",
       "",
-      // Optional per-project curator instructions (`.paddock/hooks/sweep.md`,
+      // Optional per-project curator instructions (`.managers/hooks/sweep.md`,
       // issue #G2): appended verbatim so a project can steer its own curation
       // (e.g. "always keep a Glossary section", "note API changes prominently").
       // These refine HOW to curate; they do NOT override the literal output

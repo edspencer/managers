@@ -26,7 +26,7 @@
 export type Readiness = "ready" | "timeout";
 
 export interface ReadyOptions {
-  /** Base URL of the server, e.g. `http://127.0.0.1:7233` — no trailing slash. */
+  /** Base URL of the server, e.g. `http://127.0.0.1:7234` — no trailing slash. */
   url: string;
   /** Give up after this long. */
   timeoutMs?: number;

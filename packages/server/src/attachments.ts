@@ -1,5 +1,5 @@
 /**
- * Attachment store for files shared via `mcp__paddock__send_file` (issue #112).
+ * Attachment store for files shared via `mcp__managers_files__send_file` (issue #112).
  *
  * When an agent sends a REAL file, we copy its bytes here AT SEND TIME and record
  * only an opaque attachment id in the chat transcript (via the tool's output

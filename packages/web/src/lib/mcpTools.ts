@@ -1,5 +1,5 @@
 // Prettify + parse Paddock's own injected MCP tools so they render as first-class
-// UI instead of a raw `mcp__paddock_manage__create_chat` name over a JSON blob
+// UI instead of a raw `mcp__managers__create_chat` name over a JSON blob
 // (issue #253). Pure/parse helpers live here (unit-testable); the React bodies
 // live in components/PaddockManageBlock.tsx.
 //
@@ -12,9 +12,9 @@
 export interface McpToolInfo {
   /** True when the name is an MCP tool (`mcp__…`). */
   isMcp: boolean;
-  /** The MCP server segment, e.g. `paddock_manage` (empty for a non-mcp name). */
+  /** The MCP server segment, e.g. `managers` (empty for a non-mcp name). */
   server: string;
-  /** True for one of Paddock's own servers (`paddock` / `paddock_manage`). */
+  /** True for one of this app's own servers (`managers` / `managers_files`). */
   isPaddock: boolean;
   /** Humanized tool label, e.g. `create_chat` → "Create chat". */
   display: string;
@@ -22,8 +22,8 @@ export interface McpToolInfo {
   tool: string;
 }
 
-/** Paddock's own injected MCP servers. */
-const MANAGERS_SERVERS = new Set(["paddock", "paddock_manage"]);
+/** This app's own injected MCP servers. */
+const MANAGERS_SERVERS = new Set(["managers", "managers_files"]);
 
 /** `create_chat` → "Create chat"; leaves an already-spaced label alone. */
 function humanize(segment: string): string {
@@ -55,7 +55,7 @@ export function mcpToolInfo(toolName: string): McpToolInfo {
   };
 }
 
-// ── paddock_manage result shapes (mirror the server `ok(...)` payloads) ────────
+// ── managers result shapes (mirror the server `ok(...)` payloads) ────────
 
 export interface PmProject {
   slug: string;
@@ -80,7 +80,7 @@ export interface PmFork {
   prompt: string;
 }
 
-/** Parsed, discriminated `paddock_manage` result (from the tool's JSON output). */
+/** Parsed, discriminated `managers` result (from the tool's JSON output). */
 export type PaddockManage =
   | { tool: "list_projects"; count: number; projects: PmProject[] }
   | { tool: "list_chats"; count: number; project: string | null; chats: PmChat[] }
@@ -104,7 +104,7 @@ export type PaddockManage =
   | { tool: "send_message"; project: string; sessionId: string; prompt?: string }
   | { tool: "fork_chat_batch"; count: number; source: string; forks: PmFork[] };
 
-const PM_PREFIX = "mcp__paddock_manage__";
+const PM_PREFIX = "mcp__managers__";
 
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
@@ -134,7 +134,7 @@ export function chatTitle(name?: string, prompt?: string): string {
 }
 
 /**
- * Parse a `mcp__paddock_manage__*` tool call's JSON `output` into a typed shape,
+ * Parse a `mcp__managers__*` tool call's JSON `output` into a typed shape,
  * or null when the name isn't ours / the output isn't a valid payload (caller
  * falls back to the generic tool body). Mirrors `sentFileFromToolCall`.
  */
@@ -220,7 +220,7 @@ export function parsePaddockManage(
   }
 }
 
-/** A one-line header subtitle for a parsed paddock_manage result. */
+/** A one-line header subtitle for a parsed managers result. */
 export function paddockManageSummary(pm: PaddockManage): string {
   switch (pm.tool) {
     case "list_projects":

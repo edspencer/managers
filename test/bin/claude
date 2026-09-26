@@ -380,6 +380,9 @@ function recordInvocation(flags, prompt) {
         // so a test can observe what herdctl actually puts on the command line
         // rather than infer it from core's source (#691 step 6).
         mcpConfig: flags.mcpConfig ?? null,
+        // Managers M1: how many inherited PADDOCK_* vars reached this child. The
+        // server's boot scrub (env-scrub.ts) should make this 0. A count, never names.
+        paddockEnvCount: Object.keys(process.env).filter((k) => k.startsWith("PADDOCK_")).length,
       }) + "\n",
     );
   } catch {

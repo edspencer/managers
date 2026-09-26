@@ -482,7 +482,7 @@ export function AppearancePanel({ className }: AppearancePanelProps) {
             Tint the background
           </legend>
           <p className="mt-1 text-3xs leading-snug text-fg-subtle">
-            Colours the whole page a little, not just the buttons. Useful for telling two Paddock
+            Colours the whole page a little, not just the buttons. Useful for telling two Managers
             instances apart at a glance.
           </p>
           <div className="mt-2 inline-flex rounded-lg border border-edge p-0.5">

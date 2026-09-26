@@ -2,11 +2,11 @@
  * Instance-wide settings surface (issue #385).
  *
  * Paddock's instance config (`PaddockConfig`) is resolved ONCE at boot and
- * `Object.freeze`d — env over an optional `paddock.config.yaml` file over
+ * `Object.freeze`d — env over an optional `managers.config.yaml` file over
  * built-in defaults (see config.ts). Until now the only way to change a knob was
  * to hand-edit that YAML (or an env var) and restart. This module backs a
  * top-level admin Settings screen that reads the resolved config and writes the
- * editable subset back to `paddock.config.yaml`.
+ * editable subset back to `managers.config.yaml`.
  *
  * Three properties the screen depends on, enforced here:
  *
@@ -155,7 +155,7 @@ const MAX_NUMBER = 1e9;
 /**
  * Ceiling for a plain `string` field, in characters. These are names, paths and
  * URLs; without a bound a 200 KB paste into `brand.name` becomes a 200 KB
- * `paddock.config.yaml` that every boot must parse. The prompt-shaped `text`
+ * `managers.config.yaml` that every boot must parse. The prompt-shaped `text`
  * fields have their own, much larger {@link MAX_PROMPT_CHARS}.
  */
 const MAX_STRING_CHARS = 1024;
@@ -330,7 +330,7 @@ export const FIELDS: readonly FieldSpec[] = [
   // IS the env-level opt-out, so it genuinely shadows the file and must render
   // read-only. `default` carries the built-in text so the UI can offer a
   // one-click restore (a `null` PUT deletes the key) without duplicating it.
-  { key: "environmentPrompt", group: "capabilities", label: "Environment prompt", help: "Appended to every keeper turn's system prompt: what the agent should know about rendering into Paddock rather than a terminal. Clear it to append nothing.", type: "text", envVars: ["MANAGERS_ENVIRONMENT_PROMPT"], envShadowWhenDefined: true, default: DEFAULT_ENVIRONMENT_PROMPT, editable: true, coerce: promptText },
+  { key: "environmentPrompt", group: "capabilities", label: "Environment prompt", help: "Appended to every keeper turn's system prompt: what the agent should know about rendering into Managers rather than a terminal. Clear it to append nothing.", type: "text", envVars: ["MANAGERS_ENVIRONMENT_PROMPT"], envShadowWhenDefined: true, default: DEFAULT_ENVIRONMENT_PROMPT, editable: true, coerce: promptText },
   { key: "selfMcpEnabled", group: "capabilities", label: "Self-management MCP (read)", help: "Let keepers list/read projects and other chats.", type: "boolean", envVars: ["MANAGERS_SELF_MCP"], default: false, editable: true, coerce: asBool },
   { key: "selfMcpWriteEnabled", group: "capabilities", label: "Self-management MCP (write)", help: "Let keepers create/fork/message chats (needs read enabled too).", type: "boolean", envVars: ["MANAGERS_SELF_MCP_WRITE"], default: false, editable: true, coerce: asBool },
   { key: "selfMcpProjectsEnabled", group: "capabilities", label: "Self-management MCP (projects)", help: "Let keepers create new projects and promote existing ones — including a git clone of a repo URL the agent supplies (needs self-MCP write).", type: "boolean", envVars: ["MANAGERS_SELF_MCP_PROJECTS"], default: false, editable: true, coerce: asBool },
@@ -355,8 +355,8 @@ export const FIELDS: readonly FieldSpec[] = [
   { key: "ui.transcriptRenderLimit", group: "ui", label: "Transcript render limit", help: "How many recent messages a chat renders on open. 0 = no limit. Older messages stay on disk and are not deleted.", type: "number", envVars: ["MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT"], default: DEFAULT_UI.transcriptRenderLimit, editable: true, coerce: nonNegInt },
 
   // Branding (issue #34).
-  { key: "brand.name", group: "branding", label: "Name", type: "string", envVars: ["MANAGERS_BRAND_NAME"], default: "Paddock", editable: true, coerce: nonEmptyString },
-  { key: "brand.logo", group: "branding", label: "Logo", help: "An emoji/glyph, or a URL/path to an image.", type: "string", envVars: ["MANAGERS_BRAND_LOGO"], default: "🐎", editable: true, coerce: nonEmptyString },
+  { key: "brand.name", group: "branding", label: "Name", type: "string", envVars: ["MANAGERS_BRAND_NAME"], default: "Managers", editable: true, coerce: nonEmptyString },
+  { key: "brand.logo", group: "branding", label: "Logo", help: "An emoji/glyph, or a URL/path to an image.", type: "string", envVars: ["MANAGERS_BRAND_LOGO"], default: "🧭", editable: true, coerce: nonEmptyString },
   { key: "brand.accent", group: "branding", label: "Accent color", type: "string", envVars: ["MANAGERS_BRAND_ACCENT"], default: "#c2603c", editable: true, coerce: hexColor },
 
   // Transcription (voice dictation). endpoint is semi-sensitive; apiKey is a
@@ -366,8 +366,8 @@ export const FIELDS: readonly FieldSpec[] = [
   { key: "transcription.endpoint", group: "transcription", label: "Endpoint", help: "remote mode: OpenAI-compatible base URL.", type: "string", envVars: ["MANAGERS_WHISPER_ENDPOINT"], default: null, editable: true, sensitive: true, coerce: optString },
 
   // Git identity.
-  { key: "gitAuthor.name", group: "git", label: "Author name", type: "string", envVars: ["MANAGERS_GIT_AUTHOR_NAME"], default: "Paddock", editable: true, coerce: nonEmptyString },
-  { key: "gitAuthor.email", group: "git", label: "Author email", type: "string", envVars: ["MANAGERS_GIT_AUTHOR_EMAIL"], default: "paddock@localhost", editable: true, coerce: nonEmptyString },
+  { key: "gitAuthor.name", group: "git", label: "Author name", type: "string", envVars: ["MANAGERS_GIT_AUTHOR_NAME"], default: "Managers", editable: true, coerce: nonEmptyString },
+  { key: "gitAuthor.email", group: "git", label: "Author email", type: "string", envVars: ["MANAGERS_GIT_AUTHOR_EMAIL"], default: "managers@localhost", editable: true, coerce: nonEmptyString },
 
   // Logging.
   { key: "logLevel", group: "logging", label: "Log level", type: "enum", enumValues: LOG_LEVELS, envVars: ["LOG_LEVEL"], default: "info", editable: true, coerce: oneOf(LOG_LEVELS) },
@@ -385,10 +385,10 @@ export const FIELDS: readonly FieldSpec[] = [
   // read-only because their symlinks are planted at agent-registration time, so
   // a live toggle silently does nothing until the next boot. Making the profile
   // editable would reintroduce that through the back door, and worse: one
-  // control that no-ops five levers at once. Change it in `paddock.config.yaml`
+  // control that no-ops five levers at once. Change it in `managers.config.yaml`
   // or `MANAGERS_PROFILE` and restart, which is what the value here reflects.
   { key: "profile", group: "advanced", label: "Posture profile", help: "The named security/capability posture this instance resolved at boot. It sets the default for the Claude sharing modes below and most of the Capabilities toggles; anything set explicitly in this file or the environment still wins over it.", type: "enum", enumValues: PROFILE_NAMES, envVars: ["MANAGERS_PROFILE"], default: DEFAULT_PROFILE, editable: false },
-  { key: "port", group: "advanced", label: "Port", type: "number", envVars: ["PORT"], default: 7233, editable: false },
+  { key: "port", group: "advanced", label: "Port", type: "number", envVars: ["PORT"], default: 7234, editable: false },
   { key: "host", group: "advanced", label: "Host", type: "string", envVars: ["HOST", "MANAGERS_HOST"], default: "127.0.0.1", editable: false },
   { key: "dataDir", group: "advanced", label: "Data dir", type: "string", envVars: ["MANAGERS_DATA_DIR"], default: null, editable: false },
   { key: "projectsRoot", group: "advanced", label: "Projects root", type: "string", envVars: ["MANAGERS_PROJECTS_DIR"], default: null, editable: false },
@@ -401,7 +401,7 @@ export const FIELDS: readonly FieldSpec[] = [
   // a toggle that silently does nothing until the next boot would be worse than
   // no toggle. It is surfaced because "what is this instance sharing?" should be
   // answerable without reading a YAML file.
-  { key: "claude.transcripts", group: "advanced", label: "Transcripts", help: "own = Paddock's own, in each project's .chats/; host = your ~/.claude transcripts, shared live.", type: "string", envVars: ["MANAGERS_CLAUDE_TRANSCRIPTS"], default: DEFAULT_TRANSCRIPTS_MODE, editable: false },
+  { key: "claude.transcripts", group: "advanced", label: "Transcripts", help: "own = Managers' own, in each project's .chats/; host = your ~/.claude transcripts, shared live.", type: "string", envVars: ["MANAGERS_CLAUDE_TRANSCRIPTS"], default: DEFAULT_TRANSCRIPTS_MODE, editable: false },
   // Read-only for the same reason, plus one of its own: the secure-storage
   // variable it sets is read by Claude Code when a turn's process starts, so a
   // live toggle would apply to some turns and not others.
@@ -425,7 +425,7 @@ export const FIELDS: readonly FieldSpec[] = [
   // user. There is no redacting variant of `FieldSpec`, and inventing one to
   // display a server list is not worth the leak surface: the boot log already
   // names every declared server, secret-free, via `describeServer`.
-  { key: "claude.mcpServers", group: "advanced", label: "MCP servers", help: "own = only the servers Paddock provides itself; host = the ones declared in your ~/.claude.json as well.", type: "string", envVars: ["MANAGERS_CLAUDE_MCP_SERVERS"], default: DEFAULT_MCP_SERVERS_MODE, editable: false },
+  { key: "claude.mcpServers", group: "advanced", label: "MCP servers", help: "own = only the servers Managers provides itself; host = the ones declared in your ~/.claude.json as well.", type: "string", envVars: ["MANAGERS_CLAUDE_MCP_SERVERS"], default: DEFAULT_MCP_SERVERS_MODE, editable: false },
   // Auth: read-only in v1 (misconfig can lock everyone out — issue #385). Only
   // the mode is surfaced; JWT/JWKS internals stay out of the API.
   { key: "auth.mode", group: "advanced", label: "Auth mode", type: "string", envVars: ["MANAGERS_AUTH_MODE"], default: "none", editable: false, sensitive: true },
@@ -473,7 +473,7 @@ export interface InstanceConfigFieldDto {
   value: unknown;
   /**
    * PENDING: what this field would resolve to if the process restarted right
-   * now — i.e. what is in `paddock.config.yaml` this instant (or the built-in
+   * now — i.e. what is in `managers.config.yaml` this instant (or the built-in
    * default where the file says nothing, or `value` where an env var wins). This
    * is what the editor renders and what a save round-trips through (#722).
    */
@@ -540,7 +540,7 @@ interface ConfigFileSnapshot {
 }
 
 /**
- * Read + parse `paddock.config.yaml` for the GET path. Never throws: a missing
+ * Read + parse `managers.config.yaml` for the GET path. Never throws: a missing
  * file is the normal case, and a malformed one must not take down the screen
  * that exists to fix it (the boot loader is the strict reader — see
  * `loadConfigFile`).
@@ -617,12 +617,12 @@ function valuesEqual(a: unknown, b: unknown): boolean {
  * Kept in sync with config.ts's private constant (both point at the same file);
  * duplicated here so this module needn't reach into config.ts internals.
  */
-const DEFAULT_CONFIG_FILENAME = "paddock.config.yaml";
+const DEFAULT_CONFIG_FILENAME = "managers.config.yaml";
 
 /**
  * Resolve the path a PUT writes to: an explicit `MANAGERS_CONFIG` env var wins
  * (the same rule {@link import("./config.js").loadConfigFile} reads it back
- * from), else `<dataDir>/paddock.config.yaml`.
+ * from), else `<dataDir>/managers.config.yaml`.
  */
 export function instanceConfigPath(cfg: PaddockConfig): string {
   const explicit = process.env.MANAGERS_CONFIG;
@@ -852,7 +852,7 @@ export function validatePatch(patch: Record<string, unknown>): { key: string; va
 }
 
 /**
- * Write the validated pairs into `paddock.config.yaml`, preserving operator
+ * Write the validated pairs into `managers.config.yaml`, preserving operator
  * comments and unmanaged keys. Uses the `yaml` `Document` API to round-trip an
  * existing file (or start a fresh document when none exists), then writes
  * atomically (temp + rename). A `null` value deletes that key (clearing an

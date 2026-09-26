@@ -1,5 +1,5 @@
 /**
- * The `mcpServers:` block of `paddock.config.yaml` (#691 step 6) — declaring an
+ * The `mcpServers:` block of `managers.config.yaml` (#691 step 6) — declaring an
  * MCP server to paddock itself rather than borrowing the machine's.
  *
  * Two things are being pinned here and they pull in opposite directions:
@@ -192,6 +192,15 @@ describe("mcpServers: what is refused, and why refusing beats degrading", () => 
     expect([...RESERVED_MCP_SERVER_NAMES].sort()).toEqual(
       [SEND_FILE_SERVER_KEY, SELF_MCP_SERVER_KEY].sort(),
     );
+  });
+
+  it("Managers M1: reserves managers/managers_files and leaves `paddock` free", () => {
+    // `paddock` is the per-project connection name for a real Paddock instance,
+    // so tools read `mcp__paddock__create_chat`; it must be declarable.
+    expect([...RESERVED_MCP_SERVER_NAMES].sort()).toEqual(["managers", "managers_files"]);
+    const { servers, errors } = resolveDeclaredMcpServers({ paddock: { command: "x" } }, NO_ENV);
+    expect(errors).toEqual([]);
+    expect(Object.keys(servers)).toEqual(["paddock"]);
   });
 
   it("refuses a name that could not produce a working allowlist pattern", () => {

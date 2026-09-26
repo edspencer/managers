@@ -25,7 +25,7 @@ vi.mock("../lib/api", async () => {
  */
 function sampleConfig(overrides: Partial<InstanceConfig> = {}): InstanceConfig {
   return {
-    configPath: "/data/paddock.config.yaml",
+    configPath: "/data/managers.config.yaml",
     restartRequired: false,
     configVersion: "v1",
     groups: [
@@ -73,10 +73,10 @@ function sampleConfig(overrides: Partial<InstanceConfig> = {}): InstanceConfig {
             group: "advanced",
             label: "Port",
             type: "number",
-            value: 7233,
-            pendingValue: 7233,
+            value: 7234,
+            pendingValue: 7234,
             pendingRestart: false,
-            default: 7233,
+            default: 7234,
             editable: false,
             sensitive: false,
             envOverridden: false,
@@ -125,7 +125,7 @@ function profiledConfig(profile = "yolo"): InstanceConfig {
     }) as InstanceConfigField;
 
   return {
-    configPath: "/data/paddock.config.yaml",
+    configPath: "/data/managers.config.yaml",
     restartRequired: false,
     configVersion: "v1",
     groups: [
@@ -206,7 +206,7 @@ describe("InstanceConfigPage (#385)", () => {
     getInstanceConfig.mockResolvedValue(sampleConfig());
     updateInstanceConfig.mockResolvedValue({
       restartRequired: true,
-      configPath: "/data/paddock.config.yaml",
+      configPath: "/data/managers.config.yaml",
       configVersion: "v2",
     });
   });
@@ -401,7 +401,7 @@ describe("InstanceConfigPage (#385)", () => {
 
     updateInstanceConfig.mockResolvedValueOnce({
       restartRequired: true,
-      configPath: "/data/paddock.config.yaml",
+      configPath: "/data/managers.config.yaml",
       configVersion: "v10",
     });
     getInstanceConfig.mockResolvedValueOnce(divergedConfig(2222, "v10"));

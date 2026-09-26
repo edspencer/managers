@@ -165,7 +165,7 @@ export class GithubAuth {
         headers: {
           authorization: `Bearer ${token}`,
           accept: "application/vnd.github+json",
-          "user-agent": "paddock",
+          "user-agent": "managers",
         },
       });
       if (!r.ok) return undefined;

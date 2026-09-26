@@ -97,8 +97,8 @@ export class GitService {
   constructor(
     private readonly projectsRoot: string,
     private readonly author: { name: string; email: string } = {
-      name: "Paddock",
-      email: "paddock@localhost",
+      name: "Managers",
+      email: "managers@localhost",
     },
   ) {}
 

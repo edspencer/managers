@@ -1,4 +1,4 @@
-# @paddock/web
+# @managers/web
 
 The project-first Paddock SPA — React + Vite + Tailwind, dark-mode, responsive.
 Projects are the first-class citizen; the instance root is a workspace of its own.
@@ -10,8 +10,8 @@ Projects are the first-class citizen; the instance root is a workspace of its ow
 ## Quick start (frontend only)
 
 ```bash
-# From the repo root, with the backend already running on :7233:
-npm run dev:web      # http://localhost:5173 (proxies /api + /ws -> :7233)
+# From the repo root, with the backend already running on :7234:
+npm run dev:web      # http://localhost:5173 (proxies /api + /ws -> :7234)
 
 # Build the production bundle (the server serves packages/web/dist):
 npm run -w packages/web build

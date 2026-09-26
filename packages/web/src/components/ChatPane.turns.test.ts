@@ -151,7 +151,7 @@ describe("historyToTurns (issue #135: stable per-message id)", () => {
       msg({
         role: "tool",
         uuid: "f-1",
-        toolCall: toolCall("mcp__paddock__send_file", envelope),
+        toolCall: toolCall("mcp__managers_files__send_file", envelope),
       }),
     ]);
     expect(turns[0].kind).toBe("file");

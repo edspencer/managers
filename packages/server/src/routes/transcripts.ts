@@ -187,7 +187,7 @@ const warningSchema = {
         "unexpected-entries",
       ],
       description:
-        "`unexpected-entries` means `.chats/` holds entries that are neither transcripts nor known sidecars; they will still be moved (the postcondition is that `.chats/` ends up empty), but they are named so nothing moves unannounced. `memory-collision` means the host store already has an agent-memory file at the same relative path: Paddock's copy is set aside in the preserve dir rather than overwriting anything in your own ~/.claude.",
+        "`unexpected-entries` means `.chats/` holds entries that are neither transcripts nor known sidecars; they will still be moved (the postcondition is that `.chats/` ends up empty), but they are named so nothing moves unannounced. `memory-collision` means the host store already has an agent-memory file at the same relative path: Managers' copy is set aside in the preserve dir rather than overwriting anything in your own ~/.claude.",
     },
     slug: { type: "string", description: "The project it applies to. Absent for instance-wide warnings." },
     message: { type: "string", description: "Human-readable detail, safe to render." },
@@ -218,14 +218,14 @@ const preservedSchema = {
       type: "string",
       enum: ["own", "host"],
       description:
-        "Which store the preserved copy came OUT of. `own` is Paddock's copy; `host` is the user's own, moved aside so Paddock's could supersede it. Not in the design's schema, and needed: a completion screen that told a user their terminal transcript was 'not ticked' would be both false and alarming.",
+        "Which store the preserved copy came OUT of. `own` is Managers' copy; `host` is the user's own, moved aside so Managers' could supersede it. Not in the design's schema, and needed: a completion screen that told a user their terminal transcript was 'not ticked' would be both false and alarming.",
     },
     path: { type: "string", description: "Absolute path of the preserved transcript, as actually written." },
     reason: {
       type: "string",
       enum: ["unchecked", "unplanned-diverged", "identical", "already-ahead", "superseded"],
       description:
-        "`unchecked` = the user did not tick it. `unplanned-diverged` = it appeared after the plan was built and classified diverged, so its own default was applied. `identical` = byte-identical on both sides, so no choice was ever offered and Paddock's redundant copy was set aside. `already-ahead` = a fast-forward with the HOST side ahead: the user's copy is the descendant and survives. `superseded` = the user's copy was moved out of ~/.claude BEFORE Paddock's landed on top. The last three are additions: replacing the design's skip-if-present rule (see the endpoint description) made them reachable.",
+        "`unchecked` = the user did not tick it. `unplanned-diverged` = it appeared after the plan was built and classified diverged, so its own default was applied. `identical` = byte-identical on both sides, so no choice was ever offered and Managers' redundant copy was set aside. `already-ahead` = a fast-forward with the HOST side ahead: the user's copy is the descendant and survives. `superseded` = the user's copy was moved out of ~/.claude BEFORE Managers' landed on top. The last three are additions: replacing the design's skip-if-present rule (see the endpoint description) made them reachable.",
     },
   },
 } as const;
@@ -436,7 +436,7 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
               configVersion: {
                 type: ["string", "null"],
                 description:
-                  "Fingerprint of paddock.config.yaml as read for THIS response; null when the file does not exist yet. Echo as `expectedVersion` on the POST to make the write conditional.",
+                  "Fingerprint of managers.config.yaml as read for THIS response; null when the file does not exist yet. Echo as `expectedVersion` on the POST to make the write conditional.",
               },
               projects: {
                 type: "array",
@@ -539,7 +539,7 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
           "Runs the migration (#882): quiesce every project, re-enumerate `.chats/` from disk, move, and — only if EVERY project ends with an empty `.chats/` — write `claude.transcripts: host`. That write is the COMMIT POINT and is deliberately last: until it lands the running server still resolves `own` and a partly-emptied `.chats/` is the transient blank-list state the modal already warns about, which re-running reconciles. The reverse order was rejected because a crash between a `host` config and files still in `.chats/` is a genuine #708 split. " +
           "ON AN INSTANCE ALREADY RESOLVING `host` this is a RECOVERY, not a flip (#882 §2). Flipping to `host` while `.chats/` was non-empty makes `pointChatsDirAt` decline the redirect symlink, leaving the pre-flip transcripts in a real `.chats/` that nothing reads — #708's remaining half. The moves are identical; step 6 simply has nothing to write, because the config already says what it would say. Such a run returns `configWritten: false` with `restartRequired: true` and `ok: true`, and on the next boot `pointChatsDirAt` finds an empty `.chats/`, plants the redirect, and the stranded chats reappear. " +
           "`sessionIds` are the chats the user TICKED; everything else in `.chats/` is preserved rather than migrated, and an empty array is a legal choice meaning 'migrate nothing, preserve everything, and empty `.chats/`'. " +
-          "NOTHING IS EVER DELETED and nothing in your own `~/.claude` is overwritten in place. Where a chat exists on both sides, the copy that does not survive is MOVED to `<project.dir>/.chats-pre-migration/` — a SIBLING of `.chats/`, because a `pre-migration/` child would leave `.chats/` non-empty and make the redirect symlink be declined, shipping #708's own symptom. When Paddock's copy supersedes the user's (a fast-forward Paddock is ahead on, or a diverged chat the user ticked), the user's copy is moved aside FIRST and the replacement lands on an empty destination. " +
+          "NOTHING IS EVER DELETED and nothing in your own `~/.claude` is overwritten in place. Where a chat exists on both sides, the copy that does not survive is MOVED to `<project.dir>/.chats-pre-migration/` — a SIBLING of `.chats/`, because a `pre-migration/` child would leave `.chats/` non-empty and make the redirect symlink be declined, shipping #708's own symptom. When Managers' copy supersedes the user's (a fast-forward Managers is ahead on, or a diverged chat the user ticked), the user's copy is moved aside FIRST and the replacement lands on an empty destination. " +
           "This replaces the design's skip-if-present move rule, which deadlocked against the empty-`.chats/` postcondition for every chat present on both sides — on an instance where the user adopted their CLI history and then worked in both places, that is every chat, and the migration could not succeed at all. " +
           "`memory/` is merged at FILE granularity for the same reason: `memory/MEMORY.md` is a single well-known path, so a collision is the common case, and a colliding file is set aside with a `memory-collision` warning rather than overwriting a hand-curated index. " +
           "Sweeper stores migrate silently with their project and are reported as counts. Returns 409 (nothing moved) for `turn_running`, `config_conflict` and `migration_in_progress`, and 400 for `env_shadowed` (the write would be inert) or a malformed session id.",
@@ -566,7 +566,7 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
             expectedVersion: {
               type: ["string", "null"],
               description:
-                "The `configVersion` from the plan this selection was made against. When the property is present the config write is conditional: 409 `config_conflict` if paddock.config.yaml changed underneath you. Omit the property entirely to write unconditionally.",
+                "The `configVersion` from the plan this selection was made against. When the property is present the config write is conditional: 409 `config_conflict` if managers.config.yaml changed underneath you. Omit the property entirely to write unconditionally.",
             },
             dryRun: {
               type: "boolean",
@@ -617,7 +617,7 @@ export function registerTranscriptsRoutes(app: FastifyInstance, ctx: RouteCtx): 
               migrated: {
                 type: "array",
                 items: { type: "string" },
-                description: "Session ids whose Paddock copy is now in a host store.",
+                description: "Session ids whose Managers copy is now in a host store.",
               },
               preserved: {
                 type: "array",

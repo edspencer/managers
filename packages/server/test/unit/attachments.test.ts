@@ -1,5 +1,5 @@
 /**
- * The attachment store backing `mcp__paddock__send_file` real-file sends (#112):
+ * The attachment store backing `mcp__managers_files__send_file` real-file sends (#112):
  * copy-on-send bytes, id-addressed serving with a content-type, id validation,
  * cleanup, and extracting a chat's referenced ids from its transcript.
  */

@@ -88,6 +88,6 @@ export function buildProtectedResourceMetadata(
     authorization_servers: [...cfg.authorizationServers],
     scopes_supported: [...OAUTH_SCOPES_SUPPORTED],
     bearer_methods_supported: ["header"],
-    resource_name: "Paddock Management API",
+    resource_name: "Managers Management API",
   };
 }

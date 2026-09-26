@@ -220,7 +220,7 @@ export const STATE_COPY: Record<
   },
   diverged: {
     label: "Diverged",
-    hint: "Both copies have messages the other does not. Ticking keeps Paddock's copy in ~/.claude; the other is kept too, in the preserve folder.",
+    hint: "Both copies have messages the other does not. Ticking keeps Managers' copy in ~/.claude; the other is kept too, in the preserve folder.",
   },
   unknown: {
     // NOT "Unchecked". That was the first label, and driving the real dialog
@@ -229,7 +229,7 @@ export const STATE_COPY: Record<
     // statement about the checkbox rather than about the comparison. It means
     // Paddock could not compare the two copies at all.
     label: "Not compared",
-    hint: "Paddock ran out of scan budget before it could compare these two copies, so it has not assumed they are safe to merge.",
+    hint: "Managers ran out of scan budget before it could compare these two copies, so it has not assumed they are safe to merge.",
   },
 };
 
@@ -241,7 +241,7 @@ export function stateCopy(state: TranscriptsMigrationState): { label: string; hi
       // reasons follow. A row Paddock cannot describe is still a row the user
       // must be able to see and decide about.
       label: String(state),
-      hint: "This Paddock build does not recognise this state, so it is shown as the server described it.",
+      hint: "This Managers build does not recognise this state, so it is shown as the server described it.",
     }
   );
 }

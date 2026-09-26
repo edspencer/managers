@@ -130,7 +130,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // Shape the engine's own logging before anything can start a job (#684). Two
   // of the three sources of the credential-failure stack-trace wall are inside
   // `@herdctl/core`, and `setLogHandler` is the supported way to reach them from
-  // out here. `MANAGERS_QUIET` is set by `cli/paddock.ts` unless `--verbose`.
+  // out here. `MANAGERS_QUIET` is set by `cli/managers.ts` unless `--verbose`.
   installHerdctlLogBridge({ quiet: (process.env.MANAGERS_QUIET ?? "") !== "" });
 
   const app = Fastify({
@@ -241,7 +241,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // sidecar rebinds a `run.session: "resume"` trigger's owned chat after a restart.
   const triggers = new TriggerService(projects, herdctl);
   const triggerSessions = new TriggerSessionStore(cfg.dataDir);
-  // Store for files shared via mcp__paddock__send_file (issue #112). Copies live
+  // Store for files shared via mcp__managers_files__send_file (issue #112). Copies live
   // outside any project working dir so they never show up as untracked repo files.
   const attachments = new AttachmentStore(path.join(cfg.dataDir, "attachments"));
   await attachments.init();
@@ -280,7 +280,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
       `${poisoned.length} symlink(s) in ${path.join(cfg.legacyClaudeHome, "projects")} redirect ` +
         `Claude Code's transcripts into a paddock .chats/ store (#682). While they exist, ` +
         `\`claude\` sessions you start in those directories are written to paddock's store, and ` +
-        `deleting that store destroys them. Paddock does not remove anything under ~/.claude — ` +
+        `deleting that store destroys them. Managers does not remove anything under ~/.claude — ` +
         `delete them yourself if you did not intend this:\n` +
         poisoned
           .map((p) => `  ${p.link} -> ${p.target}${p.dangling ? "  (target is missing)" : ""}`)
@@ -316,7 +316,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
       `${herdctl.unplantedChatsLinks.length} project store(s) still pointed at another ` +
         `transcript folder from a previous \`claude.transcripts: host\` setting (#708). ` +
         `While that link existed, \`own\` was not isolating and deleting a chat removed the ` +
-        `file it pointed at. Paddock has replaced each link with a real directory and has ` +
+        `file it pointed at. Managers has replaced each link with a real directory and has ` +
         `neither read nor moved anything at the other end. The chats written during that ` +
         `period are still in the folder on the right, and are no longer in paddock's list: ` +
         `ones you started in a terminal can be brought back with "Import chats"; ones ` +

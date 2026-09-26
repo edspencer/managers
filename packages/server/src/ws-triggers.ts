@@ -104,7 +104,7 @@ deps.herdctl.onScheduleTrigger(async (info: TriggerInfo) => {
 
 /**
  * Resolve the prompt a fired trigger should run. A trigger's `promptFile`
- * (Paddock-only, `.paddock/triggers/*.md`, git-tracked + keeper-editable) is read
+ * (Paddock-only, `.managers/triggers/*.md`, git-tracked + keeper-editable) is read
  * FRESH here at fire time — so an edit takes effect on the very next fire with no
  * agent re-register — and falls back to the inline `run.prompt` when there's no file
  * or it can't be read. For an EVENT trigger, a short machine preamble naming the

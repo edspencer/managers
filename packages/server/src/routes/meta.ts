@@ -164,7 +164,7 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
   // --- instance-wide settings (issue #385) --------------------------------
   // A top-level admin screen over the frozen instance config. GET reports every
   // surfaced field (value / default / editable / sensitive / env-shadow); PUT
-  // writes the editable subset to paddock.config.yaml (comment-preserving,
+  // writes the editable subset to managers.config.yaml (comment-preserving,
   // atomic). Writes DO NOT hot-apply — the config is read once at boot and
   // frozen — so a PUT returns `restartRequired: true` and the process keeps its
   // current config until it restarts. This route mutates instance-wide config;
@@ -178,7 +178,7 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
         tags: ["System"],
         summary: "Read instance-wide config",
         description:
-          "Reports every surfaced instance-config field for the top-level admin screen: `value` (effective in the running, boot-frozen process), `pendingValue` (what a restart would resolve, read from paddock.config.yaml on every request), `pendingRestart`, plus default / editable / sensitive / env-shadow flags. Top level carries `restartRequired` (any field diverges), `configPath`, and `configVersion` — a fingerprint of the file to echo back as `expectedVersion` on the PUT.",
+          "Reports every surfaced instance-config field for the top-level admin screen: `value` (effective in the running, boot-frozen process), `pendingValue` (what a restart would resolve, read from managers.config.yaml on every request), `pendingRestart`, plus default / editable / sensitive / env-shadow flags. Top level carries `restartRequired` (any field diverges), `configPath`, and `configVersion` — a fingerprint of the file to echo back as `expectedVersion` on the PUT.",
         response: {
           200: {
             description: "Instance config snapshot.",
@@ -198,7 +198,7 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
         tags: ["System"],
         summary: "Write instance-wide config",
         description:
-          "Writes the editable subset of the instance config to paddock.config.yaml (comment-preserving, atomic). Writes DO NOT hot-apply — the config is frozen at boot — so a successful write returns `{ restartRequired: true, configPath, configVersion }` and the process keeps its current config until it restarts. A `null` value clears that key (the built-in default applies again). Pass `expectedVersion` (the `configVersion` from the GET you were editing) to make the write conditional: 409 if the file changed underneath you, instead of silently overwriting another editor. Returns 400 on a malformed patch, an invalid/read-only/env-shadowed field, 500 on write failure.",
+          "Writes the editable subset of the instance config to managers.config.yaml (comment-preserving, atomic). Writes DO NOT hot-apply — the config is frozen at boot — so a successful write returns `{ restartRequired: true, configPath, configVersion }` and the process keeps its current config until it restarts. A `null` value clears that key (the built-in default applies again). Pass `expectedVersion` (the `configVersion` from the GET you were editing) to make the write conditional: 409 if the file changed underneath you, instead of silently overwriting another editor. Returns 400 on a malformed patch, an invalid/read-only/env-shadowed field, 500 on write failure.",
         body: {
           // Documentation-only (no validation/coercion): accept any/empty body.
           type: ["object", "null"],
@@ -355,7 +355,7 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
     },
   );
 
-  // Serve the RAW BYTES of a file the agent shared via `mcp__paddock__send_file`
+  // Serve the RAW BYTES of a file the agent shared via `mcp__managers_files__send_file`
   // (issue #112). The bytes were copied into the attachment store AT SEND TIME
   // and are addressed by an opaque id recorded in the chat transcript, so this
   // endpoint only ever serves files that were explicitly sent — never an

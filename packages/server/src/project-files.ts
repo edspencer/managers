@@ -81,7 +81,7 @@ export function resolveInProject(
   // caller's raw string: `a/./.git/config` and `a/../.git/config` both normalise
   // to a hidden directory segment the raw string doesn't literally contain. The
   // project dir itself may legitimately sit under a dot-prefixed ancestor (a
-  // data dir like `/srv/.paddock/projects`), which is why only the relative part
+  // data dir like `/srv/.managers/projects`), which is why only the relative part
   // is examined. `slice(0, -1)` leaves the leaf to the caller (see doc-comment).
   const segments = relSegments(dir, resolved);
   if (segments.slice(0, -1).some(isHidden)) {

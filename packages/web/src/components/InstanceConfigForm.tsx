@@ -93,7 +93,7 @@ import { AppearancePanel } from "./AppearancePanel";
  *
  * ## The editor edits the FILE, not the process (#722)
  *
- * Every control binds to `pendingValue` — what `paddock.config.yaml` says right
+ * Every control binds to `pendingValue` — what `managers.config.yaml` says right
  * now — and not to `value`, the value the running process froze at boot. That
  * one substitution is what makes the screen honest: a save re-fetches and sees
  * its own write (it used to re-fetch the frozen boot values and look like it had
@@ -346,7 +346,7 @@ export function InstanceConfigForm() {
           <div className={MEASURE}>
             {/* A closing rule, not just spacing. The restart banner sits
                 immediately below and says "changes here are written to
-                paddock.config.yaml and take effect after a restart" — which is
+                managers.config.yaml and take effect after a restart" — which is
                 true of everything under the rule and false of everything above
                 it. Without the divider that sentence reads as if it applies to
                 the theme picker, which is the exact confusion this section has
@@ -1213,7 +1213,7 @@ const sectionDomId = (groupId: string) => `cfg-section-${groupId}`;
  * looks", and the page's width is what lets the picker be one short band rather
  * than a tall column. But it is NOT one of the server's groups, and the
  * difference is the thing to keep visible rather than smooth over: everything
- * else on this page edits `paddock.config.yaml`, is frozen at boot, and needs a
+ * else on this page edits `managers.config.yaml`, is frozen at boot, and needs a
  * restart; this is a per-device browser preference that applies the instant you
  * click it. Stacking two lifecycles behind one save bar is exactly what v0.51.0
  * did with Settings and Config, and it read as one page rendered inside
@@ -1275,7 +1275,7 @@ function valuesEqual(a: unknown, b: unknown): boolean {
 
 /** The basename of the config path, for the banner (falls back to the full string). */
 function filename(p?: string): string {
-  if (!p) return "paddock.config.yaml";
+  if (!p) return "managers.config.yaml";
   const parts = p.split("/");
   return parts[parts.length - 1] || p;
 }

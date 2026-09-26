@@ -29,7 +29,7 @@ import { projectChatsDir } from "../../src/transcripts.js";
 const SLUG = "autodrive-proj";
 const isComplete = (e: WsEvent) =>
   e.type === "chat:complete" && e.payload?.projectSlug === SLUG && typeof e.payload?.sessionId === "string";
-const isNudge = (text: string) => text.includes("[Paddock recovery]");
+const isNudge = (text: string) => text.includes("[Managers recovery]");
 
 /** A `killed` <task-notification> in its input-queue (`queue-operation`) shape. */
 const queueOpKill = () =>

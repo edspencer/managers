@@ -9,7 +9,7 @@ import { PdfEmbed } from "./PdfEmbed";
 import { AlertIcon } from "./icons";
 
 /**
- * Renders a file the agent sent via `mcp__paddock__send_file` (issue #112).
+ * Renders a file the agent sent via `mcp__managers_files__send_file` (issue #112).
  * Reuses the same primitives as the Files tab (`Markdown` with live Mermaid, a
  * sandboxed iframe for HTML) inside a filename-header "editor" chrome.
  *

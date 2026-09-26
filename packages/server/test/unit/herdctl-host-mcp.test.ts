@@ -195,7 +195,7 @@ describe("buildAgentConfig: instance-declared mcpServers (#691 step 6)", () => {
   });
 
   /**
-   * Precedence. `paddock.config.yaml` is a statement about THIS instance;
+   * Precedence. `managers.config.yaml` is a statement about THIS instance;
    * `~/.claude.json` is ambient machine state that happens to be readable. The
    * narrower answer wins — including over the host's per-directory scope, which
    * beats the host's user scope.

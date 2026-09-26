@@ -1,6 +1,6 @@
 {
-  "name": "Paddock",
-  "short_name": "Paddock",
+  "name": "Managers",
+  "short_name": "Managers",
   "description": "Project-first launchpad for server-hosted, persistent Claude Code sessions.",
   "id": "/",
   "start_url": "/",

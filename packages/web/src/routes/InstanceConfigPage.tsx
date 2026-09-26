@@ -6,11 +6,11 @@ import { CogIcon, MenuIcon } from "../components/icons";
 
 /**
  * The instance **Config** screen (issue #385) — a top-level admin surface over
- * the frozen instance config (`paddock.config.yaml`).
+ * the frozen instance config (`managers.config.yaml`).
  *
  * Named for the file it writes, which is the point of the split: this is not
  * *settings*. A workspace's Settings tab edits its `project.yaml` and the change
- * is hot-applied by re-registering the agent. This edits `paddock.config.yaml`,
+ * is hot-applied by re-registering the agent. This edits `managers.config.yaml`,
  * which is resolved once at boot and frozen, so every save here is
  * restart-required. Stacking two surfaces with different lifecycles — and two
  * save bars — in one tab is exactly what v0.51.0 did, and it read as one page

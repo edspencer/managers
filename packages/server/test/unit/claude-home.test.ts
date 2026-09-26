@@ -297,7 +297,7 @@ describe("claude-home (#620)", () => {
 
       it("warns rather than informs — but ONLY when there is something to say (#706)", async () => {
         // The level and the condition are one decision, so they are asserted
-        // together. `cli/paddock.ts` sets LOG_LEVEL=warn unless `--verbose`, so
+        // together. `cli/managers.ts` sets LOG_LEVEL=warn unless `--verbose`, so
         // at `info` this notice was invisible on the `npx` path — the one
         // population it exists for (#706). `warn` is not noise only because of
         // the second half: an instance whose user has no ~/.claude instruction
@@ -778,10 +778,10 @@ describe("claude-home (#620)", () => {
 
     it("finds a --here workspace's poisoned link, which the dataDir check misses", async () => {
       // The observed shape: `--here` in ~/Code/thing puts the data dir at
-      // <dir>/.paddock but the store at <dir>/.chats, so the link target is NOT
+      // <dir>/.managers but the store at <dir>/.chats, so the link target is NOT
       // under dataDir and countLegacyTranscriptLinks reports nothing.
       const workspace = path.join(root, "Code", "thing");
-      const dataDir = path.join(workspace, ".paddock");
+      const dataDir = path.join(workspace, ".managers");
       const chats = path.join(workspace, ".chats");
       await fs.mkdir(chats, { recursive: true });
       const link = path.join(projectsOf(legacyHome), "-root-Code-thing");

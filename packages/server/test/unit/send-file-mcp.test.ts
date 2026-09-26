@@ -44,11 +44,11 @@ async function callTool(
 }
 
 describe("send_file MCP tool", () => {
-  it("names the server + tool as mcp__paddock__send_file", () => {
-    expect(SEND_FILE_SERVER_KEY).toBe("paddock");
-    expect(SEND_FILE_TOOL_NAME).toBe("mcp__paddock__send_file");
+  it("names the server + tool as mcp__managers_files__send_file", () => {
+    expect(SEND_FILE_SERVER_KEY).toBe("managers_files");
+    expect(SEND_FILE_TOOL_NAME).toBe("mcp__managers_files__send_file");
     const def = sendFileServerDef({ saveAttachment: async () => "id" });
-    expect(def.name).toBe("paddock");
+    expect(def.name).toBe("managers_files");
     expect(def.tools[0].name).toBe("send_file");
   });
 

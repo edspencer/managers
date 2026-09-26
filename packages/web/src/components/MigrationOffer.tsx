@@ -96,7 +96,7 @@ export function MigrationOfferBanner() {
           <button
             type="button"
             onClick={() => setDialogOpen(true)}
-            title="Your chats live in Paddock's own store, not in ~/.claude. Merge them in so the Claude Code CLI sees them too."
+            title="Your chats live in Managers' own store, not in ~/.claude. Merge them in so the Claude Code CLI sees them too."
             // Spelled out rather than left to the contents. The visible label is
             // two spans separated by a flex gap, which concatenates to
             // "…~/.claudeMerge" with no space in the accessible name — and below

@@ -149,7 +149,7 @@
  *
  * ## Step 6 landed here, as an addition
  *
- * #691 step 6 — an instance-level `mcpServers:` block in `paddock.config.yaml`
+ * #691 step 6 — an instance-level `mcpServers:` block in `managers.config.yaml`
  * for servers a user declares themselves — is `mcp-servers.ts`. It contributes
  * {@link McpSources.declared} and nothing else: the shape, {@link mcpServersFor},
  * and the allowlist widening in `buildAgentConfig` were already source-agnostic
@@ -262,7 +262,7 @@ export interface McpSources {
   user: McpServerDefs;
   /** Host `projects[<dir>].mcpServers`, keyed by the literal absolute directory. */
   byDir: Record<string, McpServerDefs>;
-  /** Declared by this instance in `paddock.config.yaml`; every keeper gets these. */
+  /** Declared by this instance in `managers.config.yaml`; every keeper gets these. */
   declared: McpServerDefs;
   /** Everything the host file could not carry faithfully, for the boot notice. */
   caveats: HostMcpCaveat[];

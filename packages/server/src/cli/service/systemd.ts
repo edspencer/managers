@@ -3,7 +3,7 @@
  *
  * ## Not the server story
  *
- * Paddock already documents itself under systemd — `guides/proxmox-lxc.md`
+ * Managers already documents itself under systemd — `guides/proxmox-lxc.md`
  * Path B, provisioned by the `paddock-deploy` Ansible recipes. That is a
  * SYSTEM unit, running as a service user, behind a reverse proxy, with a token
  * in its environment. This is the other one: a user unit, running as you, on
@@ -15,7 +15,7 @@
  * A `--user` manager is started at your first login and stopped at your last
  * logout, so by default the unit dies when you log out — including when you log
  * out of an SSH session, which is how most people meet this. `loginctl
- * enable-linger <user>` keeps the manager (and therefore Paddock) alive.
+ * enable-linger <user>` keeps the manager (and therefore Managers) alive.
  *
  * That is called out in the install output rather than being run for the user:
  * lingering is a real change to how the machine behaves after they leave it,
@@ -28,7 +28,7 @@ import { SYSTEMD_UNIT, type ServiceSpec } from "./spec.js";
 import type { Runner, ServiceBackend, ServiceState } from "./backend.js";
 
 /**
- * `~/.config/systemd/user/paddock.service`, honouring `XDG_CONFIG_HOME`.
+ * `~/.config/systemd/user/managers.service`, honouring `XDG_CONFIG_HOME`.
  *
  * ## An injected home outranks the ambient variable
  *
@@ -43,14 +43,14 @@ import type { Runner, ServiceBackend, ServiceState } from "./backend.js";
  * throwaway directory still resolved to the real config home. Two things
  * followed. Test isolation quietly stopped working, so which assertion passed
  * depended on test ORDER rather than test content. And the suite wrote a real
- * `paddock.service` into the runner's actual config directory, outside every
+ * `managers.service` into the runner's actual config directory, outside every
  * temp dir it thought it was confined to — which on a contributor's machine
  * would have installed a unit they never asked for.
  *
  * So: passing a home is a statement about where home is, and it wins. The
  * ambient read survives only on the branch where nobody said otherwise, which
  * is the real-use branch and the one where honouring `XDG_CONFIG_HOME` is
- * correct. (`paddock.ts` threads the variable in explicitly as well, so the
+ * correct. (`managers.ts` threads the variable in explicitly as well, so the
  * production path does not depend on this fallback — it is here so that a
  * caller with no opinion still gets the right answer.)
  */
@@ -69,7 +69,7 @@ export function unitPath(homeDir?: string, xdgConfigHome?: string): string {
  * `Restart=always`, matching launchd's `KeepAlive=<true/>` (#872). It was
  * `on-failure`, which for a service is the wrong default for the same reason it
  * was wrong there: `start.ts` exits `0` on SIGTERM, so a logout — or anything
- * else that signals the user manager — was read as an intended stop and Paddock
+ * else that signals the user manager — was read as an intended stop and Managers
  * stayed down.
  *
  * `always` does not make the unit unstoppable. systemd never restarts a unit it
@@ -89,7 +89,7 @@ export function unitPath(homeDir?: string, xdgConfigHome?: string): string {
 export function renderUnit(spec: ServiceSpec): string {
   const exec = [spec.nodePath, spec.scriptPath, ...spec.args].join(" ");
   return `[Unit]
-Description=Paddock — persistent, resumable Claude Code sessions, by project
+Description=Managers — persistent, resumable Claude Code sessions, by project
 Documentation=https://paddock.edspencer.net
 
 [Service]
@@ -110,7 +110,7 @@ WantedBy=default.target
  *
  * The counterpart to `plistKeepsAlive`, and narrow for the same reason: the
  * value it has to reject is the `on-failure` this file used to write, which
- * leaves Paddock down after the graceful exit `start.ts` performs on SIGTERM.
+ * leaves Managers down after the graceful exit `start.ts` performs on SIGTERM.
  * Anything unrecognised reads as "not the fixed shape", which at worst tells a
  * hand-edited unit's owner to re-run install.
  */
@@ -179,7 +179,7 @@ export function createSystemdBackend(
     /**
      * The lifecycle three (#873), which on systemd are just the verbs.
      *
-     * None of them touches `enable`/`disable`: those decide whether Paddock
+     * None of them touches `enable`/`disable`: those decide whether Managers
      * comes back at your NEXT login, which is a different question from whether
      * it is running now, and quietly answering both would make `stop` a
      * surprise the following morning. `uninstall` is where that link is cut.
@@ -225,7 +225,7 @@ export function createSystemdBackend(
     lingerNote(): string {
       const user = os.userInfo().username;
       return (
-        "  A user service stops when you log out. To keep Paddock up:\n" +
+        "  A user service stops when you log out. To keep Managers up:\n" +
         `    loginctl enable-linger ${user}`
       );
     },

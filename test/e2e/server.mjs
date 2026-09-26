@@ -52,6 +52,9 @@ if (process.env.MANAGERS_E2E_GIT === "1") {
   g(["config", "user.email", "e2e@example.com"]);
   g(["config", "user.name", "E2E"]);
   writeFileSync(path.join(projectsDir, ".gitkeep"), "");
+  // Managers M1: commit the data-repo marker the server would otherwise write at
+  // boot, so it never shows up as an uncommitted change in the git journeys.
+  writeFileSync(path.join(projectsDir, ".managers-data"), "");
   g(["add", "-A"]);
   g(["commit", "-m", "init"]);
 }

@@ -1,7 +1,7 @@
 /**
  * Schema versioning for the two on-disk formats paddock OWNS (issue #724).
  *
- * Those two are `project.yaml` and `paddock.config.yaml`, and only those two.
+ * Those two are `project.yaml` and `managers.config.yaml`, and only those two.
  * The `version: 1` fields elsewhere in the tree belong to herdctl — its fleet
  * config (`herdctl-agent-config.ts`) and `@herdctl/core`'s session metadata —
  * and transcripts are Claude Code's format. Paddock reads neither back.
@@ -59,14 +59,14 @@
  * migration in disguise, and that pattern accretes.
  *
  * The two constants are independent on purpose: a breaking change to
- * `project.yaml` should not force every `paddock.config.yaml` to claim a version
+ * `project.yaml` should not force every `managers.config.yaml` to claim a version
  * whose shape it never had. They happen to both be 1 today.
  */
 
 /** Schema version of the `project.yaml` format this build writes and understands. */
 export const PROJECT_SCHEMA_VERSION = 1;
 
-/** Schema version of the `paddock.config.yaml` format this build writes and understands. */
+/** Schema version of the `managers.config.yaml` format this build writes and understands. */
 export const CONFIG_SCHEMA_VERSION = 1;
 
 /** The key both formats carry it under. */
@@ -108,7 +108,7 @@ export function isFromTheFuture(raw: unknown, supported: number): boolean {
 }
 
 /**
- * Why `paddock.config.yaml` is unreadable by this build, or `undefined` if it is
+ * Why `managers.config.yaml` is unreadable by this build, or `undefined` if it is
  * fine. Pure, so the decision is testable without a filesystem.
  *
  * Fail-closed, in the same shape as the `claudeHome`-points-at-your-own-`~/.claude`

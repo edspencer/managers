@@ -1,8 +1,8 @@
 /**
- * `paddock service install | uninstall | status | start | stop | restart`
+ * `managers service install | uninstall | status | start | stop | restart`
  * (#796; the lifecycle three added in #873).
  *
- * Registers Paddock as a **per-user** background service — a launchd
+ * Registers Managers as a **per-user** background service — a launchd
  * LaunchAgent on macOS, a `systemd --user` unit on Linux — so it is up from
  * login rather than for as long as a terminal tab.
  *
@@ -12,7 +12,7 @@
  * Three things this deliberately does not do:
  *
  * - **It does not set `MANAGERS_DATA_DIR`.** With nothing named, the service and
- *   a `paddock` typed into a terminal both land on `~/.paddock`: one instance,
+ *   a `managers` typed into a terminal both land on `~/.managers`: one instance,
  *   two ways to reach it.
  * - **It does not generate an auth token.** A service is up longer than an
  *   `npx` run, but not reachable by anything new: a local process that can
@@ -51,7 +51,7 @@ export interface ServiceContext {
   platform: NodeJS.Platform;
   /** `process.execPath` — the interpreter the unit will name explicitly. */
   nodePath: string;
-  /** Absolute realpath of `dist/cli/paddock.js`. */
+  /** Absolute realpath of `dist/cli/managers.js`. */
   scriptPath: string;
   /** The `findUp("package.json")` root, tested for an npx cache path. */
   packageRoot: string;
@@ -84,8 +84,8 @@ function backendFor(ctx: ServiceContext): ServiceBackend {
   if (ctx.platform === "darwin") return createLaunchdBackend(run, ctx.homeDir);
   if (ctx.platform === "linux") return createSystemdBackend(run, ctx.homeDir, ctx.xdgConfigHome);
   throw new CliError(
-    `\`paddock service\` supports macOS (launchd) and Linux (systemd --user), not ${ctx.platform}.\n` +
-      "Run `paddock` in a terminal, or keep it up with whatever your platform uses.",
+    `\`managers service\` supports macOS (launchd) and Linux (systemd --user), not ${ctx.platform}.\n` +
+      "Run `managers` in a terminal, or keep it up with whatever your platform uses.",
   );
 }
 
@@ -94,10 +94,10 @@ function resolveDataDir(
   opts: CliOptions,
   ctx: ServiceContext,
 ): { dataDir: string; explicit: string | undefined } {
-  // Mirrors `paddock.ts`: flag beats env beats default. An env var set in the
+  // Mirrors `managers.ts`: flag beats env beats default. An env var set in the
   // installing shell is an explicit choice too — but it is one the service
   // would NOT inherit, so it gets written into the unit rather than silently
-  // dropped in favour of ~/.paddock.
+  // dropped in favour of ~/.managers.
   const chosen = opts.dataDir ?? ctx.envDataDir;
   if (chosen !== undefined) {
     const resolved = path.resolve(chosen);
@@ -123,16 +123,16 @@ function specFor(opts: CliOptions, ctx: ServiceContext): { spec: ServiceSpec; da
 
 /** The line every surface has to carry, because otherwise it gets filed as a bug. */
 const AT_LOGIN =
-  "  Paddock starts when you LOG IN, not when the machine boots — it runs as\n" +
+  "  Managers starts when you LOG IN, not when the machine boots — it runs as\n" +
   "  you, so it can use the Claude login you already have. After a restart\n" +
-  "  that nobody logs into, Paddock is not running.";
+  "  that nobody logs into, Managers is not running.";
 
 /**
  * What `status` says about a unit installed before #872.
  *
  * Upgrading the package leaves the unit file alone, so the people still holding
  * the broken shape are exactly the people who will never notice — the symptom
- * is Paddock being absent one morning, with nothing in the logs, because it was
+ * is Managers being absent one morning, with nothing in the logs, because it was
  * signalled rather than crashed. Naming the fix here is the only path from that
  * symptom back to a working service.
  */
@@ -143,10 +143,10 @@ function staleUnitNote(backend: ServiceBackend): string {
       : "Restart=on-failure";
   return (
     `  ⚠ This unit predates a fix (#872): ${key}, so a graceful stop —\n` +
-    "    the kind sleep, logout or a stray `kill` sends — puts Paddock down\n" +
+    "    the kind sleep, logout or a stray `kill` sends — puts Managers down\n" +
     "    until you start it again by hand. Re-run to update the unit:\n" +
     "\n" +
-    "      paddock service install"
+    "      managers service install"
   );
 }
 
@@ -170,9 +170,9 @@ function staleUnitNote(backend: ServiceBackend): string {
 function installProgress(backend: ServiceBackend): string {
   const kind = backend.platform === "darwin" ? "the LaunchAgent" : "the user service";
   return backend.platform === "darwin"
-    ? `\n  Installing ${kind} and starting Paddock…\n` +
+    ? `\n  Installing ${kind} and starting Managers…\n` +
         "  macOS may take a few seconds to approve the background item."
-    : `\n  Installing ${kind} and starting Paddock…`;
+    : `\n  Installing ${kind} and starting Managers…`;
 }
 
 async function install(
@@ -189,7 +189,7 @@ async function install(
   backend.install(spec);
 
   // The unit is written and the supervisor has accepted it. That is NOT the
-  // same as "Paddock is running", which is what this block used to assert
+  // same as "Managers is running", which is what this block used to assert
   // before anything had been checked — so the success message could sit over a
   // crash-loop (a port clash restarts every RestartSec/ThrottleInterval, and
   // both supervisors report `running` for most of that window) and still print
@@ -205,8 +205,8 @@ async function install(
     [
       "",
       readiness === "ready"
-        ? `  ✓ Paddock is installed as ${kind}, and running at ${url}`
-        : `  Paddock is installed as ${kind}, but ${url} did not answer\n` +
+        ? `  ✓ Managers is installed as ${kind}, and running at ${url}`
+        : `  Managers is installed as ${kind}, but ${url} did not answer\n` +
           `  within ${READY_TIMEOUT_LABEL}. The unit is in place; it may still be\n` +
           "  coming up, or it may be failing to start — the logs below say which.",
       "",
@@ -218,9 +218,9 @@ async function install(
       AT_LOGIN,
       ...(linger !== undefined ? ["", linger] : []),
       "",
-      "  paddock service status      is it up, and where",
-      "  paddock service restart     bounce it after editing config",
-      "  paddock service uninstall   stop it and remove the unit",
+      "  managers service status      is it up, and where",
+      "  managers service restart     bounce it after editing config",
+      "  managers service uninstall   stop it and remove the unit",
       "",
     ].join("\n"),
   );
@@ -230,8 +230,8 @@ function uninstall(ctx: ServiceContext, backend: ServiceBackend): void {
   const existed = backend.uninstall();
   console.log(
     existed
-      ? `\n  Paddock's ${backend.platform === "darwin" ? "LaunchAgent" : "user service"} is stopped and removed.\n  ${backend.unitPath}\n\n  Your data is untouched — it was never in there.\n`
-      : `\n  No Paddock service was installed (${backend.unitPath}).\n  Nothing to do.\n`,
+      ? `\n  Managers' ${backend.platform === "darwin" ? "LaunchAgent" : "user service"} is stopped and removed.\n  ${backend.unitPath}\n\n  Your data is untouched — it was never in there.\n`
+      : `\n  No Managers service was installed (${backend.unitPath}).\n  Nothing to do.\n`,
   );
   // Leave the service directory: it holds logs, and the last thing anyone wants
   // from `uninstall` is for the record of why they are uninstalling to vanish.
@@ -244,10 +244,10 @@ function status(opts: CliOptions, ctx: ServiceContext, backend: ServiceBackend):
     console.log(
       [
         "",
-        "  Paddock is not installed as a service.",
+        "  Managers is not installed as a service.",
         `  Looked for: ${backend.unitPath}`,
         "",
-        "  paddock service install     register it and start it now",
+        "  managers service install     register it and start it now",
         "",
       ].join("\n"),
     );
@@ -280,13 +280,13 @@ function status(opts: CliOptions, ctx: ServiceContext, backend: ServiceBackend):
     [
       "",
       state.running
-        ? `  Paddock is running${state.pid !== undefined ? ` (pid ${state.pid})` : ""}.`
-        : "  Paddock is registered as a service, but not running right now.",
+        ? `  Managers is running${state.pid !== undefined ? ` (pid ${state.pid})` : ""}.`
+        : "  Managers is registered as a service, but not running right now.",
       "",
       `  URL:  ${url}`,
       `  Data: ${dataDir}`,
       `  Unit: ${backend.unitPath}`,
-      `  Args: paddock ${state.argv.join(" ")}`,
+      `  Args: managers ${state.argv.join(" ")}`,
       backend.logsHint(spec),
       "",
       AT_LOGIN,
@@ -311,10 +311,10 @@ function installedUrl(state: ServiceState): string {
 function notInstalled(backend: ServiceBackend): string {
   return [
     "",
-    "  Paddock is not installed as a service.",
+    "  Managers is not installed as a service.",
     `  Looked for: ${backend.unitPath}`,
     "",
-    "  paddock service install     register it and start it now",
+    "  managers service install     register it and start it now",
     "",
   ].join("\n");
 }
@@ -347,11 +347,11 @@ async function startOrRestart(
 
   const url = installedUrl(before);
   if (action === "start" && before.running) {
-    console.log(`\n  Paddock is already running${pid(before)}.\n\n  URL:  ${url}\n`);
+    console.log(`\n  Managers is already running${pid(before)}.\n\n  URL:  ${url}\n`);
     return;
   }
 
-  console.log(`\n  ${action === "start" ? "Starting" : "Restarting"} Paddock…`);
+  console.log(`\n  ${action === "start" ? "Starting" : "Restarting"} Managers…`);
   if (action === "start") backend.start();
   else backend.restart();
 
@@ -361,10 +361,10 @@ async function startOrRestart(
     [
       "",
       readiness === "ready"
-        ? `  ✓ Paddock is running${pid(after)} at ${url}`
-        : `  Paddock was ${action === "start" ? "started" : "restarted"}, but ${url} did not\n` +
+        ? `  ✓ Managers is running${pid(after)} at ${url}`
+        : `  Managers was ${action === "start" ? "started" : "restarted"}, but ${url} did not\n` +
           `  answer within ${READY_TIMEOUT_LABEL}. It may still be coming up — check:`,
-      ...(readiness === "ready" ? [] : ["", "  paddock service status", backend.logsHint(specForLogs(ctx, after))]),
+      ...(readiness === "ready" ? [] : ["", "  managers service status", backend.logsHint(specForLogs(ctx, after))]),
       "",
     ].join("\n"),
   );
@@ -378,7 +378,7 @@ function stop(backend: ServiceBackend): void {
     return;
   }
   if (!state.running) {
-    console.log(`\n  Paddock is already stopped.\n  Unit: ${backend.unitPath}\n`);
+    console.log(`\n  Managers is already stopped.\n  Unit: ${backend.unitPath}\n`);
     return;
   }
 
@@ -386,12 +386,12 @@ function stop(backend: ServiceBackend): void {
   console.log(
     [
       "",
-      "  Paddock is stopped. The unit is still installed.",
+      "  Managers is stopped. The unit is still installed.",
       `  Unit: ${backend.unitPath}`,
       "",
       "  It comes back when you log in again, or now with:",
       "",
-      "    paddock service start",
+      "    managers service start",
       "",
     ].join("\n"),
   );

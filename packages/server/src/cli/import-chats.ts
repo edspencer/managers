@@ -16,7 +16,7 @@
  * ## Deployment note
  *
  * The import needs READ access to the user's own transcripts, which live in
- * `~/.claude` — a read-only source paddock reads out of and never writes to
+ * `~/.claude` — a read-only source managers reads out of and never writes to
  * (#620). In a container that usually means running this on the HOST against
  * the data dir (`--data-dir`), or bind-mounting the user's `~/.claude` in at the
  * same path. Detection silently finds nothing if the transcripts are not
@@ -25,7 +25,7 @@
  *
  * ## Usage
  *
- *   npm run import-chats -w @paddock/server -- --project <slug> [options]
+ *   npm run import-chats -w @managers/server -- --project <slug> [options]
  *
  *   --project <slug>   Workspace to import into. Required. Use "" (or --root)
  *                      for the ROOT workspace, whose key IS the empty string.
@@ -35,7 +35,7 @@
  *   --move             Move transcripts instead of copying them. DESTRUCTIVE:
  *                      the sessions disappear from the user's own history.
  *   --dry-run          Report what would happen and write nothing at all.
- *   --data-dir <dir>   Paddock data dir (same meaning as MANAGERS_DATA_DIR).
+ *   --data-dir <dir>   Managers data dir (same meaning as MANAGERS_DATA_DIR).
  *                      Applied to the environment BEFORE the config is read.
  *   --json             Emit the raw result as JSON instead of prose.
  */
@@ -110,16 +110,16 @@ export function parseArgs(argv: string[]): Args {
   return args;
 }
 
-const USAGE = `Import existing Claude Code CLI chats into a Paddock workspace.
+const USAGE = `Import existing Claude Code CLI chats into a Managers workspace.
 
-  npm run import-chats -w @paddock/server -- --project <slug> [options]
+  npm run import-chats -w @managers/server -- --project <slug> [options]
 
   --project <slug>   Workspace to import into (required). "" = the root workspace.
   --root             Sugar for --project ""
   --from <dir>       Import only this source working directory
   --move             Move transcripts instead of copying (DESTRUCTIVE)
   --dry-run          Report what would happen; write nothing
-  --data-dir <dir>   Paddock data dir (same as MANAGERS_DATA_DIR)
+  --data-dir <dir>   Managers data dir (same as MANAGERS_DATA_DIR)
   --json             Emit raw JSON
 `;
 

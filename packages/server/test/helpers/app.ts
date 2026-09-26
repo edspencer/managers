@@ -218,7 +218,7 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
   // so it layers under env exactly as a real deployment's file does.
   if (opts.configFile) {
     const YAML = await import("yaml");
-    const configPath = path.join(tmp, "paddock.config.yaml");
+    const configPath = path.join(tmp, "managers.config.yaml");
     await fs.writeFile(configPath, YAML.stringify(opts.configFile), "utf8");
     process.env.MANAGERS_CONFIG = configPath;
   } else {

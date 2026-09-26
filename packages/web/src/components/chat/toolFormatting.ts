@@ -24,7 +24,7 @@ export function isSubagentRunning(tool: ToolCall, chatLive: boolean): boolean {
 }
 
 /** The send_file MCP tool; its payload renders as a rich `file` turn (issue #112). */
-export const SEND_FILE_TOOL_NAME = "mcp__paddock__send_file";
+export const SEND_FILE_TOOL_NAME = "mcp__managers_files__send_file";
 
 /** Background-task *ops* (badge only) — they operate on an already-detached task. */
 export const BACKGROUND_OP_TOOLS = new Set(["BashOutput", "TaskOutput", "TaskStop", "KillShell"]);
@@ -59,7 +59,7 @@ export function statusChipClass(status: string): string {
   }
 }
 
-/** Per-tool icon for a Paddock `paddock_manage` tool segment (issue #253). */
+/** Per-tool icon for a Paddock `managers` tool segment (issue #253). */
 export function paddockMcpIcon(tool: string) {
   switch (tool) {
     case "list_projects":
@@ -78,7 +78,7 @@ export function paddockMcpIcon(tool: string) {
 }
 
 /**
- * Resolve a `mcp__paddock__send_file` tool call into a renderable SentFile by
+ * Resolve a `mcp__managers_files__send_file` tool call into a renderable SentFile by
  * parsing the JSON envelope the tool returns as its `output` (issue #112). This
  * is the single path for both live (`onToolCall`) and reload (`historyToTurn`):
  * the tool output is preserved verbatim on the live event AND by herdctl's

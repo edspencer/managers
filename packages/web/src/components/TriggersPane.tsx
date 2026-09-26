@@ -749,7 +749,7 @@ export function TriggersPane({ project }: { project: Project }) {
                           data-testid="trigger-prompt-file"
                         />
                         <p className="mt-1 text-xs text-fg-subtle">
-                          A <code>.md</code> file under <code>.paddock/triggers/</code>, read fresh
+                          A <code>.md</code> file under <code>.managers/triggers/</code>, read fresh
                           each fire (git-tracked, Claude-editable).
                         </p>
                       </>

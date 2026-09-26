@@ -192,10 +192,10 @@ export function registerMcpRoutes(app: FastifyInstance, ctx: RouteCtx): void {
               `X-Forwarded-Proto: https was ignored because the peer (${transport.peer}) is not a ` +
               `trusted proxy — a client cannot vouch for its own transport. If that address IS ` +
               `your TLS-terminating proxy, list it in managementApi.trustedProxies (or ` +
-              `MANAGERS_MANAGEMENT_TRUSTED_PROXIES); otherwise terminate TLS in front of Paddock, ` +
+              `MANAGERS_MANAGEMENT_TRUSTED_PROXIES); otherwise terminate TLS in front of Managers, ` +
               `or connect over loopback.`
             : `The management API refuses plaintext requests from non-loopback clients ` +
-              `(peer: ${transport.peer || "unknown"}). Terminate TLS in front of Paddock (and ` +
+              `(peer: ${transport.peer || "unknown"}). Terminate TLS in front of Managers (and ` +
               `forward X-Forwarded-Proto from a trusted proxy), or connect over loopback.`,
       });
     }

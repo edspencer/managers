@@ -1,5 +1,5 @@
 /**
- * Unit tests for the `paddock` CLI's pure parts (#638).
+ * Unit tests for the `managers` CLI's pure parts (#638).
  *
  * Only the side-effect-free pieces are covered here: argument parsing, the Node
  * version gate, and listen-error translation. Everything else in that module
@@ -21,7 +21,7 @@ import {
   CliError,
 } from "../../src/cli/args.js";
 
-describe("paddock CLI: parseArgs", () => {
+describe("managers CLI: parseArgs", () => {
   it("defaults every boolean to false and leaves values unset", () => {
     expect(parseArgs([])).toEqual({
       open: false,
@@ -32,7 +32,7 @@ describe("paddock CLI: parseArgs", () => {
   });
 
   // #691 deleted it: what it opted out of — running as the user's own Claude
-  // home — is no longer something paddock ever does.
+  // home — is no longer something managers ever does.
   it("rejects the removed --isolated-claude-home flag like any other unknown option", () => {
     expect(() => parseArgs(["--isolated-claude-home"])).toThrow(/unknown option/);
   });
@@ -40,7 +40,7 @@ describe("paddock CLI: parseArgs", () => {
   /**
    * #798 deleted it. Rejecting rather than ignoring matters more here than for
    * most removed flags: `--here` decided WHICH INSTANCE you got. Accepting it as
-   * a no-op would start the `~/.paddock` instance while the user believed they
+   * a no-op would start the `~/.managers` instance while the user believed they
    * had opened the directory they were standing in, and the difference is only
    * visible once they notice their projects are missing.
    */
@@ -100,7 +100,7 @@ describe("paddock CLI: parseArgs", () => {
   });
 
   it("rejects a --port value that is not a number (#823)", () => {
-    // The reported case: `paddock --port start`. `start` is only a verb in
+    // The reported case: `managers --port start`. `start` is only a verb in
     // FIRST position, so the whole argv reaches parseArgs and `start` was
     // consumed as the port — becoming NaN in config.ts, with a server asked to
     // listen on it and nothing in between naming the mistake.
@@ -114,8 +114,8 @@ describe("paddock CLI: parseArgs", () => {
   });
 
   it("still accepts an EMPTY --port value as 'unset' (#823)", () => {
-    // `paddock --port "$PORT"` with PORT unset passes "". That is falsy where
-    // it is read (`if (opts.port)` in paddock.ts), so it correctly falls
+    // `managers --port "$PORT"` with PORT unset passes "". That is falsy where
+    // it is read (`if (opts.port)` in managers.ts), so it correctly falls
     // through to the default. A bare /^\d+$/ guard would turn this working
     // invocation into a hard error — a worse bug than the one being fixed.
     expect(parseArgs(["--port", ""]).port).toBe("");
@@ -129,7 +129,7 @@ describe("paddock CLI: parseArgs", () => {
   });
 
   it("treats a bare positional as an unknown option rather than ignoring it", () => {
-    // Silently dropping it would let `paddock 4100` look like it worked while
+    // Silently dropping it would let `managers 4100` look like it worked while
     // starting on the default port.
     expect(() => parseArgs(["4100"])).toThrow(CliError);
   });
@@ -146,22 +146,22 @@ describe("paddock CLI: parseArgs", () => {
  * pinned against the source instead, in the manner of `check-no-nul-bytes`.
  *
  * Scope note (#796): this pins the ENTRYPOINT, not the CLI as a whole.
- * `paddock service install` does write files — one unit file in
+ * `managers service install` does write files — one unit file in
  * `~/Library/LaunchAgents` or `~/.config/systemd/user`, plus a log directory
  * inside the data dir — and it lives in `cli/service/`, deliberately, so those
  * writes cannot drift into the start path this guard protects. The rule here is
  * "starting a server touches no directory", not "the binary never writes".
  *
- * The bug being kept dead: `HERE_MARKER` was `.paddock` and the default data dir
- * is `~/.paddock`, so a bare run from `$HOME` on any machine that had ever run
- * paddock matched `isHereWorkspace($HOME)`, adopted the entire home as the
+ * The bug being kept dead: `HERE_MARKER` was `.managers` and the default data dir
+ * is `~/.managers`, so a bare run from `$HOME` on any machine that had ever run
+ * managers matched `isHereWorkspace($HOME)`, adopted the entire home as the
  * workspace and wrote `~/.gitignore` — with an explicit `--data-dir` set, and
  * with no consent message, because that branch was suppressed when resuming.
  */
-describe("paddock CLI: the entrypoint is location-independent (#798)", () => {
+describe("managers CLI: the entrypoint is location-independent (#798)", () => {
   const entry = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    "../../src/cli/paddock.ts",
+    "../../src/cli/managers.ts",
   );
   const source = fs.readFileSync(entry, "utf8");
   const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
@@ -184,7 +184,7 @@ describe("paddock CLI: the entrypoint is location-independent (#798)", () => {
   });
 });
 
-describe("paddock CLI: nodeVersionProblem", () => {
+describe("managers CLI: nodeVersionProblem", () => {
   it.each(["22.0.0", "22.14.1", "24.3.0", "30.0.0"])("accepts Node %s", (v) => {
     expect(nodeVersionProblem(v)).toBeUndefined();
   });
@@ -203,7 +203,7 @@ describe("paddock CLI: nodeVersionProblem", () => {
   });
 });
 
-describe("paddock CLI: explainListenError", () => {
+describe("managers CLI: explainListenError", () => {
   it("turns EADDRINUSE into a message naming the port and the fix", () => {
     const msg = explainListenError({ code: "EADDRINUSE" }, "127.0.0.1", "4000");
     expect(msg).toContain("4000");

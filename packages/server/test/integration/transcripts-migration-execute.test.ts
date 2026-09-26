@@ -149,7 +149,7 @@ describe("integration: own → host migration execute (#882)", () => {
 
     // The commit point actually landed in the file, not just in the response.
     const cfgFile = await fs.readFile(
-      path.join(t.tmp, "data", "paddock.config.yaml"),
+      path.join(t.tmp, "data", "managers.config.yaml"),
       "utf8",
     );
     expect(cfgFile).toMatch(/transcripts:\s*host/);

@@ -67,7 +67,7 @@ function project(
 function plan(over: Partial<TranscriptsMigrationPlan> = {}): TranscriptsMigrationPlan {
   return {
     mode: "own",
-    configPath: "/etc/paddock.config.yaml",
+    configPath: "/etc/managers.config.yaml",
     configVersion: "abc123",
     projects: [
       project("alpha", [
@@ -230,7 +230,7 @@ describe("migrationOutcome", () => {
     sweepers: { stores: 0, chats: 0 },
     warnings: [],
     configWritten: true,
-    configPath: "/etc/paddock.config.yaml",
+    configPath: "/etc/managers.config.yaml",
     restartRequired: true,
   };
 

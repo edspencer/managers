@@ -112,7 +112,7 @@ function plan(over: Partial<TranscriptsMigrationPlan> = {}): TranscriptsMigratio
   const chats = projects.flatMap((p) => p.chats);
   return {
     mode: "own",
-    configPath: "/srv/paddock/paddock.config.yaml",
+    configPath: "/srv/paddock/managers.config.yaml",
     configVersion: "cfg-v1",
     projects,
     sweepers: { stores: 0, chats: 0 },
@@ -147,7 +147,7 @@ function result(over: Partial<TranscriptsMigrationResult> = {}): TranscriptsMigr
     sweepers: { stores: 0, chats: 0 },
     warnings: [],
     configWritten: true,
-    configPath: "/srv/paddock/paddock.config.yaml",
+    configPath: "/srv/paddock/managers.config.yaml",
     configVersion: "cfg-v2",
     restartRequired: true,
     ...over,
@@ -225,7 +225,7 @@ describe("the table", () => {
     open();
     await waitForTable();
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Paddock's copy")).toBeInTheDocument();
+    expect(within(dialog).getByText("Managers' copy")).toBeInTheDocument();
     expect(within(dialog).getByText("Your ~/.claude copy")).toBeInTheDocument();
     expect(within(dialog).getByText(/42 messages/)).toBeInTheDocument();
     expect(within(dialog).getByText(/17 messages/)).toBeInTheDocument();
@@ -398,7 +398,7 @@ describe("the completion screen", () => {
     await waitForTable();
     await user.click(screen.getByRole("button", { name: /Merge 2 chats/ }));
 
-    await screen.findByText(/Restart the Paddock server now/i);
+    await screen.findByText(/Restart the Managers server now/i);
     expect(screen.getByText(/your chat list will look empty/i)).toBeInTheDocument();
     expect(onCompleted).toHaveBeenCalled();
   });
@@ -418,7 +418,7 @@ describe("the completion screen", () => {
     await waitForTable();
     await user.click(screen.getByRole("button", { name: /Merge 2 chats/ }));
 
-    await screen.findByText(/Restart the Paddock server now/i);
+    await screen.findByText(/Restart the Managers server now/i);
     expect(screen.getByText(/nothing about it was changed/i)).toBeInTheDocument();
     expect(screen.getByText(/will reappear/i)).toBeInTheDocument();
     // The two claims that would be false.
@@ -513,7 +513,7 @@ describe("the completion screen", () => {
     await user.click(screen.getByRole("button", { name: /Merge 2 chats/ }));
 
     await screen.findByText(/Run the migration again, then restart/i);
-    expect(screen.queryByText(/^Restart the Paddock server now\.$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Restart the Managers server now\.$/)).not.toBeInTheDocument();
     expect(screen.getByText(/your chat list will look incomplete/i)).toBeInTheDocument();
   });
 

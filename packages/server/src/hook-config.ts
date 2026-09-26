@@ -73,8 +73,8 @@ export interface HookCapabilities {
 
 /**
  * A hook declaration — persisted per project (`project.yaml` `hooks` map, keyed by
- * name) with prompt bodies in `.paddock/hooks/*.md` (git-tracked + keeper-editable),
- * mirroring the shipped `.paddock/schedules/*.md` pattern.
+ * name) with prompt bodies in `.managers/hooks/*.md` (git-tracked + keeper-editable),
+ * mirroring the shipped `.managers/schedules/*.md` pattern.
  *
  * **New hooks default `enabled: false`** (GG-3) — a safe-create default so nothing
  * fires the instant a hook is written; enabling is just editing it to `true`.
@@ -92,8 +92,8 @@ export interface PaddockHook {
   prompt?: string;
   /**
    * PADDOCK-ONLY convenience: a git-tracked, keeper-editable prompt file under the
-   * project's `.paddock/hooks/` dir (e.g. `"cleanup.md"`), relative to that dir. Read
-   * at fire time and used as the hook's prompt. Traversal outside `.paddock/hooks/`
+   * project's `.managers/hooks/` dir (e.g. `"cleanup.md"`), relative to that dir. Read
+   * at fire time and used as the hook's prompt. Traversal outside `.managers/hooks/`
    * and non-`.md` names are rejected.
    */
   promptFile?: string;

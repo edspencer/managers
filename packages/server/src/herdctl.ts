@@ -1489,7 +1489,7 @@ export class HerdctlService {
    * (edspencer/herdctl#390, wired in @herdctl/core 5.22.1). The wake path drives the
    * turn inside herdctl (a `ScheduleWakeup` / `/loop` / `CronCreate` re-fire), so it
    * bypasses Paddock's per-turn injection — without this the resumed `claude`
-   * subprocess re-spawns with the `mcp__paddock*__*` tools "allowed" but UNBACKED,
+   * subprocess re-spawns with the `mcp__managers*__*` tools "allowed" but UNBACKED,
    * so they vanish from the catalog for the whole autonomous stretch (the "MCP flap").
    * The resolver is SYNCHRONOUS (herdctl threads its result into `openChatSession`
    * before the subprocess spawns) and MUST NOT throw — herdctl catches + logs a throw

@@ -150,7 +150,7 @@ describe("profiles: resolution through loadPaddockConfig (#878)", () => {
   let saved: Record<string, string | undefined>;
 
   const writeConfig = (body: string): string => {
-    const p = path.join(dataDir, "paddock.config.yaml");
+    const p = path.join(dataDir, "managers.config.yaml");
     fs.writeFileSync(p, body, "utf8");
     return p;
   };

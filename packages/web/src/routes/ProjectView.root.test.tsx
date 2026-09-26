@@ -409,7 +409,7 @@ describe("ProjectView root (#516)", () => {
     renderRootAt("/settings");
     // The root's own project.yaml settings, exactly as a project's tab renders.
     expect(await screen.findByTestId("settings-pane")).toBeInTheDocument();
-    // The instance-wide paddock.config.yaml form used to sit beneath it as a
+    // The instance-wide managers.config.yaml form used to sit beneath it as a
     // second section, which read as two pages in one — and, because it is a
     // fragment that only works as a flex-column child, was what stopped the tab
     // scrolling at all. It is its own screen now.

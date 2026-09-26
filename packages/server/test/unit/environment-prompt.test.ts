@@ -57,7 +57,7 @@ describe("environment prompt (#635)", () => {
   });
 
   const writeYaml = (body: string) => {
-    const p = path.join(dataDir, "paddock.config.yaml");
+    const p = path.join(dataDir, "managers.config.yaml");
     fs.writeFileSync(p, body, "utf8");
     process.env.MANAGERS_CONFIG = p;
     return p;
@@ -73,7 +73,10 @@ describe("environment prompt (#635)", () => {
     it("the built-in prompt states the two audited rules", () => {
       // Not a prose assertion — these are the two findings the issue's evidence
       // pass justified, and a silent edit that drops one should fail loudly.
-      expect(DEFAULT_ENVIRONMENT_PROMPT).toContain("mcp__paddock__send_file");
+      expect(DEFAULT_ENVIRONMENT_PROMPT).toContain("mcp__managers_files__send_file");
+      // Managers M1: the prompt names this app, not Paddock.
+      expect(DEFAULT_ENVIRONMENT_PROMPT).toContain("You are running in Managers");
+      expect(DEFAULT_ENVIRONMENT_PROMPT).not.toMatch(/Paddock|mcp__paddock/);
       expect(DEFAULT_ENVIRONMENT_PROMPT).toContain("#123");
       expect(DEFAULT_ENVIRONMENT_PROMPT).toContain("GitHub-Flavored");
     });
@@ -182,7 +185,7 @@ describe("environment prompt (#635)", () => {
         "",
       ].join("\n");
 
-      const configPath = path.join(dataDir, "paddock.config.yaml");
+      const configPath = path.join(dataDir, "managers.config.yaml");
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: hostile }));
       process.env.MANAGERS_CONFIG = configPath;
 
@@ -194,7 +197,7 @@ describe("environment prompt (#635)", () => {
         .join("\n");
       expect(long.length).toBeGreaterThan(10_000);
 
-      const configPath = path.join(dataDir, "paddock.config.yaml");
+      const configPath = path.join(dataDir, "managers.config.yaml");
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: long }));
       process.env.MANAGERS_CONFIG = configPath;
 
@@ -202,7 +205,7 @@ describe("environment prompt (#635)", () => {
     });
 
     it("a null patch DELETES the key, restoring the built-in default", () => {
-      const configPath = path.join(dataDir, "paddock.config.yaml");
+      const configPath = path.join(dataDir, "managers.config.yaml");
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: "custom" }));
       process.env.MANAGERS_CONFIG = configPath;
       expect(loadPaddockConfig().environmentPrompt).toBe("custom");

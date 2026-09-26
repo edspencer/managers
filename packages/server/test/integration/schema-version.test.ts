@@ -3,7 +3,7 @@
  *
  * The unit suite (`test/unit/schema-version.test.ts`) pins the guard's decisions
  * against `loadPaddockConfig` and a bare `ProjectStore`. This one proves the two
- * things only a real boot can: that a `paddock.config.yaml` declaring its
+ * things only a real boot can: that a `managers.config.yaml` declaring its
  * version still starts an instance (the field must not read as a stray unknown
  * key that trips anything), and that a project from the future is absent from
  * `GET /api/projects` while its file survives the boot untouched.

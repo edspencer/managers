@@ -1,11 +1,11 @@
 /**
- * Pure argument parsing and message formatting for the `paddock` CLI.
+ * Pure argument parsing and message formatting for the `managers` CLI.
  *
  * ## Why this is its own module
  *
  * These functions want unit tests, and the entrypoint they used to live in
  * cannot be imported without running. The first attempt kept them in
- * `paddock.ts` behind a run-directly guard:
+ * `managers.ts` behind a run-directly guard:
  *
  * ```ts
  * if (pathToFileURL(process.argv[1]).href === import.meta.url) main();
@@ -21,7 +21,7 @@
  *
  * `realpathSync(argv[1])` would fix that instance. Splitting the module removes
  * the need for the guard entirely, so there is no condition left to get wrong on
- * the next shim, platform or package manager. `paddock.ts` now always runs.
+ * the next shim, platform or package manager. `managers.ts` now always runs.
  */
 
 export interface CliOptions {
@@ -76,11 +76,11 @@ export class CliError extends Error {}
 export const MIN_NODE_MAJOR = 22;
 
 /**
- * What `paddock service` can be asked to do.
+ * What `managers service` can be asked to do.
  *
  * `start`/`stop`/`restart` join the original three in #873. Note that `start`
- * is also a top-level VERB — `paddock start` runs a server in this terminal,
- * `paddock service start` asks the supervisor to run one. The overlap is safe
+ * is also a top-level VERB — `managers start` runs a server in this terminal,
+ * `managers service start` asks the supervisor to run one. The overlap is safe
  * because `parseCommand` dispatches on `argv[0]` alone and only then reads an
  * action, so the two never compete for the same token.
  */
@@ -95,7 +95,7 @@ export const SERVICE_ACTIONS = [
 export type ServiceAction = (typeof SERVICE_ACTIONS)[number];
 
 /**
- * What `paddock config` can be asked to do (#878).
+ * What `managers config` can be asked to do (#878).
  *
  * `show` reads the resolution; `eject` freezes it into the config file. The two
  * are the halves of #878's "thin by default, explicit on demand" — and they are
@@ -112,7 +112,7 @@ export const VERBS = ["start", "service", "config"] as const;
  * A parsed invocation: which verb, plus the flags that followed it.
  *
  * `action` is optional on `service` and `config` for exactly one reason —
- * `paddock service --help`, where there is no action to name and printing usage
+ * `managers service --help`, where there is no action to name and printing usage
  * is the whole request. It is `undefined` only when `opts.help` is true.
  */
 export type Command =
@@ -139,7 +139,7 @@ function parseAction<T extends string>(
       throw new CliError(
         `unknown ${verb} action: ${head}\n` +
           `Expected one of: ${actions.join(", ")}.\n` +
-          `Run \`paddock ${verb} --help\` for usage.`,
+          `Run \`managers ${verb} --help\` for usage.`,
       );
     }
     action = head as T;
@@ -148,8 +148,8 @@ function parseAction<T extends string>(
   // `--help` wins over a missing action: asking for usage is not a usage error.
   if (action === undefined && !opts.help) {
     throw new CliError(
-      `\`paddock ${verb}\` needs an action: ${actions.join(", ")}.\n` +
-        `Run \`paddock ${verb} --help\` for usage.`,
+      `\`managers ${verb}\` needs an action: ${actions.join(", ")}.\n` +
+        `Run \`managers ${verb} --help\` for usage.`,
     );
   }
   return { action, opts };
@@ -162,16 +162,16 @@ function parseAction<T extends string>(
  * the first non-flag token, and it happens BEFORE the flag loop. Two properties
  * fall out of that, both of which matter more than the flexibility given up:
  *
- * - **Bare `paddock` is untouched.** No verb means the whole argv goes to
+ * - **Bare `managers` is untouched.** No verb means the whole argv goes to
  *   {@link parseArgs} exactly as before, so the demo path cannot change
  *   behaviour, and an unrecognised leading token still produces `unknown
  *   option:` from the flag loop rather than a new and different error.
- * - **Flags parse after a verb**, so `paddock start --port 7299` and
- *   `paddock service install --port 7299` both work, and the flag grammar is
+ * - **Flags parse after a verb**, so `managers start --port 7299` and
+ *   `managers service install --port 7299` both work, and the flag grammar is
  *   the same one in every position.
  *
- * A verb is only a verb in first position: `paddock --port start` is an error
- * from `--port`, not a `start` invocation, and `paddock start start` is still
+ * A verb is only a verb in first position: `managers --port start` is an error
+ * from `--port`, not a `start` invocation, and `managers start start` is still
  * `unknown option`.
  *
  * That first half used to claim a *missing-value* error, which was wrong (#823):
@@ -218,9 +218,9 @@ export function parseArgs(argv: string[]): CliOptions {
         // files later, in `config.ts`, with nothing between the typo and a
         // server asked to listen on NaN (#823).
         //
-        // Scoped to NON-EMPTY values on purpose. `paddock --port "$PORT"` with
+        // Scoped to NON-EMPTY values on purpose. `managers --port "$PORT"` with
         // PORT unset passes `""`, which is falsy at the one place that reads it
-        // (`paddock.ts`: `if (opts.port)`) and so correctly falls through to the
+        // (`managers.ts`: `if (opts.port)`) and so correctly falls through to the
         // default — a working invocation that a bare `/^\d+$/` guard would turn
         // into a hard error.
         const v = next();
@@ -271,7 +271,7 @@ export function parseArgs(argv: string[]): CliOptions {
         opts.version = true;
         break;
       default:
-        throw new CliError(`unknown option: ${arg}\nRun \`paddock --help\` for usage.`);
+        throw new CliError(`unknown option: ${arg}\nRun \`managers --help\` for usage.`);
     }
   }
   return opts;
@@ -287,7 +287,7 @@ export function nodeVersionProblem(nodeVersion: string): string | undefined {
   const major = Number(nodeVersion.split(".")[0]);
   if (!Number.isFinite(major) || major >= MIN_NODE_MAJOR) return undefined;
   return (
-    `Node ${nodeVersion} is too old — Paddock needs Node ${MIN_NODE_MAJOR}+.\n` +
+    `Node ${nodeVersion} is too old — Managers needs Node ${MIN_NODE_MAJOR}+.\n` +
     `Upgrade Node, then re-run. (nodejs.org, or \`nvm install ${MIN_NODE_MAJOR}\`)`
   );
 }
@@ -295,8 +295,8 @@ export function nodeVersionProblem(nodeVersion: string): string | undefined {
 /**
  * Translate a listen failure into something a human can act on.
  *
- * `EADDRINUSE` is the likeliest first-run failure — usually a second Paddock, or
- * a Temporal frontend, which defaults to the same 7233 — and Node's raw error
+ * `EADDRINUSE` is the likeliest first-run failure — usually a second Managers or a Paddock, or
+ * a Temporal frontend (7233 is Paddock's default and Temporal's) — and Node's raw error
  * names neither the port nor the flag that fixes it.
  */
 export function explainListenError(err: unknown, host: string, port: string): string {
@@ -304,40 +304,40 @@ export function explainListenError(err: unknown, host: string, port: string): st
   if (code === "EADDRINUSE") {
     return (
       `port ${port} is already in use.\n` +
-      `Something else is listening on ${host}:${port} — possibly another Paddock.\n` +
-      `Pick a different port:  paddock --port ${Number(port) + 1}`
+      `Something else is listening on ${host}:${port} — possibly another Managers.\n` +
+      `Pick a different port:  managers --port ${Number(port) + 1}`
     );
   }
   if (code === "EACCES") {
     return (
       `not allowed to bind ${host}:${port}.\n` +
-      `Ports below 1024 need elevated privileges — use a higher one:  paddock --port 7233`
+      `Ports below 1024 need elevated privileges — use a higher one:  managers --port 7234`
     );
   }
   return String((err as { message?: string } | undefined)?.message ?? err);
 }
 
-export const USAGE = `paddock — run a Paddock instance locally
+export const USAGE = `managers — run a Managers instance locally
 
 Usage
   npx @edspencer/paddock [options]        start the server (the default)
-  paddock start [options]                 the same thing, said out loud
-  paddock service <install|uninstall|status>
+  managers start [options]                 the same thing, said out loud
+  managers service <install|uninstall|status>
                                           run it in the background from login
-                                          (\`paddock service --help\`)
-  paddock config show [--resolved]        what this instance's config resolved
+                                          (\`managers service --help\`)
+  managers config show [--resolved]        what this instance's config resolved
                                           to, and where each value came from
-  paddock config eject [--write]          freeze that resolution into
-                                          paddock.config.yaml
-                                          (\`paddock config --help\`)
+  managers config eject [--write]          freeze that resolution into
+                                          managers.config.yaml
+                                          (\`managers config --help\`)
 
 Options
-  -p, --port <port>       HTTP/WS port (default 7233, or $PORT)
+  -p, --port <port>       HTTP/WS port (default 7234, or $PORT)
       --host <host>       Bind address (default 127.0.0.1)
-  -d, --data-dir <path>   Projects + state (default ~/.paddock, or $MANAGERS_DATA_DIR)
+  -d, --data-dir <path>   Projects + state (default ~/.managers, or $MANAGERS_DATA_DIR)
   -o, --open              Open the app in your browser once it is listening
       --verbose           Show the server's own logs (quiet by default)
-  -v, --version           Print the Paddock version and exit
+  -v, --version           Print the Managers version and exit
   -h, --help              Show this help
 
 Opening your own directories
@@ -346,33 +346,33 @@ Opening your own directories
   reads your Claude Code history, lists the directories you have worked in, and
   links the ones you tick as projects. A new instance opens on it.
 
-  Importing a directory does not write into it. No .paddock/, no .chats/, no
+  Importing a directory does not write into it. No .managers/, no .chats/, no
   .gitignore edits, no CLAUDE.md — the project record and the copied transcripts
   both live in the data dir, and the project just points at the path. Your own
   ~/.claude transcripts are copied, never moved or deleted, so your terminal
   \`claude\` keeps working exactly as before.
 
 Credentials
-  Paddock drives Claude Code, so it needs Claude credentials — and if you
+  Managers drives Claude Code, so it needs Claude credentials — and if you
   already use Claude Code on this machine, it uses the login you already have.
   That is a macOS Keychain entry on a Mac, or your ~/.claude/.credentials.json
   elsewhere (symlinked in, never copied). Reading a login writes nothing.
 
   Otherwise: a CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY in the environment,
   or a one-off \`CLAUDE_CONFIG_DIR=<data-dir>/claude-home claude login\`. With no
-  login at all anywhere, run \`claude setup-token\`. Paddock says at startup when
+  login at all anywhere, run \`claude setup-token\`. Managers says at startup when
   it can find none.
 
 Posture profiles
-  One key picks how much Paddock shares and how much its agents may do:
+  One key picks how much Managers shares and how much its agents may do:
 
     profile: balanced     # paranoid | balanced | yolo   (MANAGERS_PROFILE)
 
   paranoid shares nothing but the login and turns every capability off — the
-  behaviour Paddock had before profiles existed. balanced (the default)
+  behaviour Managers had before profiles existed. balanced (the default)
   inherits the CAPABILITIES your CLI already has — instructions, MCP servers,
   plugins — and adds the read-only self-management tools, while keeping your
-  chat history Paddock's own. yolo turns the rest on: your transcripts, host
+  chat history Managers' own. yolo turns the rest on: your transcripts, host
   hooks, the write and project tools, schedule mutation, deeper spawning, the
   browser.
 
@@ -386,13 +386,13 @@ Posture profiles
   environment sets the blast radius.
 
   To see what your profile actually expanded to on THIS machine, with the layer
-  each value came from:  paddock config show --resolved
+  each value came from:  managers config show --resolved
 
 Sharing your Claude Code state
-  Apart from that login, Paddock writes nothing outside its data dir by
+  Apart from that login, Managers writes nothing outside its data dir by
   default: transcripts go to each project's .chats/, and your ~/.claude is read
   for config only. Each thing it can share is one key in
-  <data-dir>/paddock.config.yaml, and each defaults to whatever your profile
+  <data-dir>/managers.config.yaml, and each defaults to whatever your profile
   says (see Posture profiles below):
 
     claude:
@@ -403,19 +403,19 @@ Sharing your Claude Code state
       mcpServers: host    # own | host   own on paranoid, else host
 
   transcripts: host makes a chat and a \`claude --resume\` in the same directory
-  the same file, live in both directions; deleting such a chat in Paddock
+  the same file, live in both directions; deleting such a chat in Managers
   releases it rather than removing it, because it is your history rather than
-  Paddock's copy. credentials: own is the opt-out from sharing the login above.
+  Managers' copy. credentials: own is the opt-out from sharing the login above.
 
   instructions: host loads your ~/.claude CLAUDE.md, agents/, commands/ and
-  plugins/. On from balanced up, so your curated CLAUDE.md does reach Paddock's
+  plugins/. On from balanced up, so your curated CLAUDE.md does reach Managers'
   agents; profile: paranoid or instructions: own keeps it out. Each project's
   own CLAUDE.md applies either way.
 
   hooks: host runs the shell commands your ~/.claude/settings.json binds to
   tool use. Off by default — inheriting someone's hooks is not something to
   discover after the fact. Its other keys (permissions, model, statusline)
-  apply either way: under hooks: own Paddock writes its own settings.json
+  apply either way: under hooks: own Managers writes its own settings.json
   carrying them with hooks dropped, regenerated at startup.
 
   mcpServers: host attaches the MCP servers declared in your ~/.claude.json —
@@ -427,36 +427,36 @@ Sharing your Claude Code state
   one, since batch passes the definition to claude as a command-line argument.
 
 Your data
-  Everything lives in one directory — ~/.paddock unless you pass --data-dir.
+  Everything lives in one directory — ~/.managers unless you pass --data-dir.
   Projects, chat transcripts and settings all persist there between runs. Move
   that directory to move your instance; delete it to start over. Nothing is
   stored anywhere else.
 
 Notes
   Binds loopback with authentication disabled, which is safe for a laptop. To
-  expose it on a network, set MANAGERS_AUTH_MODE first — Paddock refuses to bind
+  expose it on a network, set MANAGERS_AUTH_MODE first — Managers refuses to bind
   a routable interface wide open. See AUTH.md.
 
 Docs: https://github.com/edspencer/paddock`;
 
-export const SERVICE_USAGE = `paddock service — keep Paddock running in the background
+export const SERVICE_USAGE = `managers service — keep Managers running in the background
 
 Usage
-  paddock service install [options]   register it and start it now
-  paddock service uninstall           stop it and deregister it
-  paddock service status              is it registered, is it running, where are the logs
-  paddock service start               start an installed service that is stopped
-  paddock service stop                stop it, and leave it installed
-  paddock service restart             stop it and start it again, re-reading config
+  managers service install [options]   register it and start it now
+  managers service uninstall           stop it and deregister it
+  managers service status              is it registered, is it running, where are the logs
+  managers service start               start an installed service that is stopped
+  managers service stop                stop it, and leave it installed
+  managers service restart             stop it and start it again, re-reading config
 
 Options (install only — recorded in the generated unit)
-  -p, --port <port>       HTTP/WS port (default 7233)
+  -p, --port <port>       HTTP/WS port (default 7234)
       --host <host>       Bind address (default 127.0.0.1)
   -d, --data-dir <path>   Only if you want an instance SEPARATE from your
                           terminal one. Left out of the unit when you omit it
                           AND \`MANAGERS_DATA_DIR\` is unset in this shell, so
-                          \`paddock service\` and a bare \`paddock\` are the same
-                          ~/.paddock instance reached two ways. If
+                          \`managers service\` and a bare \`managers\` are the same
+                          ~/.managers instance reached two ways. If
                           \`MANAGERS_DATA_DIR\` IS set here, that path is recorded
                           in the unit — the service would otherwise point
                           somewhere your terminal does not.
@@ -469,8 +469,8 @@ At login, not at boot
   that only a logged-in user session can read. A boot-time system daemon has no
   such session and could not use it.
 
-  So Paddock starts when you LOG IN, not when the machine boots. After a
-  restart that nobody logs into, Paddock is not running. That is the design, not
+  So Managers starts when you LOG IN, not when the machine boots. After a
+  restart that nobody logs into, Managers is not running. That is the design, not
   a fault.
 
   On Linux, a user service is also stopped when you log out. To keep it up:
@@ -478,20 +478,20 @@ At login, not at boot
     loginctl enable-linger $USER
 
 Where it lives
-  macOS   ~/Library/LaunchAgents/net.edspencer.paddock.plist
+  macOS   ~/Library/LaunchAgents/net.edspencer.managers.plist
           logs in <data-dir>/service/
-  Linux   ~/.config/systemd/user/paddock.service
-          logs via  journalctl --user -u paddock.service -f
+  Linux   ~/.config/systemd/user/managers.service
+          logs via  journalctl --user -u managers.service -f
 
 Installed from npx?
   \`service install\` refuses. An npx cache path is hash-keyed and npm may prune
   it, so the unit would work until it silently didn't, at some future login.
   Install properly first:
 
-    npm i -g @edspencer/paddock && paddock service install
+    npm i -g @edspencer/paddock && managers service install
 
 A note on access
-  Paddock binds loopback with authentication off, which is right for a laptop.
+  Managers binds loopback with authentication off, which is right for a laptop.
   A service is up for as long as you are logged in rather than as long as a
   terminal tab, so that window is longer — but it is not wider: any local
   process that could reach the port could already read the same Claude login as
@@ -499,24 +499,24 @@ A note on access
 
 Docs: https://github.com/edspencer/paddock`;
 
-export const CONFIG_USAGE = `paddock config — what this instance's configuration actually resolved to
+export const CONFIG_USAGE = `managers config — what this instance's configuration actually resolved to
 
 Usage
-  paddock config show                 the decisions: your profile, the keys your
+  managers config show                 the decisions: your profile, the keys your
                                       config file sets, the variables your
                                       environment sets
-  paddock config show --resolved      EVERY effective value, and which layer it
+  managers config show --resolved      EVERY effective value, and which layer it
                                       came from
-  paddock config show --json          the same report as JSON, long values in
+  managers config show --json          the same report as JSON, long values in
                                       full (sensitive ones still hidden)
-  paddock config eject                what freezing that resolution into
-                                      paddock.config.yaml would write — a
+  managers config eject                what freezing that resolution into
+                                      managers.config.yaml would write — a
                                       preview; writes nothing
-  paddock config eject --write        actually write it
+  managers config eject --write        actually write it
 
 Options
-  -d, --data-dir <path>   Which instance to inspect (default ~/.paddock, or
-                          $MANAGERS_DATA_DIR) — the same rule \`paddock start\`
+  -d, --data-dir <path>   Which instance to inspect (default ~/.managers, or
+                          $MANAGERS_DATA_DIR) — the same rule \`managers start\`
                           uses, so the two always read the same instance
       --resolved          show: every field, not just the ones someone set
       --json              show: the whole report as JSON (implies --resolved's
@@ -531,12 +531,12 @@ Where a value can come from
   Config resolves in four layers, and each row of --resolved names the one that
   won:
 
-    default            Paddock's built-in default.
+    default            Managers' built-in default.
     profile (<name>)   Your posture profile. The twelve levers a profile governs
                        have no code default of their own any more — the profile
                        IS their default — so this is a distinct answer from
                        "default", and switching profile would change it.
-    file               A key in paddock.config.yaml.
+    file               A key in managers.config.yaml.
     env <NAME>         An environment variable, which beats the file for the
                        same key.
 
@@ -580,7 +580,7 @@ What eject writes, and what it leaves alone
   falls back to: without it, a new capability toggle would resolve against the
   built-in default profile rather than the posture you actually ejected from.
 
-  Your comments and any keys Paddock does not manage survive — the file is
+  Your comments and any keys Managers does not manage survive — the file is
   round-tripped, not regenerated — and the write is atomic.
 
 Reading nothing, writing nothing
@@ -591,7 +591,7 @@ Reading nothing, writing nothing
 
   Values are printed to a terminal that often ends up pasted into an issue, so
   fields marked sensitive are shown as (hidden). None of them is a secret —
-  Paddock keeps secrets out of this surface entirely, so there is no API key or
+  Managers keeps secrets out of this surface entirely, so there is no API key or
   JWT signing material here to hide or reveal.
 
 Docs: https://github.com/edspencer/paddock`;

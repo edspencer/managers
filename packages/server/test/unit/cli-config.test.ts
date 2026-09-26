@@ -1,5 +1,5 @@
 /**
- * `paddock config show` — grammar, provenance and rendering (#878).
+ * `managers config show` — grammar, provenance and rendering (#878).
  *
  * The provenance block is the substance. It resolves a REAL config through
  * `loadPaddockConfig` against a throwaway data dir rather than hand-building a
@@ -43,7 +43,7 @@ import {
 import { loadPaddockConfig } from "../../src/config.js";
 import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 
-describe("paddock config: parseCommand (#878)", () => {
+describe("managers config: parseCommand (#878)", () => {
   it("parses the show action", () => {
     expect(parseCommand(["config", "show"])).toEqual({
       verb: "config",
@@ -100,7 +100,7 @@ describe("paddock config: parseCommand (#878)", () => {
   });
 
   it("documents every action it accepts", () => {
-    for (const action of CONFIG_ACTIONS) expect(CONFIG_USAGE).toContain(`paddock config ${action}`);
+    for (const action of CONFIG_ACTIONS) expect(CONFIG_USAGE).toContain(`managers config ${action}`);
   });
 });
 
@@ -142,7 +142,7 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
   });
 
   const writeConfig = (yaml: string): void =>
-    fs.writeFileSync(path.join(dataDir, "paddock.config.yaml"), yaml, "utf8");
+    fs.writeFileSync(path.join(dataDir, "managers.config.yaml"), yaml, "utf8");
 
   const report = (): ResolvedConfigReport =>
     resolveConfigReport(loadPaddockConfig({ createDataDir: false }));
@@ -220,7 +220,7 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
   /**
    * The precedence wrinkle #878 introduces, and the reason a reader needs this
    * command: an individual FILE key beats `MANAGERS_PROFILE` in the environment,
-   * inverting Paddock's otherwise universal env-beats-file rule.
+   * inverting Managers' otherwise universal env-beats-file rule.
    */
   it("shows a file key beating MANAGERS_PROFILE, and an env var beating the file", () => {
     writeConfig("claude:\n  hooks: host\n  mcpServers: own\n");
@@ -282,8 +282,8 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
 
   /**
    * Inspecting an instance must not bring one into being. Without this, running
-   * the command on a machine that has never started Paddock leaves an empty
-   * `~/.paddock` behind and the first-run welcome never prints again.
+   * the command on a machine that has never started Managers leaves an empty
+   * `~/.managers` behind and the first-run welcome never prints again.
    */
   it("does not create the data dir it reports on", async () => {
     const absent = path.join(dataDir, "never-created");
@@ -302,13 +302,13 @@ function makeReport(over: Partial<ResolvedConfigReport> = {}): ResolvedConfigRep
   const fields: ResolvedConfigField[] = [
     { key: "driveMode", group: "capabilities", label: "Drive mode", type: "enum", value: "session", source: "default", sensitive: false, ejectable: true },
     { key: "selfMcpEnabled", group: "capabilities", label: "Self-MCP", type: "boolean", value: true, source: "profile", origin: "balanced", sensitive: false, ejectable: true },
-    { key: "brand.name", group: "branding", label: "Name", type: "string", value: "QA Rig", source: "file", origin: "/tmp/i/paddock.config.yaml", sensitive: false, ejectable: true },
+    { key: "brand.name", group: "branding", label: "Name", type: "string", value: "QA Rig", source: "file", origin: "/tmp/i/managers.config.yaml", sensitive: false, ejectable: true },
     { key: "logLevel", group: "logging", label: "Log level", type: "enum", value: "warn", source: "env", origin: "LOG_LEVEL", sensitive: false, ejectable: true, shadowedFileValue: "debug" },
-    { key: "transcription.endpoint", group: "transcription", label: "Endpoint", type: "string", value: "https://user:s3cr3t@whisper.example/v1", source: "file", origin: "/tmp/i/paddock.config.yaml", sensitive: true, ejectable: false },
+    { key: "transcription.endpoint", group: "transcription", label: "Endpoint", type: "string", value: "https://user:s3cr3t@whisper.example/v1", source: "file", origin: "/tmp/i/managers.config.yaml", sensitive: true, ejectable: false },
   ];
   return {
     dataDir: "/tmp/i",
-    configPath: "/tmp/i/paddock.config.yaml",
+    configPath: "/tmp/i/managers.config.yaml",
     configFileExists: true,
     profile: { name: "balanced", source: "default" },
     fields,
@@ -316,7 +316,7 @@ function makeReport(over: Partial<ResolvedConfigReport> = {}): ResolvedConfigRep
   };
 }
 
-describe("paddock config show: rendering (#878)", () => {
+describe("managers config show: rendering (#878)", () => {
   it("summarises only the decisions someone actually made", () => {
     const out = formatSummary(makeReport());
     expect(out).toContain("Set in the config file");
@@ -326,7 +326,7 @@ describe("paddock config show: rendering (#878)", () => {
     expect(out).not.toContain("driveMode");
     expect(out).not.toContain("selfMcpEnabled");
     expect(out).toContain("Everything else follows the balanced profile");
-    expect(out).toContain("paddock config show --resolved");
+    expect(out).toContain("managers config show --resolved");
   });
 
   it("says so plainly when there is no config file", () => {
@@ -355,7 +355,7 @@ describe("paddock config show: rendering (#878)", () => {
   it("legends only the layers that are actually present", () => {
     const only = makeReport({ fields: makeReport().fields.filter((f) => f.source === "default") });
     const out = formatResolved(only, GROUPS, false);
-    expect(out).toContain("Paddock's built-in default");
+    expect(out).toContain("Managers' built-in default");
     expect(out).not.toContain("profile (balanced)");
     expect(out).not.toContain("env NAME");
   });
@@ -398,7 +398,7 @@ describe("paddock config show: rendering (#878)", () => {
 
 // --- eject ------------------------------------------------------------------
 
-describe("paddock config eject: grammar (#878)", () => {
+describe("managers config eject: grammar (#878)", () => {
   it("parses the eject action and its flags", () => {
     expect(parseCommand(["config", "eject"])).toEqual({
       verb: "config",
@@ -515,7 +515,7 @@ describe("buildEjectPlan: what gets frozen, and what deliberately does not (#878
   });
 });
 
-describe("paddock config eject: rendering (#878)", () => {
+describe("managers config eject: rendering (#878)", () => {
   it("previews without promising a write, and states the cost", () => {
     const out = formatEjectPlan(buildEjectPlan(makeReport()), GROUPS, false);
     expect(out).toContain("eject preview");
@@ -523,7 +523,7 @@ describe("paddock config eject: rendering (#878)", () => {
     expect(out).toContain("Nothing was written. Re-run with --write to apply.");
     // #878 requires the tradeoff at the point of use, not only in the docs.
     expect(out).toContain("What you give up");
-    expect(out).toContain("stops following Paddock's defaults");
+    expect(out).toContain("stops following Managers' defaults");
   });
 
   it("switches tense once the write has happened", () => {
@@ -587,7 +587,7 @@ describe("eject round-trip: the file resolves to what it froze (#878)", () => {
     await rmTmpDir(dataDir);
   });
 
-  const configPath = (): string => path.join(dataDir, "paddock.config.yaml");
+  const configPath = (): string => path.join(dataDir, "managers.config.yaml");
   const report = (): ResolvedConfigReport =>
     resolveConfigReport(loadPaddockConfig({ createDataDir: false }));
   const values = (r: ResolvedConfigReport): Record<string, unknown> =>
@@ -632,17 +632,17 @@ describe("eject round-trip: the file resolves to what it froze (#878)", () => {
     expect(fs.readFileSync(configPath(), "utf8")).toBe(once);
   });
 
-  it("preserves comments and keys Paddock does not manage", () => {
+  it("preserves comments and keys Managers does not manage", () => {
     fs.writeFileSync(
       configPath(),
-      "# hand-written\nprofile: paranoid\n\n# mine, not Paddock's\nmyOwnNote: keep me\n",
+      "# hand-written\nprofile: paranoid\n\n# mine, not Managers'\nmyOwnNote: keep me\n",
       "utf8",
     );
     const before = values(report());
     eject();
     const raw = fs.readFileSync(configPath(), "utf8");
     expect(raw).toContain("# hand-written");
-    expect(raw).toContain("# mine, not Paddock's");
+    expect(raw).toContain("# mine, not Managers'");
     expect(raw).toContain("myOwnNote: keep me");
     expect(values(report())).toEqual(before);
   });
@@ -662,7 +662,7 @@ describe("eject round-trip: the file resolves to what it froze (#878)", () => {
 
     // And with the variable gone, the file does NOT assert the env's value.
     delete process.env.MANAGERS_BRAND_NAME;
-    expect(report().fields.find((f) => f.key === "brand.name")?.value).toBe("Paddock");
+    expect(report().fields.find((f) => f.key === "brand.name")?.value).toBe("Managers");
   });
 
   it("writes an env-supplied value when asked, and then it survives the variable", () => {

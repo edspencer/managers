@@ -124,7 +124,7 @@ export interface SelfMcpTrigger {
   path: string | null;
   /** WHAT: the inline prompt, or null when a `promptFile` drives it. */
   prompt: string | null;
-  /** The `.paddock/triggers/` prompt-file name, or null. */
+  /** The `.managers/triggers/` prompt-file name, or null. */
   promptFile: string | null;
   /** `new` = a fresh chat each fire; `resume` = one owned accreting session. */
   session: "new" | "resume";

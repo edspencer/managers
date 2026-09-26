@@ -7,7 +7,7 @@
  *  - `buildApp` wiring — a refuse decision actually fails the boot closed (the
  *    guard runs before any heavy init, so this needs no fake-claude fleet).
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { isLoopbackHost, evaluateBindSafety } from "../../src/bind-safety.js";
 import { loadPaddockConfig, type PaddockConfig } from "../../src/config.js";
 import { buildApp } from "../../src/app.js";
@@ -83,6 +83,15 @@ describe("buildApp bind-safety wiring (#435)", () => {
   let dataDir: string | undefined;
   const saved = { ...process.env };
 
+  // Some cases call `loadPaddockConfig()` while BUILDING makeConfig's argument,
+  // i.e. before makeConfig points the data dir anywhere — which used to resolve
+  // the default `./data` and leave a stray `packages/server/data/` behind (it was
+  // invisible to git while empty; the M1 data-dir marker made it show up).
+  beforeEach(async () => {
+    dataDir = await makeTmpDir("paddock-bind-");
+    process.env.MANAGERS_DATA_DIR = dataDir;
+  });
+
   afterEach(async () => {
     for (const k of Object.keys(process.env)) {
       if (!(k in saved)) delete process.env[k];
@@ -94,7 +103,7 @@ describe("buildApp bind-safety wiring (#435)", () => {
 
   /** A resolved config pointed at a throwaway data dir, with overrides applied. */
   async function makeConfig(over: Partial<PaddockConfig>): Promise<PaddockConfig> {
-    dataDir = await makeTmpDir("paddock-bind-");
+    dataDir ??= await makeTmpDir("paddock-bind-");
     process.env.MANAGERS_DATA_DIR = dataDir;
     const base = loadPaddockConfig();
     return { ...base, ...over } as PaddockConfig;

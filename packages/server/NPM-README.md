@@ -7,7 +7,7 @@ sessions organized by project, in a web UI.
 npx @edspencer/paddock
 ```
 
-Then open <http://127.0.0.1:7233>.
+Then open <http://127.0.0.1:7234>.
 
 Or point it at work you've already done — see [Open your own project](#open-your-own-project).
 
@@ -33,7 +33,7 @@ the one you already have — the macOS Keychain entry on a Mac, your
 writes nothing, and nothing else is shared with it.
 
 To give Paddock its own instead, set `claude: { credentials: own }` in
-`<data-dir>/paddock.config.yaml`; a login is then a token in the environment as above,
+`<data-dir>/managers.config.yaml`; a login is then a token in the environment as above,
 or a one-off `CLAUDE_CONFIG_DIR=<data-dir>/claude-home claude login`. Either way,
 Paddock says at startup if it can find no credentials at all.
 
@@ -42,7 +42,7 @@ Paddock says at startup if it can find no credentials at all.
 Apart from that login: **nothing, by default.** Your `CLAUDE.md`, `agents/`,
 `commands/` and `plugins/` are not loaded, the hooks your `settings.json` binds to tool
 use do not run, your transcripts are not touched, and your `~/.claude.json` MCP servers
-are not attached. Each is one key in `<data-dir>/paddock.config.yaml`:
+are not attached. Each is one key in `<data-dir>/managers.config.yaml`:
 
 ```yaml
 claude:
@@ -88,7 +88,7 @@ an empty instance you are looking at your own work. Expand a row first if you wo
 rather pick individual conversations than take the lot. Discover stays in the sidebar
 afterwards; it is not only a first-run screen.
 
-**Nothing is written into the directories you import.** No `.paddock/`, no `.chats/`,
+**Nothing is written into the directories you import.** No `.managers/`, no `.chats/`,
 no `.gitignore` edit, no `CLAUDE.md`. The project record and the copied transcripts
 both live in the data dir, and the project simply points at the path.
 
@@ -96,22 +96,22 @@ both live in the data dir, and the project simply points at the path.
 timestamps preserved — the originals are never moved or deleted, and your terminal
 `claude` keeps working exactly as before. To share **one** set of transcripts between
 Paddock and your terminal rather than keeping a copy, set
-`claude: { transcripts: host }` in `<data-dir>/paddock.config.yaml`. (Your *login* is
+`claude: { transcripts: host }` in `<data-dir>/managers.config.yaml`. (Your *login* is
 already shared, which is why there is nothing to log into — see Credentials above.)
 
 ## Options
 
 ```
-  -p, --port <port>       HTTP/WS port (default 7233)
+  -p, --port <port>       HTTP/WS port (default 7234)
       --host <host>       Bind address (default 127.0.0.1)
-  -d, --data-dir <path>   Projects + state (default ~/.paddock)
+  -d, --data-dir <path>   Projects + state (default ~/.managers)
   -o, --open              Open the app in your browser once it is listening
       --verbose           Show the server's own logs (quiet by default)
   -v, --version           Print the version
   -h, --help              Show help
 ```
 
-Your projects, chats and settings persist between runs in `~/.paddock`, or wherever
+Your projects, chats and settings persist between runs in `~/.managers`, or wherever
 `--data-dir` points. It is one directory: move it to move your instance, delete it to
 start over. Where you run `paddock` from has no effect on which instance you get.
 
@@ -132,7 +132,7 @@ A multi-arch Docker image is published alongside this package, and is the better
 fit for a server deployment:
 
 ```sh
-docker run -d -p 127.0.0.1:7233:7233 -v /srv/paddock-data:/data \
+docker run -d -p 127.0.0.1:7234:7234 -v /srv/paddock-data:/data \
   -e CLAUDE_CODE_OAUTH_TOKEN=… \
   -e MANAGERS_DANGEROUSLY_ALLOW_OPEN=1 \
   ghcr.io/edspencer/paddock:latest

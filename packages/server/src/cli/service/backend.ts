@@ -1,5 +1,5 @@
 /**
- * The seam between "what a Paddock service is" and "how this init system spells
+ * The seam between "what a Managers service is" and "how this init system spells
  * it" (#796).
  *
  * Two backends implement this: `launchd.ts` and `systemd.ts`. They differ in
@@ -40,7 +40,7 @@ export interface ServiceState {
   /** Does the init system say the process is up right now? */
   running: boolean;
   pid?: string;
-  /** The Paddock arguments recorded in the installed unit, interpreter stripped. */
+  /** The Managers arguments recorded in the installed unit, interpreter stripped. */
   argv: string[];
   /**
    * Does the unit ON DISK come back after a graceful stop (#872)?
@@ -49,7 +49,7 @@ export interface ServiceState {
    * because those differ for exactly the people who need to hear about it.
    * Upgrading the package does not rewrite a unit, so anyone who installed
    * before #872 still has `SuccessfulExit: false` / `Restart=on-failure` — the
-   * shape where one sleep or logout stops Paddock for good. They cannot see
+   * shape where one sleep or logout stops Managers for good. They cannot see
    * that from the outside: the service simply is not running one morning.
    * `status` is where they look, so `status` is where it has to say so.
    *
@@ -75,7 +75,7 @@ export interface ServiceBackend {
    * These exist so an intended stop has a channel of its OWN. Before them the
    * only stop was `uninstall`, which also deregisters, so "bounce it after
    * editing config" meant either losing the unit or dropping to raw
-   * `launchctl kickstart -k gui/$(id -u)/net.edspencer.paddock` — undiscoverable,
+   * `launchctl kickstart -k gui/$(id -u)/net.edspencer.managers` — undiscoverable,
    * and different on each platform. The exit-code heuristic that #872 removed
    * was carrying the same meaning by inference; a command carries it directly.
    *

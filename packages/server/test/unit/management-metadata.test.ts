@@ -58,7 +58,7 @@ describe("buildProtectedResourceMetadata", () => {
       authorization_servers: ["https://idp.example.test/application/o/paddock"],
       scopes_supported: ["paddock:read", "paddock:write"],
       bearer_methods_supported: ["header"],
-      resource_name: "Paddock Management API",
+      resource_name: "Managers Management API",
     });
   });
 

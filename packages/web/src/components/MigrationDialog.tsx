@@ -369,7 +369,7 @@ function WarningsDisclosure({ plan }: { plan: TranscriptsMigrationPlan }) {
                 {plan.totals.unknown === 1 ? "chat" : "chats"} could not be compared.
               </strong>{" "}
               Comparing two copies means reading both in full, and this instance has more of them
-              than one pass is allowed to read. Those rows start unticked — Paddock will not assume
+              than one pass is allowed to read. Those rows start unticked — Managers will not assume
               a chat is safe to merge when it has not looked. Nothing is lost either way.
             </p>
           )}
@@ -526,7 +526,7 @@ function AlsoMoving({ alsoMoving }: { alsoMoving: ReturnType<typeof silentlyMovi
 
       {open && (
         <p className="mt-1.5 pl-5 text-xs text-fg-muted">
-          {joinList(parts)}. These have no decision attached — Paddock's copy of an identical chat
+          {joinList(parts)}. These have no decision attached — Managers' copy of an identical chat
           is set aside rather than deleted, and the rest have no counterpart to conflict with.{" "}
           <Mono>.chats/</Mono> has to end up completely empty for the switch to take effect.
         </p>
@@ -746,7 +746,7 @@ function Comparison({ chat, checked }: { chat: TranscriptsMigrationChat; checked
   return (
     <span className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
       <SideCard
-        title="Paddock's copy"
+        title="Managers' copy"
         side={chat.own}
         wins={checked}
         note={checked ? "moves into ~/.claude" : "kept in the preserve folder"}
@@ -905,7 +905,7 @@ function RefusalPanel({
 
       {code === "config_conflict" && (
         <p className="text-xs text-fg-muted">
-          Something else edited <Mono>{plan?.configPath ?? "paddock.config.yaml"}</Mono> after this
+          Something else edited <Mono>{plan?.configPath ?? "managers.config.yaml"}</Mono> after this
           plan was built — another tab, or an editor. Reload the plan so your choices are made
           against the current file, then submit again.
         </p>
@@ -923,7 +923,7 @@ function RefusalPanel({
           <Mono>MANAGERS_CLAUDE_TRANSCRIPTS</Mono> is set in this server's environment, and an
           environment variable beats the config file. Writing{" "}
           <Mono>claude.transcripts: host</Mono> would have no effect, so the chats would have been
-          moved for nothing. Unset it, restart Paddock, and the offer will come back.
+          moved for nothing. Unset it, restart Managers, and the offer will come back.
         </p>
       )}
 
@@ -979,7 +979,7 @@ function ResultPanel({ result }: { result: TranscriptsMigrationResult }) {
           <p className="font-semibold">The migration did not finish.</p>
           <p className="mt-1">
             <Mono>claude.transcripts</Mono> was <strong className="font-semibold">not</strong>{" "}
-            changed, so this instance is still using its own store and nothing about how Paddock
+            changed, so this instance is still using its own store and nothing about how Managers
             behaves has changed yet. Files that did move are already in place and will not move
             twice — <strong className="font-semibold">running this again is safe</strong> and
             picks up where it stopped.
@@ -1170,7 +1170,7 @@ function RestartNotice({ ok, configWritten }: { ok: boolean; configWritten: bool
       <Callout tone="accent" className="text-sm">
         <p className="font-semibold text-fg">Run the migration again, then restart.</p>
         <p className="mt-1">
-          Some chats have already moved out of Paddock's own store, and because the setting was
+          Some chats have already moved out of Managers' own store, and because the setting was
           not written this server still looks for them there.{" "}
           <strong className="font-semibold text-fg">
             Until the migration finishes, your chat list will look incomplete.
@@ -1196,12 +1196,12 @@ function RestartNotice({ ok, configWritten }: { ok: boolean; configWritten: bool
   if (!configWritten) {
     return (
       <Callout tone="accent" className="text-sm">
-        <p className="font-semibold text-fg">Restart the Paddock server now.</p>
+        <p className="font-semibold text-fg">Restart the Managers server now.</p>
         <p className="mt-1">
           Your configuration already asked for <Mono>~/.claude</Mono>, so{" "}
           <strong className="font-semibold text-fg">nothing about it was changed</strong> — the
-          chats were simply stranded where Paddock could not reach them, and they are now back in
-          the store it reads. Paddock only wires that up at startup, so this running server has
+          chats were simply stranded where Managers could not reach them, and they are now back in
+          the store it reads. Managers only wires that up at startup, so this running server has
           not caught up yet.{" "}
           <strong className="font-semibold text-fg">
             Restart and the chats that were missing will reappear.
@@ -1214,9 +1214,9 @@ function RestartNotice({ ok, configWritten }: { ok: boolean; configWritten: bool
 
   return (
     <Callout tone="accent" className="text-sm">
-      <p className="font-semibold text-fg">Restart the Paddock server now.</p>
+      <p className="font-semibold text-fg">Restart the Managers server now.</p>
       <p className="mt-1">
-        The setting is written, but Paddock reads it once when it starts — so this running server
+        The setting is written, but Managers reads it once when it starts — so this running server
         has not picked it up yet.{" "}
         <strong className="font-semibold text-fg">
           Until you restart, your chat list will look empty.
@@ -1224,7 +1224,7 @@ function RestartNotice({ ok, configWritten }: { ok: boolean; configWritten: bool
         That is expected and nothing is wrong: the running process is still looking in the old
         location, which the migration just emptied. Everything is on disk — the merged chats are
         in your <Mono>~/.claude</Mono> and the set-aside copies are in the folders listed here.
-        They all come back the moment Paddock restarts.
+        They all come back the moment Managers restarts.
       </p>
     </Callout>
   );
@@ -1233,18 +1233,18 @@ function RestartNotice({ ok, configWritten }: { ok: boolean; configWritten: bool
 function preserveExplanation(reason: string, side: "own" | "host"): string {
   switch (reason) {
     case "unchecked":
-      return "you left this one unticked, so Paddock's copy was set aside and your ~/.claude copy is untouched";
+      return "you left this one unticked, so Managers' copy was set aside and your ~/.claude copy is untouched";
     case "unplanned-diverged":
       return "created after the table was built and had conflicting edits, so it was set aside rather than merged without asking";
     case "identical":
-      return "already identical in both places, so Paddock's duplicate was set aside";
+      return "already identical in both places, so Managers' duplicate was set aside";
     case "already-ahead":
-      return "your ~/.claude copy was the longer one and was kept, so Paddock's shorter copy was set aside";
+      return "your ~/.claude copy was the longer one and was kept, so Managers' shorter copy was set aside";
     case "superseded":
-      return "your ~/.claude copy was moved here first, then Paddock's copy took its place — this is the original";
+      return "your ~/.claude copy was moved here first, then Managers' copy took its place — this is the original";
     default:
       // Open vocabulary: name the value rather than inventing a description.
-      return `set aside from the ${side === "host" ? "~/.claude" : "Paddock"} side (${reason})`;
+      return `set aside from the ${side === "host" ? "~/.claude" : "Managers"} side (${reason})`;
   }
 }
 
@@ -1358,7 +1358,7 @@ function MigrationFooter({
         lever" is a legal and meaningful choice — the server documents an empty
         `sessionIds` as exactly that and deliberately does not 400 it — and it is
         the right one for a user who wants the CLI to own their history from here
-        on without importing any of Paddock's. Disabling it would silently
+        on without importing any of Managers's. Disabling it would silently
         remove an option the API supports; the label says plainly what it will
         do instead.
       */}

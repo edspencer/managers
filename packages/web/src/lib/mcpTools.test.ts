@@ -19,10 +19,10 @@ describe("mcpToolInfo", () => {
     });
   });
 
-  it("humanizes a paddock_manage tool and flags provenance", () => {
-    expect(mcpToolInfo("mcp__paddock_manage__create_chat")).toEqual({
+  it("humanizes a managers tool and flags provenance", () => {
+    expect(mcpToolInfo("mcp__managers__create_chat")).toEqual({
       isMcp: true,
-      server: "paddock_manage",
+      server: "managers",
       isPaddock: true,
       display: "Create chat",
       tool: "create_chat",
@@ -30,7 +30,7 @@ describe("mcpToolInfo", () => {
   });
 
   it("recognizes the paddock send_file server", () => {
-    const info = mcpToolInfo("mcp__paddock__send_file");
+    const info = mcpToolInfo("mcp__managers_files__send_file");
     expect(info.isPaddock).toBe(true);
     expect(info.display).toBe("Send file");
   });
@@ -41,19 +41,28 @@ describe("mcpToolInfo", () => {
     expect(info.isPaddock).toBe(false);
     expect(info.display).toBe("Browser click");
   });
+
+  it("treats a `paddock` connection as third-party, not one of Managers' own servers", () => {
+    // Managers M1: `paddock` is freed to name a per-project connection to a real
+    // Paddock instance, so it must not get the own-server treatment.
+    const info = mcpToolInfo("mcp__paddock__create_chat");
+    expect(info.isMcp).toBe(true);
+    expect(info.server).toBe("paddock");
+    expect(info.isPaddock).toBe(false);
+  });
 });
 
 describe("parsePaddockManage", () => {
-  it("returns null for a non-paddock_manage tool", () => {
+  it("returns null for a non-managers tool", () => {
     expect(parsePaddockManage("Read", "{}")).toBeNull();
-    expect(parsePaddockManage("mcp__paddock__send_file", "{}")).toBeNull();
+    expect(parsePaddockManage("mcp__managers_files__send_file", "{}")).toBeNull();
   });
 
   it("returns null for missing or malformed output", () => {
-    expect(parsePaddockManage("mcp__paddock_manage__list_chats", undefined)).toBeNull();
-    expect(parsePaddockManage("mcp__paddock_manage__list_chats", "not json")).toBeNull();
+    expect(parsePaddockManage("mcp__managers__list_chats", undefined)).toBeNull();
+    expect(parsePaddockManage("mcp__managers__list_chats", "not json")).toBeNull();
     // Wrong shape (no chats array) → null so the caller shows the generic body.
-    expect(parsePaddockManage("mcp__paddock_manage__list_chats", "{}")).toBeNull();
+    expect(parsePaddockManage("mcp__managers__list_chats", "{}")).toBeNull();
   });
 
   it("parses list_projects", () => {
@@ -64,7 +73,7 @@ describe("parsePaddockManage", () => {
         { slug: "herdctl", name: "herdctl", status: "active" },
       ],
     });
-    const pm = parsePaddockManage("mcp__paddock_manage__list_projects", out);
+    const pm = parsePaddockManage("mcp__managers__list_projects", out);
     expect(pm).toMatchObject({ tool: "list_projects", count: 2 });
     expect((pm as Extract<PaddockManage, { tool: "list_projects" }>).projects).toHaveLength(2);
   });
@@ -75,7 +84,7 @@ describe("parsePaddockManage", () => {
       project: "paddock",
       chats: [{ project: "paddock", sessionId: "abc123def", name: "Fix bug", running: true }],
     });
-    const pm = parsePaddockManage("mcp__paddock_manage__list_chats", out) as Extract<
+    const pm = parsePaddockManage("mcp__managers__list_chats", out) as Extract<
       PaddockManage,
       { tool: "list_chats" }
     >;
@@ -95,7 +104,7 @@ describe("parsePaddockManage", () => {
         { role: "assistant", text: "hello" },
       ],
     });
-    const pm = parsePaddockManage("mcp__paddock_manage__read_chat", out) as Extract<
+    const pm = parsePaddockManage("mcp__managers__read_chat", out) as Extract<
       PaddockManage,
       { tool: "read_chat" }
     >;
@@ -106,7 +115,7 @@ describe("parsePaddockManage", () => {
   it("parses the write acks (create/fork/send) incl. echoed name/prompt", () => {
     expect(
       parsePaddockManage(
-        "mcp__paddock_manage__create_chat",
+        "mcp__managers__create_chat",
         JSON.stringify({
           created: true,
           project: "paddock",
@@ -125,7 +134,7 @@ describe("parsePaddockManage", () => {
 
     expect(
       parsePaddockManage(
-        "mcp__paddock_manage__fork_chat",
+        "mcp__managers__fork_chat",
         JSON.stringify({
           forked: true,
           project: "paddock",
@@ -138,7 +147,7 @@ describe("parsePaddockManage", () => {
 
     expect(
       parsePaddockManage(
-        "mcp__paddock_manage__send_message",
+        "mcp__managers__send_message",
         JSON.stringify({ sent: true, project: "paddock", sessionId: "s2", prompt: "ping" }),
       ),
     ).toEqual({ tool: "send_message", project: "paddock", sessionId: "s2", prompt: "ping" });
@@ -154,7 +163,7 @@ describe("parsePaddockManage", () => {
         { sessionId: "f3", prompt: "handle item 3" },
       ],
     });
-    const pm = parsePaddockManage("mcp__paddock_manage__fork_chat_batch", out) as Extract<
+    const pm = parsePaddockManage("mcp__managers__fork_chat_batch", out) as Extract<
       PaddockManage,
       { tool: "fork_chat_batch" }
     >;

@@ -126,9 +126,9 @@ describe("AppShell: sidebar shell", () => {
   it("renders the brand and the Home link", () => {
     mockProjects = [makeProject({ slug: "a", group: "homelab" }), makeProject({ slug: "b", group: "homelab" })];
     renderShell();
-    // "Paddock" appears twice: the mobile top bar + the sidebar (both render in
+    // "Managers" appears twice: the mobile top bar + the sidebar (both render in
     // jsdom, which ignores the responsive `lg:hidden` media query).
-    expect(screen.getAllByText("Paddock").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Managers").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
   });
 
@@ -166,7 +166,7 @@ describe("AppShell: sidebar shell", () => {
 
   it("links to instance Config at /config, not to /settings", () => {
     // `/settings` is a WORKSPACE's own settings (the root's, here) and writes
-    // `project.yaml`; `/config` writes `paddock.config.yaml` and is
+    // `project.yaml`; `/config` writes `managers.config.yaml` and is
     // restart-required. The sidebar link means the latter, and pointed at the
     // former's URL until they were split.
     renderShell();
@@ -230,7 +230,7 @@ describe("AppShell: sidebar shell", () => {
       renderShell();
       expect(screen.getAllByText("Homelab").length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText("🏠").length).toBeGreaterThanOrEqual(1);
-      expect(screen.queryByText("Paddock")).not.toBeInTheDocument();
+      expect(screen.queryByText("Managers")).not.toBeInTheDocument();
       expect(document.title).toBe("Homelab");
     } finally {
       delete (globalThis as WithConfig).__MANAGERS_CONFIG__;

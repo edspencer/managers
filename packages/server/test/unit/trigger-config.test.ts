@@ -276,9 +276,9 @@ describe("trigger-config: projection helpers", () => {
     ).toBe(false);
   });
 
-  it("triggerPromptFileAbsPath resolves under .paddock/triggers, rejects traversal/non-md", () => {
+  it("triggerPromptFileAbsPath resolves under .managers/triggers, rejects traversal/non-md", () => {
     const wd = "/work/proj";
-    expect(triggerPromptFileAbsPath(wd, "daily.md")).toBe("/work/proj/.paddock/triggers/daily.md");
+    expect(triggerPromptFileAbsPath(wd, "daily.md")).toBe("/work/proj/.managers/triggers/daily.md");
     expect(triggerPromptFileAbsPath(wd, "../secret.md")).toBeNull();
     expect(triggerPromptFileAbsPath(wd, "/abs/x.md")).toBeNull();
     expect(triggerPromptFileAbsPath(wd, "notes.txt")).toBeNull();

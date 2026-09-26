@@ -35,7 +35,7 @@
  *    herdctl `ScheduleSchema` shape forwarded into the keeper agent's `schedules`
  *    block (so herdctl's cron engine arms them, exactly as legacy schedules are).
  *  - {@link triggerPromptFileAbsPath} — resolve a `promptFile` under the project's
- *    `.paddock/triggers/` dir, rejecting traversal / non-`.md`.
+ *    `.managers/triggers/` dir, rejecting traversal / non-`.md`.
  */
 import path from "node:path";
 import { z } from "zod";
@@ -63,7 +63,7 @@ export type TriggerPermissionMode = "default" | "acceptEdits" | "bypassPermissio
 const PERMISSION_MODES = ["default", "acceptEdits", "bypassPermissions", "plan"] as const;
 
 /** The dir (relative to a project's working dir) holding keeper-editable prompts. */
-export const TRIGGER_PROMPT_DIR = path.join(".paddock", "triggers");
+export const TRIGGER_PROMPT_DIR = path.join(".managers", "triggers");
 
 /** Default max agent turns for a trigger when its run doesn't set one. */
 export const TRIGGER_DEFAULT_MAX_TURNS = 30;
@@ -120,7 +120,7 @@ const triggerWhenSchema = z.discriminatedUnion("type", [
 const runSchema = z.object({
   /** Inline prompt (mutually exclusive with {@link promptFile} — enforced below). */
   prompt: z.string().optional(),
-  /** Git-tracked `.paddock/triggers/*.md` prompt file, read fresh at fire time. */
+  /** Git-tracked `.managers/triggers/*.md` prompt file, read fresh at fire time. */
   promptFile: z.string().trim().min(1).optional(),
   /** `new` = a fresh chat each fire; `resume` = one owned accreting session. */
   session: z.enum(["new", "resume"]).default("new"),
@@ -494,10 +494,10 @@ export function toChatTriggerInfo(dto: TriggerDto): ChatTriggerInfo {
 }
 
 /**
- * Resolve a `promptFile` to an absolute path under the project's `.paddock/triggers/`
+ * Resolve a `promptFile` to an absolute path under the project's `.managers/triggers/`
  * dir, or `null` if it escapes that dir, is absolute, or isn't a `.md` file. The name
  * is treated as relative to the triggers dir (so a bare `"daily.md"` resolves to
- * `<workingDir>/.paddock/triggers/daily.md`). Byte-for-byte the hook/schedule twin's guard.
+ * `<workingDir>/.managers/triggers/daily.md`). Byte-for-byte the hook/schedule twin's guard.
  */
 export function triggerPromptFileAbsPath(workingDir: string, promptFile: string): string | null {
   if (typeof promptFile !== "string" || promptFile.trim() === "") return null;

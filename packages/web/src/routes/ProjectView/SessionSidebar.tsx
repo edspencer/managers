@@ -640,7 +640,7 @@ export function SessionSidebar({
 
               It OPENS A DIALOG rather than adopting (#660). The no-dismiss
               design is right only while the count is trustworthy, and it has not
-              been: this button has offered Paddock's own sweeper output (#658)
+              been: this button has offered Managers' own sweeper output (#658)
               and another instance's chats (#659). A permanent, one-click,
               irreversible action is the wrong shape for something a user may not
               recognise — so the click now asks. */}

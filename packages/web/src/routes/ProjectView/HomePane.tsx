@@ -165,7 +165,7 @@ export function HomePane({
         {firstRun === true && (
           <section className="mb-8" data-testid="home-first-run">
             {/* Full width and at the top: on an instance with history to adopt,
-                adopting it is the fastest route to a Paddock worth having. */}
+                adopting it is the fastest route to a Managers worth having. */}
             <DiscoverView firstRun embedded onLeave={onInstanceRecheck} onStartChat={onNewChat} />
           </section>
         )}

@@ -1190,7 +1190,7 @@ export type SentFileKind =
   | "pdf";
 
 /**
- * The JSON envelope the `mcp__paddock__send_file` tool returns as its result
+ * The JSON envelope the `mcp__managers_files__send_file` tool returns as its result
  * `output`. The client parses this off the tool call (live + on reload) — see
  * `sentFileFromToolCall` in ChatPane. `paddockSendFile` discriminates our
  * envelope from any other tool's output.
@@ -1480,7 +1480,7 @@ export type InstanceConfigFieldType =
  *
  * TWO values, because the file and the running process can disagree (#722):
  *  - `value` — what the running process resolved at boot (frozen there);
- *  - `pendingValue` — what `paddock.config.yaml` says right now, i.e. what a
+ *  - `pendingValue` — what `managers.config.yaml` says right now, i.e. what a
  *    restart would resolve. The editor binds to THIS, so a save round-trips
  *    instead of appearing to revert and another tab's write is visible.
  */
@@ -1786,7 +1786,7 @@ export interface TranscriptsMigrationTotals {
 export interface TranscriptsMigrationPlan {
   mode: "own" | "host";
   configPath: string;
-  /** `null` when paddock.config.yaml does not exist yet. Echo it back verbatim,
+  /** `null` when managers.config.yaml does not exist yet. Echo it back verbatim,
    *  INCLUDING the null — the server distinguishes "property absent" (write
    *  unconditionally) from "property present and null". */
   configVersion: string | null;

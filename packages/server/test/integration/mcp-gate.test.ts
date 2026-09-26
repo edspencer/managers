@@ -110,7 +110,7 @@ describe("/mcp — authentication", () => {
     const res = await a.app.inject({ method: "GET", url: "/mcp" });
     expect(res.statusCode).toBe(401);
     expect(res.headers["www-authenticate"]).toContain("Bearer");
-    expect(res.headers["www-authenticate"]).toContain('realm="paddock"');
+    expect(res.headers["www-authenticate"]).toContain('realm="managers"');
   });
 
   // The MCP-discovery-breaking failure mode we must never exhibit.

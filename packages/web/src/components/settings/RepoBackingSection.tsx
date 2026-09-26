@@ -46,8 +46,8 @@ export function RepoBackingSection({
         title="Backing"
         description={
           project.managed
-            ? "Claude works in the directory below, and Paddock curates this project's notes there."
-            : "Claude works in the directory below. Paddock does not write project files into it — its notes stay in the project's own folder."
+            ? "Claude works in the directory below, and Managers curates this project's notes there."
+            : "Claude works in the directory below. Managers does not write project files into it — its notes stay in the project's own folder."
         }
       >
         <dl className="grid grid-cols-1 gap-y-3">
@@ -111,7 +111,7 @@ export function RepoBackingSection({
           </Hint>
         ) : (
           <Hint>
-            Paddock clones this repo into a nested checkout and points Claude at it. The repo’s
+            Managers clones this repo into a nested checkout and points Claude at it. The repo’s
             own <code>CLAUDE.md</code> and git tooling take over.
           </Hint>
         )}

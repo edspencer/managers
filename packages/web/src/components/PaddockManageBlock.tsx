@@ -1,4 +1,4 @@
-// Rich expanded bodies for Paddock's own `mcp__paddock_manage__*` tools (issue
+// Rich expanded bodies for Paddock's own `mcp__managers__*` tools (issue
 // #253). Every payload carries a `{project, sessionId}` pair and the chat route
 // is `/projects/:slug/chat/:sessionId`, so results become real links into the
 // spawned/inspected chats — the write tools' whole point. Parsed client-side
@@ -88,7 +88,7 @@ function ChatRow({ chat }: { chat: PmChat }) {
   );
 }
 
-/** The expanded body for a parsed paddock_manage result. */
+/** The expanded body for a parsed managers result. */
 export function PaddockManageBody({ data }: { data: PaddockManage }) {
   // Fallback project for links whose payload omits one (fork_chat_batch forks).
   const ctxProject = useContext(PaddockManageProjectContext) ?? "";

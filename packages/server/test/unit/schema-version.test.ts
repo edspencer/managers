@@ -5,7 +5,7 @@
  * a file written by a newer paddock must never be lenient-parsed, because
  * `ProjectStore.normalize` drops keys it doesn't recognise and the next write
  * persists the loss. The two formats guard asymmetrically on purpose —
- * `paddock.config.yaml` refuses the boot, a `project.yaml` is skipped loudly —
+ * `managers.config.yaml` refuses the boot, a `project.yaml` is skipped loudly —
  * and both halves are asserted here.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -52,9 +52,9 @@ describe("readSchemaVersion: what a file's own claim about its shape reads as", 
 
 describe("the refusal/skip messages", () => {
   it("names the file, BOTH versions, and what to do about it", () => {
-    const msg = configSchemaRefusal(9, "/data/paddock.config.yaml")!;
+    const msg = configSchemaRefusal(9, "/data/managers.config.yaml")!;
     expect(msg).toMatch(/refusing to start/);
-    expect(msg).toContain("/data/paddock.config.yaml");
+    expect(msg).toContain("/data/managers.config.yaml");
     expect(msg).toContain("version 9");
     expect(msg).toContain(`version ${CONFIG_SCHEMA_VERSION}`);
     expect(msg).toMatch(/upgrade paddock/i);
@@ -252,7 +252,7 @@ describe("project.yaml: schemaVersion (#724)", () => {
   });
 });
 
-describe("paddock.config.yaml: schemaVersion (#724)", () => {
+describe("managers.config.yaml: schemaVersion (#724)", () => {
   // Cleared so the file layer is observed in isolation, and so an ambient
   // CLAUDE_CONFIG_DIR on the dev box cannot trip the unrelated claudeHome refusal.
   const ENV_KEYS = ["MANAGERS_DATA_DIR", "MANAGERS_CONFIG", "CLAUDE_CONFIG_DIR", "PORT"];
@@ -261,7 +261,7 @@ describe("paddock.config.yaml: schemaVersion (#724)", () => {
   let saved: Record<string, string | undefined>;
 
   const writeConfig = (body: string): string => {
-    const p = path.join(dataDir, "paddock.config.yaml");
+    const p = path.join(dataDir, "managers.config.yaml");
     fs.writeFileSync(p, body, "utf8");
     return p;
   };
@@ -332,7 +332,7 @@ describe("paddock.config.yaml: schemaVersion (#724)", () => {
   });
 
   it("creates a brand-new config file already carrying the version", () => {
-    const p = path.join(dataDir, "paddock.config.yaml");
+    const p = path.join(dataDir, "managers.config.yaml");
     writeInstanceConfig(p, [{ key: "logLevel", value: "debug" }]);
     expect(YAML.parse(fs.readFileSync(p, "utf8")).schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
   });

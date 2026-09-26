@@ -53,7 +53,7 @@ function probe(over: Partial<TranscriptsMigrationProbe> = {}): TranscriptsMigrat
 function emptyPlan(): TranscriptsMigrationPlan {
   return {
     mode: "own",
-    configPath: "/tmp/paddock.config.yaml",
+    configPath: "/tmp/managers.config.yaml",
     configVersion: "v1",
     projects: [],
     sweepers: { stores: 0, chats: 0 },

@@ -1,0 +1,106 @@
+/**
+ * Managers M1: the data-dir safety guard. A non-empty projects root holding
+ * projects but no `.managers-data` marker is refused; the marker or the adopt
+ * flag lets boot proceed; a fresh root is claimed.
+ */
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { loadPaddockConfig } from "../../src/config.js";
+import {
+  DATA_REPO_MARKER,
+  claimProjectsRoot,
+  dataDirGuardRefusal,
+} from "../../src/data-dir-guard.js";
+import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
+
+const TOUCHED = ["MANAGERS_DATA_DIR", "MANAGERS_PROJECTS_DIR", "MANAGERS_ADOPT_DATA_DIR"];
+
+function seedForeignProject(root: string, slug = "acme-site"): void {
+  fs.mkdirSync(path.join(root, slug), { recursive: true });
+  fs.writeFileSync(path.join(root, slug, "project.yaml"), `slug: ${slug}\nname: Acme\n`);
+}
+
+describe("data-dir guard", () => {
+  let dataDir: string;
+  let saved: Record<string, string | undefined>;
+
+  beforeEach(async () => {
+    dataDir = await makeTmpDir("managers-guard-");
+    saved = {};
+    for (const k of TOUCHED) saved[k] = process.env[k];
+    process.env.MANAGERS_DATA_DIR = dataDir;
+    delete process.env.MANAGERS_PROJECTS_DIR;
+    delete process.env.MANAGERS_ADOPT_DATA_DIR;
+  });
+  afterEach(async () => {
+    for (const k of TOUCHED) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    await rmTmpDir(dataDir);
+  });
+
+  it("refuses a non-empty projects root with projects and no marker", () => {
+    const root = path.join(dataDir, "projects");
+    seedForeignProject(root);
+    expect(() => loadPaddockConfig()).toThrow(/Refusing to start.*1 project.*\.managers-data/s);
+    // Refusing writes nothing into the foreign directory.
+    expect(fs.existsSync(path.join(root, DATA_REPO_MARKER))).toBe(false);
+  });
+
+  it("refuses via MANAGERS_PROJECTS_DIR too, wherever it points", async () => {
+    const elsewhere = await makeTmpDir("managers-guard-foreign-");
+    try {
+      seedForeignProject(elsewhere, "widget-lib");
+      seedForeignProject(elsewhere, "empty-project");
+      process.env.MANAGERS_PROJECTS_DIR = elsewhere;
+      expect(() => loadPaddockConfig()).toThrow(/2 projects/);
+    } finally {
+      await rmTmpDir(elsewhere);
+    }
+  });
+
+  it("boots when the marker is present", () => {
+    const root = path.join(dataDir, "projects");
+    seedForeignProject(root);
+    fs.writeFileSync(path.join(root, DATA_REPO_MARKER), "");
+    expect(() => loadPaddockConfig()).not.toThrow();
+  });
+
+  it("boots with MANAGERS_ADOPT_DATA_DIR=1, and does NOT write the marker", () => {
+    const root = path.join(dataDir, "projects");
+    seedForeignProject(root);
+    process.env.MANAGERS_ADOPT_DATA_DIR = "1";
+    expect(() => loadPaddockConfig()).not.toThrow();
+    expect(fs.existsSync(path.join(root, DATA_REPO_MARKER))).toBe(false);
+  });
+
+  it("ignores a falsy adopt flag", () => {
+    const root = path.join(dataDir, "projects");
+    seedForeignProject(root);
+    process.env.MANAGERS_ADOPT_DATA_DIR = "0";
+    expect(() => loadPaddockConfig()).toThrow(/Refusing to start/);
+  });
+
+  it("claims a fresh (absent) root by writing the marker, so later boots pass", () => {
+    const cfg = loadPaddockConfig();
+    expect(fs.existsSync(path.join(cfg.projectsRoot, DATA_REPO_MARKER))).toBe(true);
+    seedForeignProject(cfg.projectsRoot);
+    expect(() => loadPaddockConfig()).not.toThrow();
+  });
+
+  it("a root holding only loose files is not a refusal, and is claimed", () => {
+    const root = path.join(dataDir, "projects");
+    fs.mkdirSync(path.join(root, "notes"), { recursive: true });
+    fs.writeFileSync(path.join(root, "README.md"), "hi\n");
+    expect(dataDirGuardRefusal(root, {})).toBeUndefined();
+    claimProjectsRoot(root);
+    expect(fs.existsSync(path.join(root, DATA_REPO_MARKER))).toBe(true);
+  });
+
+  it("createDataDir: false (config show) checks but never claims", () => {
+    loadPaddockConfig({ createDataDir: false });
+    expect(fs.existsSync(path.join(dataDir, "projects", DATA_REPO_MARKER))).toBe(false);
+  });
+});

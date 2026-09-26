@@ -26,7 +26,7 @@ export const MODEL_ARG_DESC =
 // ── Read tools ──────────────────────────────────────────────────────────────
 
 export const LIST_PROJECTS_DESC =
-  "List all Paddock projects (across every area). Returns each project's slug, " +
+  "List all Managers projects (across every area). Returns each project's slug, " +
   "display name, area, and status. Use the slug to target `list_chats`/`read_chat`. " +
   "Also returns `root`: the ROOT WORKSPACE — the instance's own top-level " +
   "directory, which has chats of its own but is NOT a project and so is not in " +
@@ -127,7 +127,7 @@ export const FORK_CHAT_BATCH_DESC =
 // ── Project tools (issues #467, #470) ───────────────────────────────────────
 
 export const CREATE_PROJECT_DESC =
-  "Create a BRAND-NEW Paddock project — the workspace a keeper agent lives in — and " +
+  "Create a BRAND-NEW Managers project — the workspace a keeper agent lives in — and " +
   "register its keeper. `name` is the only required argument; the kebab-case `slug` " +
   "is derived from it unless you pass one. Two kinds: pass a `repo` git URL for a " +
   "REPO-BACKED project (the repo is cloned into a nested checkout that becomes the " +
@@ -166,7 +166,7 @@ export const SET_TRIGGER_DESC =
   "lifecycle `event` fires it (v1: \"onArchive\" — after a chat is archived; \"afterTurn\" " +
   "reserved); \"webhook\" — reserved (give a `path`), not yet fired. WHAT (the run): the " +
   "instruction as `prompt` (inline) OR `prompt_file` — a git-tracked `.md` under the " +
-  "project's `.paddock/triggers/` dir (e.g. \"daily.md\"), read at fire time; `session` " +
+  "project's `.managers/triggers/` dir (e.g. \"daily.md\"), read at fire time; `session` " +
   "\"new\" (a FRESH chat each fire, default) or \"resume\" (accrete the trigger's ONE owned " +
   "session); `tools` = the deny-by-default capability allow-list (one per line or " +
   "comma-separated, e.g. \"Bash, Read\"; omit / empty = a tool-less curator that only " +

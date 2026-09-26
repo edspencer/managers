@@ -25,7 +25,7 @@ describe("TurnView — Paddock MCP brand badge", () => {
     // result's target project, not the host project's brand name (the bug where
     // it always said "PADDOCK" regardless of target).
     renderToolTurn(
-      "mcp__paddock_manage__create_chat",
+      "mcp__managers__create_chat",
       JSON.stringify({
         created: true,
         project: "herdctl",
@@ -46,14 +46,14 @@ describe("TurnView — Paddock MCP brand badge", () => {
 
   it("falls back to the Paddock brand label when the action carries no project", () => {
     renderToolTurn(
-      "mcp__paddock_manage__fork_chat_batch",
+      "mcp__managers__fork_chat_batch",
       JSON.stringify({
         count: 1,
         source: "src-1",
         forks: [{ sessionId: "f1", prompt: "a poem about the sea" }],
       }),
     );
-    expect(screen.getByText("Paddock", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Managers", { exact: true })).toBeInTheDocument();
   });
 });
 

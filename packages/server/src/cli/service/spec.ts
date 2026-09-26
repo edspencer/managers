@@ -1,5 +1,5 @@
 /**
- * What a Paddock background service IS, independent of how any one init system
+ * What a Managers background service IS, independent of how any one init system
  * spells it (#796).
  *
  * Everything in this file is pure. The two backends — `launchd.ts` and
@@ -13,23 +13,23 @@ import path from "node:path";
 
 /**
  * Reverse-DNS on macOS, plain on Linux. Both are stable identifiers a user may
- * end up typing (`launchctl print gui/501/net.edspencer.paddock`,
- * `systemctl --user status paddock`), so neither is derived from anything that
+ * end up typing (`launchctl print gui/501/net.edspencer.managers`,
+ * `systemctl --user status managers`), so neither is derived from anything that
  * could vary between installs.
  */
-export const LAUNCHD_LABEL = "net.edspencer.paddock";
-export const SYSTEMD_UNIT = "paddock.service";
+export const LAUNCHD_LABEL = "net.edspencer.managers";
+export const SYSTEMD_UNIT = "managers.service";
 
 /** Default port, matching the server's own (#741). Kept here so the generated
  * unit can name a port even when the user passed no flag — a unit that relies
  * on a default is a unit whose port changes under it on upgrade. */
-export const DEFAULT_PORT = "7233";
+export const DEFAULT_PORT = "7234";
 
 export interface ServiceSpec {
   /** Absolute path to the `node` that will run us — `process.execPath`. */
   nodePath: string;
   /**
-   * Absolute path to `dist/cli/paddock.js`.
+   * Absolute path to `dist/cli/managers.js`.
    *
    * NOT the `bin` shim. npm installs a bin as a symlink whose `#!/usr/bin/env
    * node` shebang has to find `node` on PATH, and launchd's PATH is a stub —
@@ -68,7 +68,7 @@ export interface SpecInput {
  * `WorkingDirectory` has to be *something*, and the two obvious candidates are
  * both wrong. `$HOME` is wrong on the merits — a background process has no cwd
  * anyone chose, and it should not sit in a directory full of the user's things
- * (it was also, until #798, actively dangerous: `.paddock` was the here-marker
+ * (it was also, until #798, actively dangerous: `.managers` was the here-marker
  * AND the default data dir, so `$HOME` looked like an already-opened
  * workspace). The data dir root is wrong because launchd's `StandardOutPath`
  * would then drop log files in among the state directories. A dedicated
@@ -78,21 +78,21 @@ export function serviceDir(dataDir: string): string {
   return path.join(dataDir, "service");
 }
 
-/** The data dir the service will use, resolved the same way `paddock.ts` does. */
+/** The data dir the service will use, resolved the same way `managers.ts` does. */
 export function defaultDataDir(homeDir: string = os.homedir()): string {
-  return path.join(homeDir, ".paddock");
+  return path.join(homeDir, ".managers");
 }
 
 /**
  * Assemble the spec.
  *
- * The argument vector leads with the `start` verb even though bare `paddock`
+ * The argument vector leads with the `start` verb even though bare `managers`
  * would do the same thing. It costs nothing and it is the difference between
  * `launchctl print` showing an argv you can read and one you have to recognise.
  *
  * `--data-dir` is forwarded ONLY when the user passed it. The default of
  * setting nothing is load-bearing: with no data dir named anywhere, the service
- * and a `paddock` typed into a terminal both fall through to `~/.paddock` and
+ * and a `managers` typed into a terminal both fall through to `~/.managers` and
  * are the same instance. Naming it — even naming it as the same value — would
  * be a second place to change on the day someone moves it.
  *
@@ -112,19 +112,19 @@ export function buildSpec(input: SpecInput): ServiceSpec {
     scriptPath: input.scriptPath,
     args,
     workingDirectory: dir,
-    stdoutPath: path.join(dir, "paddock.log"),
-    stderrPath: path.join(dir, "paddock.error.log"),
+    stdoutPath: path.join(dir, "managers.log"),
+    stderrPath: path.join(dir, "managers.error.log"),
     pathEnv: input.pathEnv ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
   };
 }
 
 /**
- * Is this copy of Paddock running out of npx's cache?
+ * Is this copy of Managers running out of npx's cache?
  *
  * npx materialises a package under `~/.npm/_npx/<hash>/`, where the hash is
  * keyed on the resolved spec. Copies accumulate, and the whole tree is removed
  * by `npm cache clean`. A unit file pointing in there works right up until it
- * doesn't — at a login, unattended, with the failure reported as "Paddock
+ * doesn't — at a login, unattended, with the failure reported as "Managers
  * stopped starting". Refusing to write it is the only outcome that cannot
  * mislead someone six months from now.
  *
@@ -140,7 +140,7 @@ export const NPX_REFUSAL =
   "`service install` needs an install path that will still be there at your\n" +
   "         next login, and this copy is running from npx's cache — a hash-keyed\n" +
   "         directory that `npm cache clean` removes.\n\n" +
-  "  npm i -g @edspencer/paddock && paddock service install\n";
+  "  npm i -g @edspencer/paddock && managers service install\n";
 
 /**
  * The port a generated unit will actually serve on, read back out of its own

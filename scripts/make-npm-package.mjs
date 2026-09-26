@@ -3,7 +3,7 @@
  * Stage the publishable `@edspencer/paddock` npm package (#637).
  *
  * Paddock's workspace packages are `private` and internally named
- * (`@paddock/server`, `@paddock/web`). Rather than flip `private` — which makes
+ * (`@managers/server`, `@managers/web`). Rather than flip `private` — which makes
  * every future `npm publish` in the repo a loaded gun pointed at an
  * internal-named package — this script SYNTHESIZES a single public package from
  * the built output. The repo manifests stay private and unchanged.
@@ -166,7 +166,7 @@ const web = copyTreeWithoutMaps(webDist, path.join(outDir, "packages/web/dist"))
 fs.mkdirSync(path.join(outDir, "packages/server"), { recursive: true });
 fs.writeFileSync(
   path.join(outDir, "packages/server/package.json"),
-  JSON.stringify({ name: "@paddock/server", version, private: true, type: "module" }, null, 2) + "\n",
+  JSON.stringify({ name: "@managers/server", version, private: true, type: "module" }, null, 2) + "\n",
   "utf8",
 );
 
@@ -189,7 +189,7 @@ const manifest = {
   author: "Ed Spencer",
   type: "module",
   engines: { node: ">=22" },
-  bin: { paddock: "packages/server/dist/cli/paddock.js" },
+  bin: { paddock: "packages/server/dist/cli/managers.js" },
   scripts: { preinstall: "node install-notice.mjs" },
   dependencies: pinnedVersions(lock, serverPkg.dependencies, "packages/server"),
   optionalDependencies: pinnedVersions(lock, serverPkg.optionalDependencies ?? {}, "packages/server"),

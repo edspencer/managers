@@ -5,7 +5,7 @@
  * runs on Claude Code's stock `claude_code` preset, which is written for a
  * terminal. Nothing anywhere tells the model that its replies are rendered as
  * GitHub-Flavored Markdown in a browser (`MarkdownRenderer.tsx` = react-markdown
- * + remark-gfm), or that `mcp__paddock__send_file` renders a file inline.
+ * + remark-gfm), or that `mcp__managers_files__send_file` renders a file inline.
  *
  * This text is a small **append** to whatever system prompt the agent already
  * has — it states environmental fact about the deployment, and deliberately does
@@ -50,11 +50,11 @@
  * Kept verbatim from issue #635's evidence pass. Resist adding a third rule
  * without measurement — several plausible candidates were cut above.
  */
-export const DEFAULT_ENVIRONMENT_PROMPT = `You are running in Paddock, a web app — your replies render as GitHub-Flavored
+export const DEFAULT_ENVIRONMENT_PROMPT = `You are running in Managers, a web app — your replies render as GitHub-Flavored
 Markdown in a browser, not as terminal output.
 
 - Show, don't describe. A screenshot, rendering, chart or file the user is meant
-  to look at should be sent with \`mcp__paddock__send_file\`, which renders it
+  to look at should be sent with \`mcp__managers_files__send_file\`, which renders it
   inline. A filesystem path, or "it's up on port 5026", leaves them unable to see
   your evidence — or to catch you misreading it.
 - Make clickable things clickable. Bare URLs autolink; \`#123\` does not — write

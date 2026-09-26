@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `paddock` — the npx / global-install entrypoint (#637, #638).
+ * `managers` — the npx / global-install entrypoint (#637, #638).
  *
  * The user-facing front door for `npx @edspencer/paddock`: someone who has never
  * seen this repo runs one command and gets a working instance on localhost.
@@ -53,9 +53,9 @@ const moduleDir = path.dirname(entryScript);
  *
  * Two layouts have to work and they nest differently:
  *
- *   repo       `<repo>/packages/server/dist/cli/paddock.js`
+ *   repo       `<repo>/packages/server/dist/cli/managers.js`
  *              deps at `<repo>/packages/server/node_modules` AND `<repo>/node_modules`
- *   published  `<pkg>/packages/server/dist/cli/paddock.js`
+ *   published  `<pkg>/packages/server/dist/cli/managers.js`
  *              deps at `<pkg>/node_modules` only — two levels FURTHER up
  *
  * A fixed `../..` hop is right for the repo and wrong for the published tarball,
@@ -75,7 +75,7 @@ function findUp(rel: string): string | undefined {
 const packageRoot = findUp("package.json") ?? path.resolve(moduleDir, "../..");
 
 function fail(message: string): never {
-  console.error(`paddock: ${message}`);
+  console.error(`managers: ${message}`);
   process.exit(1);
 }
 
@@ -135,7 +135,7 @@ function noteFirstRun(dataDir: string): void {
   console.log(
     [
       "",
-      `  Welcome to Paddock. Creating a new instance in ${dataDir}`,
+      `  Welcome to Managers. Creating a new instance in ${dataDir}`,
       "  Projects, chats and settings persist there between runs.",
       "  Open the app to find directories you have used Claude Code in.",
       "",
@@ -163,7 +163,7 @@ function openBrowser(url: string): void {
 }
 
 /**
- * `paddock service …` — register/inspect the background service (#796).
+ * `managers service …` — register/inspect the background service (#796).
  *
  * Split out so `main` stays the start path. Note what it is handed: the
  * interpreter and script by absolute path, and `packageRoot` — which is tested
@@ -202,21 +202,21 @@ async function service(command: Extract<Command, { verb: "service" }>): Promise<
 
 /**
  * Which instance this invocation is about: an explicit flag, else the
- * environment, else `~/.paddock`.
+ * environment, else `~/.managers`.
  *
  * Shared by `start` and `config` deliberately. A `config show` that resolved its
  * data dir even slightly differently would report on an instance other than the
- * one `paddock start` runs — and would do it convincingly, since every value it
+ * one `managers start` runs — and would do it convincingly, since every value it
  * printed would be real. One function, so the two cannot diverge.
  */
 function resolveDataDir(opts: CliOptions): string {
   return path.resolve(
-    opts.dataDir ?? process.env.MANAGERS_DATA_DIR ?? path.join(os.homedir(), ".paddock"),
+    opts.dataDir ?? process.env.MANAGERS_DATA_DIR ?? path.join(os.homedir(), ".managers"),
   );
 }
 
 /**
- * `paddock config …` — print the resolved configuration (#878).
+ * `managers config …` — print the resolved configuration (#878).
  *
  * Sets `MANAGERS_DATA_DIR` before the dynamic import for the same reason the
  * start path does: `loadPaddockConfig` reads the environment, so the environment
@@ -287,16 +287,16 @@ async function main(): Promise<void> {
   // used to make the current directory the workspace by setting
   // `MANAGERS_PROJECTS_DIR = cwd`, which was the only place that variable was
   // ever set from cwd. It also made the instance you got depend on where you
-  // stood — and because its marker directory was `.paddock`, the same name as
+  // stood — and because its marker directory was `.managers`, the same name as
   // the default data dir, a bare run from `$HOME` on any machine that had ever
-  // run paddock resumed `$HOME` itself as the workspace, silently, even with an
+  // run managers resumed `$HOME` itself as the workspace, silently, even with an
   // explicit `--data-dir`. An instance is now decided by its data dir alone;
   // directories are added inside the app as linked projects (Discover, #745),
   // and the CLI writes nothing into any of them.
 
   // No Claude-home choice happens here any more (#691). The CLI used to point
   // `CLAUDE_HOME` at `~/.claude` so a macOS Keychain login would be visible
-  // (#683); paddock now always owns its home, and what a user actually wanted
+  // (#683); managers now always owns its home, and what a user actually wanted
   // from that — shared transcripts, shared login — are separate `claude:` config
   // keys. `claude.credentials` restores the Keychain half and defaults to `host`,
   // so a Mac whose only login is a `claude /login` still works out of the box
@@ -318,7 +318,7 @@ async function main(): Promise<void> {
   // Quiet by default. The server emits a few hundred lines on the way up, which
   // scrolls the one line the user actually needs — the URL — off the top of the
   // terminal. TWO loggers have to be told, and they are unrelated:
-  //   LOG_LEVEL          Paddock's own pino logger (config.ts).
+  //   LOG_LEVEL          Managers' own pino logger (config.ts).
   //   HERDCTL_LOG_LEVEL  @herdctl/core's `createLogger`, which writes the
   //                      `[fleet-manager] …` lines via console.info — pino's
   //                      level cannot reach those.
@@ -338,13 +338,13 @@ async function main(): Promise<void> {
 
   // No credential preflight here: `ensureClaudeHome` (claude-home.ts) already
   // warns at boot, and it is the only check that can be right. It tests the home
-  // paddock will ACTUALLY use — after the bridge has symlinked in any
+  // managers will ACTUALLY use — after the bridge has symlinked in any
   // `~/.claude/.credentials.json`, and, on darwin, after probing the Keychain for
   // the login `CLAUDE_CONFIG_DIR` scoping hides (#683). It logs at `warn`, which
   // survives the quiet default set just above. Continuity (chosen above) usually
   // means it has nothing to say, because there is nothing left to bridge.
 
-  const port = process.env.PORT ?? "7233";
+  const port = process.env.PORT ?? "7234";
   const host = process.env.HOST ?? "127.0.0.1";
 
   // Imported dynamically, AFTER the env above is set: a static import would
@@ -364,7 +364,7 @@ async function main(): Promise<void> {
   console.log(
     [
       "",
-      `  Paddock is running at ${url}`,
+      `  Managers is running at ${url}`,
       `  Data: ${dataDir}`,
       "  Press Ctrl-C to stop.",
       "",

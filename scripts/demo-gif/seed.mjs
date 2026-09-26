@@ -391,7 +391,7 @@ function starChat(projectDir) {
     });
 
     // ── Claude opening its own chats ────────────────────────────────────────
-    // `mcp__paddock_manage__create_chat` — the self-management MCP tool. Unlike
+    // `mcp__managers__create_chat` — the self-management MCP tool. Unlike
     // ordinary tools these cards are EXPANDED BY DEFAULT, and the whole card is
     // rendered from the tool_result's JSON *output* (no toolUseResult sidecar):
     // `sessionId` is required, and supplying BOTH `name` and `prompt` is what
@@ -406,7 +406,7 @@ function starChat(projectDir) {
     );
     for (const { label, project, name, prompt } of SPAWNED_CHILDREN) {
       out += toolCall(ctx, {
-        name: "mcp__paddock_manage__create_chat",
+        name: "mcp__managers__create_chat",
         id: ids.toolId(`star:create:${label}`),
         input: { project, name, prompt },
         content: JSON.stringify({
@@ -546,6 +546,9 @@ write(path.join(PROJECTS_ROOT, "OVERVIEW.md"), `${ROOT_WORKSPACE.overview}\n`);
 write(path.join(PROJECTS_ROOT, "CHANGELOG.md"), `${ROOT_WORKSPACE.changelog}\n`);
 // Keep transcripts out of every git status the demo might show.
 write(path.join(PROJECTS_ROOT, ".gitignore"), "*/.chats/\n.chats/\n");
+// Managers M1: the data-dir guard refuses a projects root that holds projects
+// but lacks this marker, so a seeded rig has to carry it.
+write(path.join(PROJECTS_ROOT, ".managers-data"), "Managers demo rig (synthetic).\n");
 
 for (const p of PROJECTS) {
   const dir = path.join(PROJECTS_ROOT, p.slug);
@@ -553,7 +556,7 @@ for (const p of PROJECTS) {
   write(path.join(dir, "project.yaml"), projectYaml(p, iso(NOW).slice(0, 10)));
   for (const [name, content] of Object.entries(p.files ?? {})) write(path.join(dir, name), content);
   for (const [name, content] of Object.entries(p.triggerPrompts ?? {})) {
-    write(path.join(dir, ".paddock", "triggers", name), `${content}\n`);
+    write(path.join(dir, ".managers", "triggers", name), `${content}\n`);
   }
 }
 
@@ -798,7 +801,7 @@ addChat({
       usage(12_800, 190, 38_000, 2_600),
     );
     out += toolCall(ctx, {
-      name: "mcp__paddock__send_file",
+      name: "mcp__managers_files__send_file",
       id: ids.toolId("handoff:diagram"),
       input: { filename: "pipeline.mmd", kind: "mermaid" },
       content: sendFileEnvelope({
@@ -810,7 +813,7 @@ addChat({
       durationMs: 900,
     });
     out += toolCall(ctx, {
-      name: "mcp__paddock__send_file",
+      name: "mcp__managers_files__send_file",
       id: ids.toolId("handoff:doc"),
       input: { filename: "pipeline.md", kind: "markdown" },
       content: sendFileEnvelope({

@@ -279,7 +279,7 @@ describe("loadPaddockConfig: folded env knobs (#269)", () => {
     expect(cfg.logLevel).toBe("info");
     expect(cfg.browserMcp).toBe(false);
     expect(cfg.sweepMinIntervalMs).toBeUndefined();
-    expect(cfg.gitAuthor).toEqual({ name: "Paddock", email: "paddock@localhost" });
+    expect(cfg.gitAuthor).toEqual({ name: "Managers", email: "managers@localhost" });
     expect(cfg.githubClientId).toBeUndefined();
   });
 
@@ -329,7 +329,7 @@ describe("loadPaddockConfig: folded env knobs (#269)", () => {
 /**
  * YAML instance-config file loader (issue #270 / DD-5) — precedence file < env.
  * Each case points MANAGERS_DATA_DIR at a throwaway tmp dir and writes the
- * optional `paddock.config.yaml` under it; the surrounding env vars that could
+ * optional `managers.config.yaml` under it; the surrounding env vars that could
  * shadow file values are cleared so the file layer is observed in isolation.
  */
 describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
@@ -359,7 +359,7 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
   let saved: Record<string, string | undefined>;
 
   const writeConfig = (body: string, dir = dataDir): string => {
-    const p = path.join(dir, "paddock.config.yaml");
+    const p = path.join(dir, "managers.config.yaml");
     fs.writeFileSync(p, body, "utf8");
     return p;
   };
@@ -383,21 +383,21 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
 
   it("no file present → env-only behaviour is unchanged (a no-op)", () => {
     const cfg = loadPaddockConfig();
-    expect(cfg.port).toBe(7233);
+    expect(cfg.port).toBe(7234);
     // Safe by default (#435): the bind host now defaults to loopback.
     expect(cfg.host).toBe("127.0.0.1");
     expect(cfg.dangerouslyAllowOpen).toBe(false);
     expect(cfg.auth.mode).toBe("none");
-    expect(cfg.brand.name).toBe("Paddock");
+    expect(cfg.brand.name).toBe("Managers");
     // Built-in default flipped to session (#316); env + file still override.
     expect(cfg.driveMode).toBe("session");
     expect(cfg.maxSpawnDepth).toBe(1);
-    expect(cfg.gitAuthor).toEqual({ name: "Paddock", email: "paddock@localhost" });
+    expect(cfg.gitAuthor).toEqual({ name: "Managers", email: "managers@localhost" });
   });
 
   it("an empty (comments-only) file is also a no-op", () => {
     writeConfig("# nothing to see here\n");
-    expect(loadPaddockConfig().brand.name).toBe("Paddock");
+    expect(loadPaddockConfig().brand.name).toBe("Managers");
   });
 
   it("populates config from file values across scalar + nested sections", () => {
@@ -544,14 +544,14 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
     let cfg!: ReturnType<typeof loadPaddockConfig>;
     expect(() => (cfg = loadPaddockConfig())).not.toThrow();
     expect(cfg.port).toBe(4000);
-    expect(cfg.brand.name).toBe("Paddock");
+    expect(cfg.brand.name).toBe("Managers");
     expect(cfg.auth.mode).toBe("none");
   });
 
   it("treats a null scalar (valueless key) as absent, falling back to the default", () => {
     writeConfig(["port:", "logLevel:", "maxSpawnDepth:"].join("\n") + "\n");
     const cfg = loadPaddockConfig();
-    expect(cfg.port).toBe(7233);
+    expect(cfg.port).toBe(7234);
     expect(cfg.logLevel).toBe("info");
     expect(cfg.maxSpawnDepth).toBe(1);
   });
@@ -561,7 +561,7 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
       ["brand:", "auth:", "  mode: jwt", "  jwksUrl: https://idp.example/jwks"].join("\n") + "\n",
     );
     const cfg = loadPaddockConfig();
-    expect(cfg.brand.name).toBe("Paddock"); // empty section → default
+    expect(cfg.brand.name).toBe("Managers"); // empty section → default
     expect(cfg.auth.mode).toBe("jwt"); // sibling section still applies
     expect(cfg.auth.jwksUrl).toBe("https://idp.example/jwks");
   });
@@ -580,7 +580,7 @@ describe("loadPaddockConfig: models allow-list (#457)", () => {
   let saved: Record<string, string | undefined>;
 
   const writeConfig = (body: string): string => {
-    const p = path.join(dataDir, "paddock.config.yaml");
+    const p = path.join(dataDir, "managers.config.yaml");
     fs.writeFileSync(p, body, "utf8");
     return p;
   };
@@ -631,7 +631,7 @@ describe("loadPaddockConfig: models allow-list (#457)", () => {
  * Retired settings must be IGNORED, never fatal (#549).
  *
  * `scratchDir` / `MANAGERS_SCRATCH_DIR` was deleted in #549. An operator upgrading
- * with a stale env file or an old `paddock.config.yaml` must still boot: config is
+ * with a stale env file or an old `managers.config.yaml` must still boot: config is
  * pull-based on both layers (env vars read by name, YAML parsed into a loose record
  * that is only ever read), so a deleted key is simply never looked at. These tests
  * pin that as a contract rather than an accident — and use `scratchDir` as the
@@ -675,7 +675,7 @@ describe("loadPaddockConfig: retired settings are ignored, not fatal (#549)", ()
 
   it("boots with a retired `scratchDir:` key in the YAML file, alongside live keys", () => {
     fs.writeFileSync(
-      path.join(dataDir, "paddock.config.yaml"),
+      path.join(dataDir, "managers.config.yaml"),
       ["scratchDir: /gone/nowhere", "logLevel: debug"].join("\n") + "\n",
       "utf8",
     );
@@ -687,7 +687,7 @@ describe("loadPaddockConfig: retired settings are ignored, not fatal (#549)", ()
 
   it("ignores an entirely unknown key rather than throwing", () => {
     fs.writeFileSync(
-      path.join(dataDir, "paddock.config.yaml"),
+      path.join(dataDir, "managers.config.yaml"),
       ["neverWasASetting: 42", "logLevel: warn"].join("\n") + "\n",
       "utf8",
     );
@@ -724,7 +724,7 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
   let saved: Record<string, string | undefined>;
 
   const writeConfig = (body: string): void => {
-    fs.writeFileSync(path.join(dataDir, "paddock.config.yaml"), body, "utf8");
+    fs.writeFileSync(path.join(dataDir, "managers.config.yaml"), body, "utf8");
   };
 
   beforeEach(async () => {
@@ -925,12 +925,12 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
 
   it("refuses the same value from the config file, not just from env", () => {
     writeConfig(`claudeHome: ${path.join(process.env.HOME!, ".claude")}\n`);
-    expect(() => loadPaddockConfig()).toThrow(/paddock.config.yaml/);
+    expect(() => loadPaddockConfig()).toThrow(/managers.config.yaml/);
   });
 
   it("sees through a trailing slash — the check resolves both sides", () => {
     expect(claudeHomeRefusal("/u/me/.claude/", "/u/me/.claude", true)).toMatch(/refusing/);
-    expect(claudeHomeRefusal("/u/me/.paddock/claude-home", "/u/me/.claude", true)).toBeUndefined();
+    expect(claudeHomeRefusal("/u/me/.managers/claude-home", "/u/me/.claude", true)).toBeUndefined();
   });
 });
 

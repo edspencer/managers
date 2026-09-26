@@ -247,7 +247,7 @@ export function DiscoverView({
             // already been using Claude Code in a terminal" — was a guess
             // presented as a fact, and it read as nonsense to the people it was
             // most wrong about: anyone whose first Claude Code install this is.
-            "If you have used Claude Code in a terminal on this machine, Paddock can adopt that history: each directory becomes a project with its conversations already in it."
+            "If you have used Claude Code in a terminal on this machine, Managers can adopt that history: each directory becomes a project with its conversations already in it."
           : "Directories on this machine with existing Claude Code history. Adopting one links it as a project and brings its conversations in; your own history is never moved or deleted."}
       </p>
 
@@ -282,7 +282,7 @@ export function DiscoverView({
               // The tally is NOT repeated here: `Filters` renders it directly
               // below, always, and saying it twice on one screen reads as two
               // different findings.
-              body="Paddock found Claude Code history on this machine, but none of it is available to adopt right now. The tally below says what was skipped, and the two toggles relax the rules that are safe to relax."
+              body="Managers found Claude Code history on this machine, but none of it is available to adopt right now. The tally below says what was skipped, and the two toggles relax the rules that are safe to relax."
             />
           ) : (
             <ul className="space-y-2">
@@ -640,7 +640,7 @@ function NoHistory({
           No Claude Code history has been recorded under{" "}
           <code className="break-all">{claudeHome}</code>. That is normal on a new install, and on a
           container whose Claude home is its own rather than yours — nothing is wrong. Start a chat
-          here and Paddock writes its own history; or bind-mount an existing one there and re-open
+          here and Managers writes its own history; or bind-mount an existing one there and re-open
           this page, or import it headlessly with <code>npm run import-chats</code>.
         </>
       }
@@ -728,7 +728,7 @@ export function excludedSentence(result: DiscoverResult): string {
     ["missing", (n) => `${n} no longer on disk`],
     ["home-root", (n) => `${n} your home directory itself`],
     ["system-path", (n) => `${n} system directories`],
-    ["paddock-internal", (n) => `${n} inside Paddock's own data`],
+    ["paddock-internal", (n) => `${n} inside Managers' own data`],
   ];
   for (const [key, label] of labels) {
     const n = result.excluded[key];

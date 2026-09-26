@@ -34,7 +34,7 @@ interface StubOverrides {
   /** Make writeClaudeCurated reject to exercise the non-fatal path. */
   claudeAppendThrows?: boolean;
   /**
-   * Content of the optional per-project `.paddock/hooks/sweep.md` (issue #G2).
+   * Content of the optional per-project `.managers/hooks/sweep.md` (issue #G2).
    * `undefined` → the file is absent (readFile rejects, as on disk).
    */
   sweepInstructions?: string;
@@ -101,7 +101,7 @@ describe("SweepService", () => {
       runSweeper,
     };
     // T5: the stub project carries an optional `triggers` map + a `workingDir` (used to
-    // resolve a curator trigger's `run.promptFile` under `.paddock/triggers/`).
+    // resolve a curator trigger's `run.promptFile` under `.managers/triggers/`).
     const stubProject = {
       // `managed` is what gates CLAUDE.md curation since #206 (it replaced
       // `repoBacked`); default the stub to a managed project, the shape most of
@@ -119,7 +119,7 @@ describe("SweepService", () => {
       }),
       readOverview: vi.fn(async () => ""),
       readFile: vi.fn(async (_slug: string, name: string) => {
-        if (name === ".paddock/hooks/sweep.md") {
+        if (name === ".managers/hooks/sweep.md") {
           // Absent file → reject (mirrors fs.readFile ENOENT), which the service
           // catches into "" (no extra instructions).
           if (o.sweepInstructions === undefined) throw new Error("ENOENT");
@@ -224,7 +224,7 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("appends `.paddock/hooks/sweep.md` instructions to the sweeper prompt when present (#G2)", async () => {
+  it("appends `.managers/hooks/sweep.md` instructions to the sweeper prompt when present (#G2)", async () => {
     const marker = "ALWAYS keep a Glossary section in the overview.";
     const { svc, runSweeper } = makeService({ sweepInstructions: `# Curator notes\n${marker}\n` });
     svc.enqueue("demo");
@@ -237,7 +237,7 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("does NOT add the extra-instructions section when `.paddock/hooks/sweep.md` is absent (#G2)", async () => {
+  it("does NOT add the extra-instructions section when `.managers/hooks/sweep.md` is absent (#G2)", async () => {
     const { svc, runSweeper } = makeService(); // sweepInstructions undefined → file absent
     svc.enqueue("demo");
     await vi.waitFor(() => expect(runSweeper).toHaveBeenCalled(), { timeout: 2000 });
@@ -246,7 +246,7 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("treats a blank/whitespace-only `.paddock/hooks/sweep.md` as absent (#G2)", async () => {
+  it("treats a blank/whitespace-only `.managers/hooks/sweep.md` as absent (#G2)", async () => {
     const { svc, runSweeper } = makeService({ sweepInstructions: "   \n\t\n" });
     svc.enqueue("demo");
     await vi.waitFor(() => expect(runSweeper).toHaveBeenCalled(), { timeout: 2000 });
@@ -255,7 +255,7 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("caps an oversized `.paddock/hooks/sweep.md` before appending it to the prompt (#G2)", async () => {
+  it("caps an oversized `.managers/hooks/sweep.md` before appending it to the prompt (#G2)", async () => {
     // A pathologically large file must not bloat the prompt unbounded — it's
     // capped (~8000 chars) like every sibling field, with a truncation marker.
     const huge = "X".repeat(20_000);
@@ -316,7 +316,7 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("folds BOTH the trigger prompt and .paddock/hooks/sweep.md under one heading (T5)", async () => {
+  it("folds BOTH the trigger prompt and .managers/hooks/sweep.md under one heading (T5)", async () => {
     const triggerMarker = "Trigger says: keep a GLOSSARY.";
     const fileMarker = "File says: note API changes prominently.";
     const { svc, runSweeper } = makeService({
@@ -333,9 +333,9 @@ describe("SweepService", () => {
     svc.stop();
   });
 
-  it("reads the curate-overview trigger's run.promptFile from .paddock/triggers/ (T5)", async () => {
+  it("reads the curate-overview trigger's run.promptFile from .managers/triggers/ (T5)", async () => {
     const marker = "PROMPT-FILE-EXTENSION-MARKER: always keep an Architecture section.";
-    const triggersDir = path.join(project.dir, ".paddock", "triggers");
+    const triggersDir = path.join(project.dir, ".managers", "triggers");
     await fs.mkdir(triggersDir, { recursive: true });
     await fs.writeFile(path.join(triggersDir, "curate.md"), `# Curator\n${marker}\n`, "utf8");
     const { svc, runSweeper } = makeService({

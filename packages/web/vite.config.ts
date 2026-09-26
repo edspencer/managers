@@ -50,14 +50,14 @@ function swCacheVersion(): Plugin {
 // Dev server config. The Vite dev server proxies /api + /ws to the
 // paddock-server. Both the dev-server port and the backend it proxies to are
 // configurable via env so you can run the frontend on a non-default port or
-// point it at a backend that isn't on :7233 (e.g. a second instance).
+// point it at a backend that isn't on :7234 (e.g. a second instance).
 //
 //   MANAGERS_DEV_PORT     Vite dev-server port                (default 5173)
-//   MANAGERS_PROXY_TARGET http(s) origin of the paddock-server (default http://localhost:7233)
+//   MANAGERS_PROXY_TARGET http(s) origin of the paddock-server (default http://localhost:7234)
 //
 // The WebSocket proxy target is derived from MANAGERS_PROXY_TARGET (http -> ws).
 const devPort = Number(process.env.MANAGERS_DEV_PORT) || 5173;
-const proxyTarget = process.env.MANAGERS_PROXY_TARGET || "http://localhost:7233";
+const proxyTarget = process.env.MANAGERS_PROXY_TARGET || "http://localhost:7234";
 const wsTarget = proxyTarget.replace(/^http/, "ws");
 
 export default defineConfig({

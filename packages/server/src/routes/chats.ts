@@ -764,7 +764,7 @@ export function registerChatWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx)
         tags: ["Chats"],
         summary: "Delete a project chat",
         description:
-          "Deletes a project chat (session) and clears any archived/starred flag so a future session id can't inherit it. Responds 200 with `{ ok, removed, retained }`. In a Claude home Paddock owns, the transcript JSONL is unlinked (`removed: true`). In a home it does NOT own the transcript is the user's own terminal `claude` history — Paddock plants no symlink there (#682), so there is no copy to delete — and the session is RELEASED instead: it leaves the chat list, the file stays on disk, and `retained` is true (#689).",
+          "Deletes a project chat (session) and clears any archived/starred flag so a future session id can't inherit it. Responds 200 with `{ ok, removed, retained }`. In a Claude home Managers owns, the transcript JSONL is unlinked (`removed: true`). In a home it does NOT own the transcript is the user's own terminal `claude` history — Managers plants no symlink there (#682), so there is no copy to delete — and the session is RELEASED instead: it leaves the chat list, the file stays on disk, and `retained` is true (#689).",
         params: {
           type: "object",
           properties: {
@@ -1673,7 +1673,7 @@ export function registerChatWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx)
         tags: ["Chats"],
         summary: "Count the native Claude Code chats this project could adopt",
         description:
-          "Returns the terminal `claude` sessions that could be adopted into this project but are not yet visible in it: the project's own working directory, plus any Claude transcript folder whose recorded working directory matches the project (by checkout name when the project has a `repo:` key, by exact path otherwise). Sidechains, already-adopted sessions and sessions belonging to a real Paddock run are excluded by the engine; empty transcripts, slash-command-only transcripts and Paddock's own sweeper curation runs (`too-small` / `slash-command-only` / `sweeper-run`) are additionally withheld as noise and reported under `filtered`, so a count lower than the raw total always has an explanation. Response: `{ count, sources: [{ sourceCwd, sessionIds }], filtered: [{ sessionId, sourceCwd, reason }] }`. The count is LIVE — re-read it after an adoption rather than remembering a dismissal.",
+          "Returns the terminal `claude` sessions that could be adopted into this project but are not yet visible in it: the project's own working directory, plus any Claude transcript folder whose recorded working directory matches the project (by checkout name when the project has a `repo:` key, by exact path otherwise). Sidechains, already-adopted sessions and sessions belonging to a real Managers run are excluded by the engine; empty transcripts, slash-command-only transcripts and Managers' own sweeper curation runs (`too-small` / `slash-command-only` / `sweeper-run`) are additionally withheld as noise and reported under `filtered`, so a count lower than the raw total always has an explanation. Response: `{ count, sources: [{ sourceCwd, sessionIds }], filtered: [{ sessionId, sourceCwd, reason }] }`. The count is LIVE — re-read it after an adoption rather than remembering a dismissal.",
         params: {
           type: "object",
           properties: {

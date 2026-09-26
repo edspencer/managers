@@ -37,7 +37,7 @@
  *   3. the temp component is the fixture's own `paddock-e2e-` prefix
  *      (`server.mjs`: `mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-"))`).
  *
- * A real instance's data dir is `~/.paddock` or `/var/lib/paddock/...`, never
+ * A real instance's data dir is `~/.managers` or `/var/lib/paddock/...`, never
  * `/tmp/paddock-e2e-*`, so no production process can satisfy this no matter what
  * its command line looks like. PID 1 is additionally refused outright, as are
  * this script's own process and its ancestors.

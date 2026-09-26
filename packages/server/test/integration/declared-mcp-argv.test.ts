@@ -100,7 +100,7 @@ describe("integration: what a declared MCP server puts in the spawned argv (#691
     expect(turn, "the fake claude recorded no invocation for this turn").toBeDefined();
 
     // The declared server reached the process that runs the model: declared in
-    // paddock.config.yaml, resolved out of the environment, spawned into argv.
+    // managers.config.yaml, resolved out of the environment, spawned into argv.
     expect(turn!.mcpConfig).toBeTruthy();
     const parsed = JSON.parse(turn!.mcpConfig!) as {
       mcpServers: Record<string, { command?: string; env?: Record<string, string> }>;

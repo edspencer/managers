@@ -103,7 +103,7 @@ describe("integration: instance-declared MCP servers (#691 step 6)", () => {
       string,
       { command?: string }
     >;
-    // paddock.config.yaml is a statement about THIS instance; ~/.claude.json is
+    // managers.config.yaml is a statement about THIS instance; ~/.claude.json is
     // ambient machine state. The narrower answer wins.
     expect(servers.notion.command).toBe("mine-not-real");
   });
@@ -183,7 +183,7 @@ describe("integration: instance-declared MCP servers (#691 step 6)", () => {
   });
 
   /**
-   * The Settings screen writes `paddock.config.yaml` through the `yaml` Document
+   * The Settings screen writes `managers.config.yaml` through the `yaml` Document
    * API precisely so unmanaged keys survive. `mcpServers:` is unmanaged AND holds
    * credentials, so "survives a Settings write" is worth pinning rather than
    * inferring — clobbering it would silently unconfigure every declared server on
@@ -200,7 +200,7 @@ describe("integration: instance-declared MCP servers (#691 step 6)", () => {
       payload: { patch: { "brand.name": "Renamed" } },
     });
     expect(res.statusCode).toBe(200);
-    const written = await fs.readFile(path.join(t.tmp, "paddock.config.yaml"), "utf8");
+    const written = await fs.readFile(path.join(t.tmp, "managers.config.yaml"), "utf8");
     expect(written).toContain("notion-mcp-not-real");
     expect(written).toContain(`env:${SECRET_VAR}`);
     // And the file still holds only the reference, never the resolved value.

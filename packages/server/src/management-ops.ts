@@ -73,7 +73,7 @@ import {
  */
 export function forkKickoffPrompt(directive: string): string {
   return (
-    "[Paddock fan-out] You are a NEW chat forked from the conversation above. " +
+    "[Managers fan-out] You are a NEW chat forked from the conversation above. " +
     "That history is INHERITED CONTEXT — you are NOT in the middle of the prior " +
     "turn, and its final exchange may be truncated at the fork point; do not try " +
     "to continue it. Use it as background, then carry out this instruction as your " +

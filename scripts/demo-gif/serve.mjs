@@ -36,9 +36,9 @@ export const REPO_ROOT = path.resolve(HERE, "..", "..");
 export function demoEnv({ dataDir, port, home, fakeScript }) {
   const env = { ...process.env };
 
-  // Drop every inherited Paddock var — we set the ones we want below.
+  // Drop every inherited Managers AND Paddock var — we set the ones we want below.
   for (const key of Object.keys(env)) {
-    if (key.startsWith("MANAGERS_")) delete env[key];
+    if (key.startsWith("MANAGERS_") || key.startsWith("PADDOCK_")) delete env[key];
   }
   // Credentials: absent on purpose, so an accidental real-runtime call fails
   // loudly instead of spending money. Do not "helpfully" restore these.
@@ -169,6 +169,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     });
   }
   process.on("exit", stop);
-  console.log(`Paddock demo server up: ${base}`);
+  console.log(`Managers demo server up: ${base}`);
   console.log("Ctrl-C to stop.");
 }

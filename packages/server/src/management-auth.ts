@@ -123,7 +123,7 @@ export function challengeHeader(
   failure: ManagementAuthFailure,
   resourceMetadataUrl?: string,
 ): string {
-  const params: string[] = ['realm="paddock"'];
+  const params: string[] = ['realm="managers"'];
   if (failure !== "missing") {
     params.push('error="invalid_token"');
     params.push(
@@ -149,7 +149,7 @@ export function insufficientScopeChallenge(
   resourceMetadataUrl?: string,
 ): string {
   const params = [
-    'realm="paddock"',
+    'realm="managers"',
     'error="insufficient_scope"',
     `error_description="the authenticated client's scope does not permit this operation"`,
     `scope="${requiredScope}"`,

@@ -66,7 +66,7 @@ import {
  * happened. Kept terse; the killed `<task-notification>` is already in its context.
  */
 export const RECOVERY_NUDGE =
-  "[Paddock recovery] Your previous turn ended while a background task was still " +
+  "[Managers recovery] Your previous turn ended while a background task was still " +
   "running, and that task was then KILLED at the turn boundary by the runtime — " +
   "this is a known limitation (see herdctl#374), NOT a user cancellation. Nothing " +
   "is running now. Please pick up where you left off: if you still need that work, " +

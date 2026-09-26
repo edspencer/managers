@@ -177,7 +177,7 @@ describe("ProjectStore — linked projects (issue #206)", () => {
 
     expect(await fingerprint(checkout)).toEqual(before);
     // And specifically none of the things a repo-backed project would have got.
-    for (const f of [".gitignore", ".chats", "CLAUDE.md.paddock", "project.yaml", ".paddock"]) {
+    for (const f of [".gitignore", ".chats", "CLAUDE.md.paddock", "project.yaml", ".managers"]) {
       // `.gitignore`/`CLAUDE.md` may legitimately pre-exist in a real repo; the
       // fingerprint above is what proves we didn't touch them. These assert the
       // ones we know Paddock creates elsewhere are simply absent.

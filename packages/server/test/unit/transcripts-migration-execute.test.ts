@@ -43,7 +43,7 @@ describe("own → host migration execute (#882)", () => {
     tmp = await makeTmpDir("paddock-migrate-exec-");
     userHome = path.join(tmp, "home", ".claude");
     projectsRoot = path.join(tmp, "projects");
-    configPath = path.join(tmp, "paddock.config.yaml");
+    configPath = path.join(tmp, "managers.config.yaml");
     commits = 0;
     await fs.mkdir(userHome, { recursive: true });
   });

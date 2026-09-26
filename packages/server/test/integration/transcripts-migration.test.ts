@@ -197,7 +197,7 @@ describe("integration: own → host migration preview (#882)", () => {
     // `.chats/` non-empty and the redirect symlink would never be planted.
     expect(acme.preserveDir).toBe(path.join(t.projectsRoot, "acme", ".chats-pre-migration"));
 
-    expect(body.configPath).toContain("paddock.config.yaml");
+    expect(body.configPath).toContain("managers.config.yaml");
     expect(body.scanBudgetExhausted).toBe(false);
   });
 

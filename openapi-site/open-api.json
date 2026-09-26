@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Paddock HTTP API",
-    "description": "HTTP API for Paddock — the Claude Code workspace platform (persistent chats, projects, unified triggers).\n\nThis document is **generated from the server's route schemas** via `@fastify/swagger`, so it\ntracks the code: a new or changed route with a schema shows up here automatically.\n\n**Live chat is WebSocket, not REST.** Sending a message, streaming the response, tool-call\nevents, cancel, slash-commands and the live queue all flow over `GET /ws`. This spec covers the\nHTTP surface: reads, project/chat/trigger/git management, instance config, and attachment\nupload/serve. The two-step attachment flow is: `POST .../chats/:sessionId/upload` (HTTP, here)\nthen reference the returned file ids in the `chat:send` WebSocket frame.\n\n## Authentication\n\nPaddock has no built-in login — authentication is provider-agnostic and handled at the edge (reverse proxy / IdP). **When these docs are served by the Paddock instance itself, behind your proxy, a `Try it out` request is a same-origin call that inherits your existing SSO session — it authenticates automatically, nothing to paste here.** Use the **Authorize** button only for the explicit-token path (a different origin, a programmatic client, or testing without the proxy).\n\nThis instance runs **jwt** mode: a signed token in the `Authorization` header, verified against the JWKS.",
-    "version": "0.74.1"
+    "title": "Managers HTTP API",
+    "description": "HTTP API for Managers — the Claude Code workspace platform (persistent chats, projects, unified triggers).\n\nThis document is **generated from the server's route schemas** via `@fastify/swagger`, so it\ntracks the code: a new or changed route with a schema shows up here automatically.\n\n**Live chat is WebSocket, not REST.** Sending a message, streaming the response, tool-call\nevents, cancel, slash-commands and the live queue all flow over `GET /ws`. This spec covers the\nHTTP surface: reads, project/chat/trigger/git management, instance config, and attachment\nupload/serve. The two-step attachment flow is: `POST .../chats/:sessionId/upload` (HTTP, here)\nthen reference the returned file ids in the `chat:send` WebSocket frame.\n\n## Authentication\n\nManagers has no built-in login — authentication is provider-agnostic and handled at the edge (reverse proxy / IdP). **When these docs are served by the Managers instance itself, behind your proxy, a `Try it out` request is a same-origin call that inherits your existing SSO session — it authenticates automatically, nothing to paste here.** Use the **Authorize** button only for the explicit-token path (a different origin, a programmatic client, or testing without the proxy).\n\nThis instance runs **jwt** mode: a signed token in the `Authorization` header, verified against the JWKS.",
+    "version": "0.1.0"
   },
   "components": {
     "securitySchemes": {
@@ -115,7 +115,7 @@
         "tags": [
           "System"
         ],
-        "description": "Reports every surfaced instance-config field for the top-level admin screen: `value` (effective in the running, boot-frozen process), `pendingValue` (what a restart would resolve, read from paddock.config.yaml on every request), `pendingRestart`, plus default / editable / sensitive / env-shadow flags. Top level carries `restartRequired` (any field diverges), `configPath`, and `configVersion` — a fingerprint of the file to echo back as `expectedVersion` on the PUT.",
+        "description": "Reports every surfaced instance-config field for the top-level admin screen: `value` (effective in the running, boot-frozen process), `pendingValue` (what a restart would resolve, read from managers.config.yaml on every request), `pendingRestart`, plus default / editable / sensitive / env-shadow flags. Top level carries `restartRequired` (any field diverges), `configPath`, and `configVersion` — a fingerprint of the file to echo back as `expectedVersion` on the PUT.",
         "responses": {
           "200": {
             "description": "Instance config snapshot.",
@@ -136,7 +136,7 @@
         "tags": [
           "System"
         ],
-        "description": "Writes the editable subset of the instance config to paddock.config.yaml (comment-preserving, atomic). Writes DO NOT hot-apply — the config is frozen at boot — so a successful write returns `{ restartRequired: true, configPath, configVersion }` and the process keeps its current config until it restarts. A `null` value clears that key (the built-in default applies again). Pass `expectedVersion` (the `configVersion` from the GET you were editing) to make the write conditional: 409 if the file changed underneath you, instead of silently overwriting another editor. Returns 400 on a malformed patch, an invalid/read-only/env-shadowed field, 500 on write failure.",
+        "description": "Writes the editable subset of the instance config to managers.config.yaml (comment-preserving, atomic). Writes DO NOT hot-apply — the config is frozen at boot — so a successful write returns `{ restartRequired: true, configPath, configVersion }` and the process keeps its current config until it restarts. A `null` value clears that key (the built-in default applies again). Pass `expectedVersion` (the `configVersion` from the GET you were editing) to make the write conditional: 409 if the file changed underneath you, instead of silently overwriting another editor. Returns 400 on a malformed patch, an invalid/read-only/env-shadowed field, 500 on write failure.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -441,7 +441,7 @@
         "tags": [
           "Projects"
         ],
-        "description": "Creates a project from `CreateProjectInput` and registers its agent and its sweeper. Set `repo` to create a repo-backed project (the cloned checkout becomes the agent's working directory), or `path` to LINK an existing on-box git checkout used in place with no copy (that directory becomes the working directory and Paddock writes nothing into it); omit both for a notebook project. Responds 201 with `{ project }`.",
+        "description": "Creates a project from `CreateProjectInput` and registers its agent and its sweeper. Set `repo` to create a repo-backed project (the cloned checkout becomes the agent's working directory), or `path` to LINK an existing on-box git checkout used in place with no copy (that directory becomes the working directory and Managers writes nothing into it); omit both for a notebook project. Responds 201 with `{ project }`.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -480,10 +480,10 @@
                     "description": "External git repo URL to back this project (repo-backed if set)."
                   },
                   "path": {
-                    "description": "Absolute path to the directory this project's content lives in (issue #206). For an unmanaged project this LINKS an existing on-box checkout, used in place with no copy. If it does not exist, Paddock clones `repo` into it when one is given, or creates it for a managed project. Must lie outside the projects root, the data dir, and every other project's working directory. No git repository is required. Immutable once set."
+                    "description": "Absolute path to the directory this project's content lives in (issue #206). For an unmanaged project this LINKS an existing on-box checkout, used in place with no copy. If it does not exist, Managers clones `repo` into it when one is given, or creates it for a managed project. Must lie outside the projects root, the data dir, and every other project's working directory. No git repository is required. Immutable once set."
                   },
                   "managed": {
-                    "description": "Whether Paddock curates this project's own CLAUDE.md/OVERVIEW.md/CHANGELOG.md (issue #206). Omit to derive it: a create naming `repo` or `path` is unmanaged, a plain one is managed. `managed: true` together with `repo` is rejected."
+                    "description": "Whether Managers curates this project's own CLAUDE.md/OVERVIEW.md/CHANGELOG.md (issue #206). Omit to derive it: a create naming `repo` or `path` is unmanaged, a plain one is managed. `managed: true` together with `repo` is rejected."
                   }
                 },
                 "required": []
@@ -513,7 +513,7 @@
         "tags": [
           "System"
         ],
-        "description": "Scans `<claudeHome>/projects/*` for directories with existing Claude Code history and returns the ones worth importing, ranked by how many non-noise sessions each holds. Never walks the filesystem: the only directories it can name are ones a transcript already records, and each is put through the same path floor a linked project must clear (no system directories, no temp roots, nothing inside Paddock's own data dir, nothing overlapping an existing project). Two rules are relaxable: `includeNonGit=1` offers directories that are not git checkouts, `includeOutsideHome=1` offers directories outside `$HOME`. Note the two counts are in DIFFERENT units and do not reconcile by subtraction: `scanned` counts transcript FOLDERS, while `excluded` reports how many DIRECTORIES each rule ate — one directory routinely has two transcript folders (the user's own and Paddock's copy), so a rule that ate one directory may account for two scanned folders. The single exception is `no-recorded-cwd`, which is necessarily per-folder: a folder with no recorded cwd has no directory to be counted under. A machine with no Claude Code history reports `scanned: 0`, which is what distinguishes 'no history' from 'all of it was filtered'. Paddock's own `.chats` bridge folders are excluded before that count is taken — they exist on an instance nobody has used yet, and counting them made `scanned: 0` unreachable. Response: `{ claudeHome, homeDir, scanned, candidates, excluded }`.",
+        "description": "Scans `<claudeHome>/projects/*` for directories with existing Claude Code history and returns the ones worth importing, ranked by how many non-noise sessions each holds. Never walks the filesystem: the only directories it can name are ones a transcript already records, and each is put through the same path floor a linked project must clear (no system directories, no temp roots, nothing inside Managers' own data dir, nothing overlapping an existing project). Two rules are relaxable: `includeNonGit=1` offers directories that are not git checkouts, `includeOutsideHome=1` offers directories outside `$HOME`. Note the two counts are in DIFFERENT units and do not reconcile by subtraction: `scanned` counts transcript FOLDERS, while `excluded` reports how many DIRECTORIES each rule ate — one directory routinely has two transcript folders (the user's own and Managers' copy), so a rule that ate one directory may account for two scanned folders. The single exception is `no-recorded-cwd`, which is necessarily per-folder: a folder with no recorded cwd has no directory to be counted under. A machine with no Claude Code history reports `scanned: 0`, which is what distinguishes 'no history' from 'all of it was filtered'. Managers' own `.chats` bridge folders are excluded before that count is taken — they exist on an instance nobody has used yet, and counting them made `scanned: 0` unreachable. Response: `{ claudeHome, homeDir, scanned, candidates, excluded }`.",
         "parameters": [
           {
             "schema": {
@@ -665,7 +665,7 @@
         "tags": [
           "System"
         ],
-        "description": "Runs the migration (#882): quiesce every project, re-enumerate `.chats/` from disk, move, and — only if EVERY project ends with an empty `.chats/` — write `claude.transcripts: host`. That write is the COMMIT POINT and is deliberately last: until it lands the running server still resolves `own` and a partly-emptied `.chats/` is the transient blank-list state the modal already warns about, which re-running reconciles. The reverse order was rejected because a crash between a `host` config and files still in `.chats/` is a genuine #708 split. ON AN INSTANCE ALREADY RESOLVING `host` this is a RECOVERY, not a flip (#882 §2). Flipping to `host` while `.chats/` was non-empty makes `pointChatsDirAt` decline the redirect symlink, leaving the pre-flip transcripts in a real `.chats/` that nothing reads — #708's remaining half. The moves are identical; step 6 simply has nothing to write, because the config already says what it would say. Such a run returns `configWritten: false` with `restartRequired: true` and `ok: true`, and on the next boot `pointChatsDirAt` finds an empty `.chats/`, plants the redirect, and the stranded chats reappear. `sessionIds` are the chats the user TICKED; everything else in `.chats/` is preserved rather than migrated, and an empty array is a legal choice meaning 'migrate nothing, preserve everything, and empty `.chats/`'. NOTHING IS EVER DELETED and nothing in your own `~/.claude` is overwritten in place. Where a chat exists on both sides, the copy that does not survive is MOVED to `<project.dir>/.chats-pre-migration/` — a SIBLING of `.chats/`, because a `pre-migration/` child would leave `.chats/` non-empty and make the redirect symlink be declined, shipping #708's own symptom. When Paddock's copy supersedes the user's (a fast-forward Paddock is ahead on, or a diverged chat the user ticked), the user's copy is moved aside FIRST and the replacement lands on an empty destination. This replaces the design's skip-if-present move rule, which deadlocked against the empty-`.chats/` postcondition for every chat present on both sides — on an instance where the user adopted their CLI history and then worked in both places, that is every chat, and the migration could not succeed at all. `memory/` is merged at FILE granularity for the same reason: `memory/MEMORY.md` is a single well-known path, so a collision is the common case, and a colliding file is set aside with a `memory-collision` warning rather than overwriting a hand-curated index. Sweeper stores migrate silently with their project and are reported as counts. Returns 409 (nothing moved) for `turn_running`, `config_conflict` and `migration_in_progress`, and 400 for `env_shadowed` (the write would be inert) or a malformed session id.",
+        "description": "Runs the migration (#882): quiesce every project, re-enumerate `.chats/` from disk, move, and — only if EVERY project ends with an empty `.chats/` — write `claude.transcripts: host`. That write is the COMMIT POINT and is deliberately last: until it lands the running server still resolves `own` and a partly-emptied `.chats/` is the transient blank-list state the modal already warns about, which re-running reconciles. The reverse order was rejected because a crash between a `host` config and files still in `.chats/` is a genuine #708 split. ON AN INSTANCE ALREADY RESOLVING `host` this is a RECOVERY, not a flip (#882 §2). Flipping to `host` while `.chats/` was non-empty makes `pointChatsDirAt` decline the redirect symlink, leaving the pre-flip transcripts in a real `.chats/` that nothing reads — #708's remaining half. The moves are identical; step 6 simply has nothing to write, because the config already says what it would say. Such a run returns `configWritten: false` with `restartRequired: true` and `ok: true`, and on the next boot `pointChatsDirAt` finds an empty `.chats/`, plants the redirect, and the stranded chats reappear. `sessionIds` are the chats the user TICKED; everything else in `.chats/` is preserved rather than migrated, and an empty array is a legal choice meaning 'migrate nothing, preserve everything, and empty `.chats/`'. NOTHING IS EVER DELETED and nothing in your own `~/.claude` is overwritten in place. Where a chat exists on both sides, the copy that does not survive is MOVED to `<project.dir>/.chats-pre-migration/` — a SIBLING of `.chats/`, because a `pre-migration/` child would leave `.chats/` non-empty and make the redirect symlink be declined, shipping #708's own symptom. When Managers' copy supersedes the user's (a fast-forward Managers is ahead on, or a diverged chat the user ticked), the user's copy is moved aside FIRST and the replacement lands on an empty destination. This replaces the design's skip-if-present move rule, which deadlocked against the empty-`.chats/` postcondition for every chat present on both sides — on an instance where the user adopted their CLI history and then worked in both places, that is every chat, and the migration could not succeed at all. `memory/` is merged at FILE granularity for the same reason: `memory/MEMORY.md` is a single well-known path, so a collision is the common case, and a colliding file is set aside with a `memory-collision` warning rather than overwriting a hand-curated index. Sweeper stores migrate silently with their project and are reported as counts. Returns 409 (nothing moved) for `turn_running`, `config_conflict` and `migration_in_progress`, and 400 for `env_shadowed` (the write would be inert) or a malformed session id.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -699,7 +699,7 @@
                       "string",
                       "null"
                     ],
-                    "description": "The `configVersion` from the plan this selection was made against. When the property is present the config write is conditional: 409 `config_conflict` if paddock.config.yaml changed underneath you. Omit the property entirely to write unconditionally."
+                    "description": "The `configVersion` from the plan this selection was made against. When the property is present the config write is conditional: 409 `config_conflict` if managers.config.yaml changed underneath you. Omit the property entirely to write unconditionally."
                   },
                   "dryRun": {
                     "type": "boolean",
@@ -798,7 +798,7 @@
                       "items": {
                         "type": "string"
                       },
-                      "description": "Session ids whose Paddock copy is now in a host store."
+                      "description": "Session ids whose Managers copy is now in a host store."
                     },
                     "preserved": {
                       "type": "array",
@@ -827,7 +827,7 @@
                               "own",
                               "host"
                             ],
-                            "description": "Which store the preserved copy came OUT of. `own` is Paddock's copy; `host` is the user's own, moved aside so Paddock's could supersede it. Not in the design's schema, and needed: a completion screen that told a user their terminal transcript was 'not ticked' would be both false and alarming."
+                            "description": "Which store the preserved copy came OUT of. `own` is Managers' copy; `host` is the user's own, moved aside so Managers' could supersede it. Not in the design's schema, and needed: a completion screen that told a user their terminal transcript was 'not ticked' would be both false and alarming."
                           },
                           "path": {
                             "type": "string",
@@ -842,7 +842,7 @@
                               "already-ahead",
                               "superseded"
                             ],
-                            "description": "`unchecked` = the user did not tick it. `unplanned-diverged` = it appeared after the plan was built and classified diverged, so its own default was applied. `identical` = byte-identical on both sides, so no choice was ever offered and Paddock's redundant copy was set aside. `already-ahead` = a fast-forward with the HOST side ahead: the user's copy is the descendant and survives. `superseded` = the user's copy was moved out of ~/.claude BEFORE Paddock's landed on top. The last three are additions: replacing the design's skip-if-present rule (see the endpoint description) made them reachable."
+                            "description": "`unchecked` = the user did not tick it. `unplanned-diverged` = it appeared after the plan was built and classified diverged, so its own default was applied. `identical` = byte-identical on both sides, so no choice was ever offered and Managers' redundant copy was set aside. `already-ahead` = a fast-forward with the HOST side ahead: the user's copy is the descendant and survives. `superseded` = the user's copy was moved out of ~/.claude BEFORE Managers' landed on top. The last three are additions: replacing the design's skip-if-present rule (see the endpoint description) made them reachable."
                           }
                         }
                       }
@@ -969,7 +969,7 @@
                               "memory-collision",
                               "unexpected-entries"
                             ],
-                            "description": "`unexpected-entries` means `.chats/` holds entries that are neither transcripts nor known sidecars; they will still be moved (the postcondition is that `.chats/` ends up empty), but they are named so nothing moves unannounced. `memory-collision` means the host store already has an agent-memory file at the same relative path: Paddock's copy is set aside in the preserve dir rather than overwriting anything in your own ~/.claude."
+                            "description": "`unexpected-entries` means `.chats/` holds entries that are neither transcripts nor known sidecars; they will still be moved (the postcondition is that `.chats/` ends up empty), but they are named so nothing moves unannounced. `memory-collision` means the host store already has an agent-memory file at the same relative path: Managers' copy is set aside in the preserve dir rather than overwriting anything in your own ~/.claude."
                           },
                           "slug": {
                             "type": "string",
@@ -1140,7 +1140,7 @@
                         "null",
                         "string"
                       ],
-                      "description": "Fingerprint of paddock.config.yaml as read for THIS response; null when the file does not exist yet. Echo as `expectedVersion` on the POST to make the write conditional."
+                      "description": "Fingerprint of managers.config.yaml as read for THIS response; null when the file does not exist yet. Echo as `expectedVersion` on the POST to make the write conditional."
                     },
                     "projects": {
                       "type": "array",
@@ -1395,7 +1395,7 @@
                               "memory-collision",
                               "unexpected-entries"
                             ],
-                            "description": "`unexpected-entries` means `.chats/` holds entries that are neither transcripts nor known sidecars; they will still be moved (the postcondition is that `.chats/` ends up empty), but they are named so nothing moves unannounced. `memory-collision` means the host store already has an agent-memory file at the same relative path: Paddock's copy is set aside in the preserve dir rather than overwriting anything in your own ~/.claude."
+                            "description": "`unexpected-entries` means `.chats/` holds entries that are neither transcripts nor known sidecars; they will still be moved (the postcondition is that `.chats/` ends up empty), but they are named so nothing moves unannounced. `memory-collision` means the host store already has an agent-memory file at the same relative path: Managers' copy is set aside in the preserve dir rather than overwriting anything in your own ~/.claude."
                           },
                           "slug": {
                             "type": "string",
@@ -2318,7 +2318,7 @@
         "tags": [
           "Chats"
         ],
-        "description": "Deletes a project chat (session) and clears any archived/starred flag so a future session id can't inherit it. Responds 200 with `{ ok, removed, retained }`. In a Claude home Paddock owns, the transcript JSONL is unlinked (`removed: true`). In a home it does NOT own the transcript is the user's own terminal `claude` history — Paddock plants no symlink there (#682), so there is no copy to delete — and the session is RELEASED instead: it leaves the chat list, the file stays on disk, and `retained` is true (#689).",
+        "description": "Deletes a project chat (session) and clears any archived/starred flag so a future session id can't inherit it. Responds 200 with `{ ok, removed, retained }`. In a Claude home Managers owns, the transcript JSONL is unlinked (`removed: true`). In a home it does NOT own the transcript is the user's own terminal `claude` history — Managers plants no symlink there (#682), so there is no copy to delete — and the session is RELEASED instead: it leaves the chat list, the file stays on disk, and `retained` is true (#689).",
         "parameters": [
           {
             "schema": {
@@ -3145,7 +3145,7 @@
         "tags": [
           "Chats"
         ],
-        "description": "Returns the terminal `claude` sessions that could be adopted into this project but are not yet visible in it: the project's own working directory, plus any Claude transcript folder whose recorded working directory matches the project (by checkout name when the project has a `repo:` key, by exact path otherwise). Sidechains, already-adopted sessions and sessions belonging to a real Paddock run are excluded by the engine; empty transcripts, slash-command-only transcripts and Paddock's own sweeper curation runs (`too-small` / `slash-command-only` / `sweeper-run`) are additionally withheld as noise and reported under `filtered`, so a count lower than the raw total always has an explanation. Response: `{ count, sources: [{ sourceCwd, sessionIds }], filtered: [{ sessionId, sourceCwd, reason }] }`. The count is LIVE — re-read it after an adoption rather than remembering a dismissal.",
+        "description": "Returns the terminal `claude` sessions that could be adopted into this project but are not yet visible in it: the project's own working directory, plus any Claude transcript folder whose recorded working directory matches the project (by checkout name when the project has a `repo:` key, by exact path otherwise). Sidechains, already-adopted sessions and sessions belonging to a real Managers run are excluded by the engine; empty transcripts, slash-command-only transcripts and Managers' own sweeper curation runs (`too-small` / `slash-command-only` / `sweeper-run`) are additionally withheld as noise and reported under `filtered`, so a count lower than the raw total always has an explanation. Response: `{ count, sources: [{ sourceCwd, sessionIds }], filtered: [{ sessionId, sourceCwd, reason }] }`. The count is LIVE — re-read it after an adoption rather than remembering a dismissal.",
         "parameters": [
           {
             "schema": {
@@ -4722,7 +4722,7 @@
         "tags": [
           "Chats"
         ],
-        "description": "Deletes a project chat (session) and clears any archived/starred flag so a future session id can't inherit it. Responds 200 with `{ ok, removed, retained }`. In a Claude home Paddock owns, the transcript JSONL is unlinked (`removed: true`). In a home it does NOT own the transcript is the user's own terminal `claude` history — Paddock plants no symlink there (#682), so there is no copy to delete — and the session is RELEASED instead: it leaves the chat list, the file stays on disk, and `retained` is true (#689).",
+        "description": "Deletes a project chat (session) and clears any archived/starred flag so a future session id can't inherit it. Responds 200 with `{ ok, removed, retained }`. In a Claude home Managers owns, the transcript JSONL is unlinked (`removed: true`). In a home it does NOT own the transcript is the user's own terminal `claude` history — Managers plants no symlink there (#682), so there is no copy to delete — and the session is RELEASED instead: it leaves the chat list, the file stays on disk, and `retained` is true (#689).",
         "parameters": [
           {
             "schema": {
@@ -5549,7 +5549,7 @@
         "tags": [
           "Chats"
         ],
-        "description": "Returns the terminal `claude` sessions that could be adopted into this project but are not yet visible in it: the project's own working directory, plus any Claude transcript folder whose recorded working directory matches the project (by checkout name when the project has a `repo:` key, by exact path otherwise). Sidechains, already-adopted sessions and sessions belonging to a real Paddock run are excluded by the engine; empty transcripts, slash-command-only transcripts and Paddock's own sweeper curation runs (`too-small` / `slash-command-only` / `sweeper-run`) are additionally withheld as noise and reported under `filtered`, so a count lower than the raw total always has an explanation. Response: `{ count, sources: [{ sourceCwd, sessionIds }], filtered: [{ sessionId, sourceCwd, reason }] }`. The count is LIVE — re-read it after an adoption rather than remembering a dismissal.",
+        "description": "Returns the terminal `claude` sessions that could be adopted into this project but are not yet visible in it: the project's own working directory, plus any Claude transcript folder whose recorded working directory matches the project (by checkout name when the project has a `repo:` key, by exact path otherwise). Sidechains, already-adopted sessions and sessions belonging to a real Managers run are excluded by the engine; empty transcripts, slash-command-only transcripts and Managers' own sweeper curation runs (`too-small` / `slash-command-only` / `sweeper-run`) are additionally withheld as noise and reported under `filtered`, so a count lower than the raw total always has an explanation. Response: `{ count, sources: [{ sourceCwd, sessionIds }], filtered: [{ sessionId, sourceCwd, reason }] }`. The count is LIVE — re-read it after an adoption rather than remembering a dismissal.",
         "parameters": [
           {
             "schema": {

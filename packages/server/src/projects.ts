@@ -238,7 +238,7 @@ export class ProjectStore {
     const body = existing && !existing.endsWith("\n") ? `${existing}\n` : existing;
     await fs.writeFile(
       file,
-      `${body}${existing ? "" : "# Paddock instance data repo.\n"}` +
+      `${body}${existing ? "" : "# Managers instance data repo.\n"}` +
         `# Root chat transcripts (issue #516) — not tracked, like every project's.\n/.chats/\n`,
       "utf8",
     );
@@ -436,7 +436,7 @@ export class ProjectStore {
     }
     if (this.dataDir && isPathInside(resolved, this.dataDir)) {
       throw new ProjectError(
-        `Project path must be outside the Paddock data dir (${this.dataDir}): ${input}`,
+        `Project path must be outside the Managers data dir (${this.dataDir}): ${input}`,
         "invalid",
       );
     }
@@ -613,7 +613,7 @@ export class ProjectStore {
     // be a migration.
     if (managed && repo) {
       throw new ProjectError(
-        "A managed project cannot have a repo — Paddock would be curating files " +
+        "A managed project cannot have a repo — Managers would be curating files " +
           "into a checkout it clones. Use managed: false to work in the repo, or " +
           "drop `repo` for a notebook.",
         "invalid",
@@ -1507,7 +1507,7 @@ export class ProjectStore {
 
   private async writeYaml(slug: string, yaml: ProjectYaml): Promise<void> {
     const header =
-      "# Paddock project metadata. Directory name MUST equal `slug`.\n" +
+      "# Managers project metadata. Directory name MUST equal `slug`.\n" +
       "# status: idea | active | paused | blocked | done | abandoned\n";
     // Stamped here rather than threaded through ProjectYaml/the DTO, because
     // this is the one write choke point and because what it describes is the

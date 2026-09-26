@@ -176,10 +176,10 @@ function fail(text: string): McpToolCallResult {
 }
 
 const TOOL_NAME = "send_file";
-const SERVER_NAME = "paddock";
+const SERVER_NAME = "managers_files";
 
 const TOOL_DESCRIPTION =
-  "Render a file inline in the Paddock chat so the user sees it nicely formatted. " +
+  "Render a file inline in the Managers chat so the user sees it nicely formatted. " +
   "Use this to share a document, code snippet, or diagram. Two modes: (1) pass `content` " +
   "with a `filename` to render inline/virtual content that need not exist on disk (great " +
   "for a code snippet or a Markdown/Mermaid block — the filename can be illustrative, e.g. " +
@@ -315,7 +315,7 @@ function createHandler(context: SendFileContext) {
 /**
  * Build the injected MCP server definition for the send-file tool, bound to a
  * per-turn context. Pass the returned value under a stable server key (`paddock`)
- * so the tool surfaces to the agent as `mcp__paddock__send_file`.
+ * so the tool surfaces to the agent as `mcp__managers_files__send_file`.
  */
 export function sendFileServerDef(context: SendFileContext): InjectedMcpServerDef {
   return {

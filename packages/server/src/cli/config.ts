@@ -1,5 +1,5 @@
 /**
- * `paddock config show` — what this instance's config actually resolved to (#878).
+ * `managers config show` — what this instance's config actually resolved to (#878).
  *
  * ## Why the command exists
  *
@@ -149,7 +149,7 @@ export function formatSummary(report: ResolvedConfigReport): string {
   const fromFile = report.fields.filter((f) => f.source === "file");
   const fromEnv = report.fields.filter((f) => f.source === "env");
 
-  const lines = ["Paddock config", ...header(report), "", "Set in the config file"];
+  const lines = ["Managers config", ...header(report), "", "Set in the config file"];
   if (fromFile.length === 0) {
     lines.push(report.configFileExists ? "  (nothing this instance reads)" : "  (no config file)");
   } else {
@@ -174,8 +174,8 @@ export function formatSummary(report: ResolvedConfigReport): string {
   lines.push(...shadowedSection(report));
   lines.push(
     "",
-    `Everything else follows the ${report.profile.name} profile and Paddock's built-in defaults.`,
-    "Run `paddock config show --resolved` to print every effective value and where it came from.",
+    `Everything else follows the ${report.profile.name} profile and Managers' built-in defaults.`,
+    "Run `managers config show --resolved` to print every effective value and where it came from.",
   );
   return lines.join("\n");
 }
@@ -193,7 +193,7 @@ export function formatResolved(
   });
   const valueWidth = Math.max(...rendered.map((r) => r.text.length));
 
-  const lines = ["Paddock config — every effective value, and the layer it came from", ...header(report)];
+  const lines = ["Managers config — every effective value, and the layer it came from", ...header(report)];
 
   for (const g of groups) {
     const rows = rendered.filter((r) => r.field.group === g.id);
@@ -218,7 +218,7 @@ export function formatResolved(
       `profile (${report.profile.name})`,
       "the profile — these levers have no code default of their own",
     ],
-    ["default", "default", "Paddock's built-in default"],
+    ["default", "default", "Managers' built-in default"],
   ];
   const shown = legend.filter(([source]) => present.has(source));
   if (shown.length > 0) {
@@ -265,7 +265,7 @@ export function toJson(report: ResolvedConfigReport, showSensitive: boolean): st
 // --- `config eject` ---------------------------------------------------------
 
 /**
- * `paddock config eject` — freeze the resolution into `paddock.config.yaml`.
+ * `managers config eject` — freeze the resolution into `managers.config.yaml`.
  *
  * ## Why this exists next to a command that argues against it
  *
@@ -460,7 +460,7 @@ function costSection(plan: EjectPlan): string[] {
   const lines = [
     "",
     "What you give up",
-    "  Every key below stops following Paddock's defaults and becomes yours to",
+    "  Every key below stops following Managers' defaults and becomes yours to",
     "  maintain. Upgrades will no longer change any of them.",
   ];
 
@@ -474,7 +474,7 @@ function costSection(plan: EjectPlan): string[] {
   if (has("environmentPrompt")) {
     lines.push(
       "    environmentPrompt  pinned to the current text. Improvements to what agents",
-      "                       are told about running in Paddock stop reaching you.",
+      "                       are told about running in Managers stop reaching you.",
     );
   }
 
@@ -487,7 +487,7 @@ function costSection(plan: EjectPlan): string[] {
     "",
     "  None of this is one-way. Delete the keys you would rather inherit again,",
     "  leave `profile:` in place, and they go back to following it —",
-    "  `paddock config show` will tell you which layer each one is coming from.",
+    "  `managers config show` will tell you which layer each one is coming from.",
   );
   return lines;
 }
@@ -503,7 +503,7 @@ export function formatEjectPlan(
 ): string {
   const { report } = plan;
   const lines = [
-    written ? "Paddock config — ejected" : "Paddock config — eject preview",
+    written ? "Managers config — ejected" : "Managers config — eject preview",
     ...header(report),
   ];
 
@@ -565,7 +565,7 @@ export function formatEjectPlan(
   lines.push(
     "",
     written
-      ? "`paddock config show --resolved` now reports these as `file`."
+      ? "`managers config show --resolved` now reports these as `file`."
       : "Nothing was written. Re-run with --write to apply.",
   );
   return lines.join("\n");
@@ -620,14 +620,14 @@ function notWrittenSection(plan: EjectPlan): string[] {
  * Run a `config` action against the data dir the caller has already resolved
  * into `MANAGERS_DATA_DIR`.
  *
- * The two imports are dynamic for the same reason `paddock.ts` defers
+ * The two imports are dynamic for the same reason `managers.ts` defers
  * `start.js`: config resolution reads the environment, so nothing that resolves
  * it may be pulled in before the caller has finished setting it.
  *
  * `createDataDir: false` is the one behavioural request this command makes of
  * the loader, and it holds for `eject` too. Inspecting an instance must not
- * CREATE one — otherwise `paddock config show` on a machine that has never run
- * Paddock leaves an empty `~/.paddock` behind, and the first-run welcome that
+ * CREATE one — otherwise `managers config show` on a machine that has never run
+ * Managers leaves an empty `~/.managers` behind, and the first-run welcome that
  * keys on its absence never prints. `eject --write` does create the directory,
  * because it has to put a file in it, but only on the path that writes.
  */
@@ -650,11 +650,11 @@ export async function runConfig(action: ConfigAction, opts: CliOptions): Promise
     //
     // Scoped to the LOAD deliberately, and worded about the configuration rather
     // than about a file. A failure below this line is a bug in this command, and
-    // claiming `paddock start` would fail too would be a false statement at the
+    // claiming `managers start` would fail too would be a false statement at the
     // moment someone most needs a true one — while a `CLAUDE_CONFIG_DIR` refusal
     // is a real boot failure with no config file involved at all.
     throw new CliError(
-      `${(err as Error).message}\nThis is what \`paddock start\` would fail with too.`,
+      `${(err as Error).message}\nThis is what \`managers start\` would fail with too.`,
     );
   }
   const report = resolveConfigReport(cfg);
@@ -666,8 +666,8 @@ export async function runConfig(action: ConfigAction, opts: CliOptions): Promise
         writeInstanceConfig(report.configPath, plan.pairs);
       } catch (err) {
         // An unwritable path, a read-only mount, a directory where the file
-        // should be. Raised as a CliError so `paddock.ts` reports it as this
-        // command failing rather than appending its "`paddock start` would fail
+        // should be. Raised as a CliError so `managers.ts` reports it as this
+        // command failing rather than appending its "`managers start` would fail
         // on the same file" note, which is true of a malformed config and a
         // lie about a permissions problem.
         throw new CliError(

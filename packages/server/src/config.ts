@@ -29,6 +29,7 @@ import {
   isKnownModel,
 } from "./models.js";
 import { SCHEMA_VERSION_KEY, configSchemaRefusal } from "./schema-version.js";
+import { enforceDataDirGuard } from "./data-dir-guard.js";
 import { isValidMaxSpawnDepth } from "./spawn-capability.js";
 import {
   type Posture,
@@ -110,7 +111,7 @@ export interface AuthConfig {
 /**
  * Per-instance branding (issue #34). Lets several Paddock instances (Projects,
  * Homelab, House, …) be told apart at a glance. All optional; the defaults
- * preserve today's look (🐎 / "Paddock" / terracotta). Injected into index.html
+ * preserve today's look (🧭 / "Managers" / terracotta). Injected into index.html
  * at serve time (so there's no title/color flash) and read by the SPA from a
  * `window.__MANAGERS_CONFIG__` global.
  */
@@ -355,7 +356,7 @@ export interface PaddockConfig {
   environmentPrompt: string;
   /**
    * Whether keeper turns are handed the read-only self-management MCP server
-   * (issue #214 Phase 1) — the `mcp__paddock_manage__*` tools that let a keeper
+   * (issue #214 Phase 1) — the `mcp__managers__*` tools that let a keeper
    * enumerate projects/chats and read another chat's transcript. Driven by
    * `MANAGERS_SELF_MCP`; default OFF (opt-in per instance). The write tools
    * (create/fork/message) are gated separately by
@@ -449,7 +450,7 @@ export interface PaddockConfig {
   mcpServersDiagnostics: { errors: string[]; warnings: string[] };
   /**
    * Instance default for the hook-management MCP (Epic G / G5, GG-4) — now the
-   * unified TRIGGER tools `mcp__paddock_manage__{list_triggers,set_trigger,
+   * unified TRIGGER tools `mcp__managers__{list_triggers,set_trigger,
    * remove_trigger,run_trigger}` that let a project agent declare/edit/delete/fire
    * its own triggers. Epic T / T3 collapsed the former `*_hook` and `*_schedule`
    * verbs into these; the flag and its env var kept the `hooks` spelling.
@@ -783,7 +784,7 @@ function fileOpt(fileVal: unknown): string | undefined {
 }
 
 /** Default filename for the instance-config file, resolved under the data dir. */
-const DEFAULT_CONFIG_FILENAME = "paddock.config.yaml";
+const DEFAULT_CONFIG_FILENAME = "managers.config.yaml";
 
 /**
  * Load the optional YAML instance-config file that provides the BASE layer for
@@ -791,7 +792,7 @@ const DEFAULT_CONFIG_FILENAME = "paddock.config.yaml";
  * (precedence file < env).
  *
  * Path resolution: an explicit `MANAGERS_CONFIG` env var wins; otherwise
- * `<dataDir>/paddock.config.yaml`. When no file exists at the default location
+ * `<dataDir>/managers.config.yaml`. When no file exists at the default location
  * the result is an empty object, so an env-only deployment behaves exactly as
  * before — this is a no-op for existing installs. An explicit `MANAGERS_CONFIG`
  * that points at a missing file is treated as a misconfiguration (a clear error)
@@ -818,7 +819,7 @@ export function loadConfigFile(dataDir: string): PaddockConfigFile {
       }
       return {};
     }
-    throw new Error(`Failed to read Paddock config file ${configPath}: ${(err as Error).message}`);
+    throw new Error(`Failed to read Managers config file ${configPath}: ${(err as Error).message}`);
   }
 
   let parsed: unknown;
@@ -826,7 +827,7 @@ export function loadConfigFile(dataDir: string): PaddockConfigFile {
     parsed = YAML.parse(raw);
   } catch (err) {
     throw new Error(
-      `Failed to parse Paddock config file ${configPath} as YAML: ${(err as Error).message}`,
+      `Failed to parse Managers config file ${configPath} as YAML: ${(err as Error).message}`,
     );
   }
 
@@ -834,7 +835,7 @@ export function loadConfigFile(dataDir: string): PaddockConfigFile {
   if (parsed === null || parsed === undefined) return {};
   if (typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(
-      `Paddock config file ${configPath} must contain a YAML mapping (got ${
+      `Managers config file ${configPath} must contain a YAML mapping (got ${
         Array.isArray(parsed) ? "a list" : typeof parsed
       }).`,
     );
@@ -929,8 +930,8 @@ function loadTranscriptionConfig(file: PaddockConfigFile["transcription"] = {}):
  */
 function loadBrandConfig(file: PaddockConfigFile["brand"] = {}): BrandConfig {
   return {
-    name: envOr("MANAGERS_BRAND_NAME", fileOr(file.name, "Paddock")),
-    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "🐎")),
+    name: envOr("MANAGERS_BRAND_NAME", fileOr(file.name, "Managers")),
+    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "🧭")),
     accent: envOr("MANAGERS_BRAND_ACCENT", fileOr(file.accent, "#c2603c")),
   };
 }
@@ -967,7 +968,7 @@ export interface LoadConfigOptions {
    *
    * `paddock config show` (#878) passes `false`. Inspecting an instance must not
    * bring one into being: otherwise running it on a machine that has never
-   * started Paddock leaves an empty `~/.paddock` behind, and the first-run
+   * started Paddock leaves an empty `~/.managers` behind, and the first-run
    * welcome — which keys on that directory's absence — never prints again.
    * Skipping the mkdir costs nothing else, because `canonical()` already handles
    * a path whose tail does not exist yet.
@@ -999,6 +1000,9 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
   const projectsRoot = canonical(
     envOr("MANAGERS_PROJECTS_DIR", fileOr(file.projectsRoot, path.join(dataRoot, "projects"))),
   );
+  // Managers M1: never boot against a projects root full of someone else's
+  // projects (see data-dir-guard.ts). A fresh root is claimed with the marker.
+  enforceDataDirGuard(projectsRoot, { claim: opts.createDataDir !== false });
   const stateDir = canonical(
     envOr("MANAGERS_STATE_DIR", fileOr(file.stateDir, path.join(dataRoot, ".herdctl"))),
   );
@@ -1024,7 +1028,7 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
 
   return Object.freeze({
     profile,
-    port: Number(envOr("PORT", fileOr(file.port, "7233"))),
+    port: Number(envOr("PORT", fileOr(file.port, "7234"))),
     // Safe by default (#435): bind loopback unless explicitly told otherwise, so
     // a fresh source/tarball run is network-closed. Non-loopback + no auth is then
     // gated by the bind-safety guard (see bind-safety.ts). Existing deployments
@@ -1092,8 +1096,8 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
     openapi: loadOpenApiConfig(file.openapi),
     sweepMinIntervalMs: loadSweepMinIntervalMs(file.sweepMinIntervalMs),
     gitAuthor: {
-      name: envOr("MANAGERS_GIT_AUTHOR_NAME", fileOr(file.gitAuthor?.name, "Paddock")),
-      email: envOr("MANAGERS_GIT_AUTHOR_EMAIL", fileOr(file.gitAuthor?.email, "paddock@localhost")),
+      name: envOr("MANAGERS_GIT_AUTHOR_NAME", fileOr(file.gitAuthor?.name, "Managers")),
+      email: envOr("MANAGERS_GIT_AUTHOR_EMAIL", fileOr(file.gitAuthor?.email, "managers@localhost")),
     },
     githubClientId: envOpt("MANAGERS_GITHUB_CLIENT_ID") ?? fileOpt(file.githubClientId),
   });
@@ -1615,7 +1619,7 @@ export function claudeHomeRefusal(
     (fromEnv
       ? `CLAUDE_CONFIG_DIR is what points it there: unset it, or point it at a directory ` +
         `of paddock's own. `
-      : `The \`claudeHome:\` key in paddock.config.yaml points it there: remove it, or name a ` +
+      : `The \`claudeHome:\` key in managers.config.yaml points it there: remove it, or name a ` +
         `directory of paddock's own. `) +
     `To SHARE your Claude Code transcripts, set \`claude: { transcripts: host }\` (or ` +
     `MANAGERS_CLAUDE_TRANSCRIPTS=host) — that shares the files themselves and keeps ` +

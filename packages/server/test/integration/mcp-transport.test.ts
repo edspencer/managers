@@ -78,7 +78,7 @@ describe("/mcp transport", () => {
       },
     });
     expect(json.result.protocolVersion).toBe("2025-11-25");
-    expect(json.result.serverInfo.name).toBe("paddock");
+    expect(json.result.serverInfo.name).toBe("managers");
   });
 
   // Regression guard for the `parsedBody` gotcha: Fastify has already drained

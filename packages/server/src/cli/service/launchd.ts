@@ -5,7 +5,7 @@
  *
  * A LaunchAgent is bootstrapped into the `gui/<uid>` domain when that user logs
  * in, and runs as them. A LaunchDaemon starts at boot, as root, before anyone
- * has logged in. The difference is not convenience — it decides whether Paddock
+ * has logged in. The difference is not convenience — it decides whether Managers
  * can use your Claude login at all.
  *
  * On macOS that login is a Keychain item, and the login keychain is unlocked by
@@ -15,7 +15,7 @@
  * credentials: host` on darwin therefore structurally requires a logged-in user
  * session, and boot-time start and Keychain credentials are mutually exclusive.
  *
- * The consequence users will meet is that Paddock starts **at login, not at
+ * The consequence users will meet is that Managers starts **at login, not at
  * boot** — after a restart nobody logs into, it is not running. Every surface
  * that mentions this service says so, because otherwise it gets filed as a bug.
  *
@@ -39,7 +39,7 @@ import path from "node:path";
 import { LAUNCHD_LABEL, type ServiceSpec } from "./spec.js";
 import type { Runner, ServiceBackend, ServiceState } from "./backend.js";
 
-/** `~/Library/LaunchAgents/net.edspencer.paddock.plist`. */
+/** `~/Library/LaunchAgents/net.edspencer.managers.plist`. */
 export function plistPath(homeDir: string = os.homedir()): string {
   return path.join(homeDir, "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
 }
@@ -61,13 +61,13 @@ function xmlEscape(s: string): string {
  * choice and is, for a service, a trap. `start.ts` handles SIGTERM by shutting
  * down cleanly and exiting `0`, so **every** SIGTERM the OS routinely sends a
  * LaunchAgent (sleep, logout, a stray `kill`) looked to launchd like "it meant
- * to stop", and Paddock stayed down until the next login. A hard crash was the
+ * to stop", and Managers stayed down until the next login. A hard crash was the
  * survivable case; the graceful stop was the terminal one.
  *
  * The worry that motivated the dict — that `<true/>` fights a deliberate stop —
  * does not hold for the stop this CLI actually performs. `launchctl bootout`
  * unloads the job from the domain, and KeepAlive only applies to a job that is
- * still loaded, so `uninstall` still stops Paddock in one call. What `<true/>`
+ * still loaded, so `uninstall` still stops Managers in one call. What `<true/>`
  * does fight is `launchctl stop`, which is why nothing here uses it.
  *
  * Intent belongs in an explicit command, not in an exit code.
@@ -79,7 +79,7 @@ function xmlEscape(s: string): string {
  * category of value that would be tempting to put here — a credential — is
  * precisely what the agent shape exists to avoid needing.
  *
- * No `MANAGERS_DATA_DIR`: see `buildSpec`. One `~/.paddock` instance, reachable
+ * No `MANAGERS_DATA_DIR`: see `buildSpec`. One `~/.managers` instance, reachable
  * from the service and from a terminal.
  */
 export function renderPlist(spec: ServiceSpec): string {
@@ -224,7 +224,7 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
      * Load the job back into the GUI domain and make sure it is running (#873).
      *
      * `bootstrap`, not `launchctl start`: `stop` below BOOTS OUT, so a stopped
-     * Paddock is not merely idle, it is absent from the domain — and `start` on
+     * Managers is not merely idle, it is absent from the domain — and `start` on
      * a label launchd has never heard of fails. Bootstrapping is also what a
      * login does, so `service start` and the next login take the same path.
      */
@@ -284,7 +284,7 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
         running: parsed.running,
         ...(parsed.pid !== undefined ? { pid: parsed.pid } : {}),
         // Strip the interpreter and script: what a reader wants from `status`
-        // is the Paddock invocation, not the absolute path to node twice.
+        // is the Managers invocation, not the absolute path to node twice.
         argv: argv.slice(2),
         keepsAlive: plistKeepsAlive(xml),
       };

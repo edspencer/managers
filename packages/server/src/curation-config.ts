@@ -71,7 +71,7 @@ export function sanitizeCurationOverride(value: unknown): CurationOverride | und
 /**
  * Resolve the effective curation budgets for a sweep: a valid per-project
  * override wins field-by-field; every absent field inherits the instance default
- * (which is itself `env > paddock.config.yaml > built-in default`). The override
+ * (which is itself `env > managers.config.yaml > built-in default`). The override
  * is re-sanitised so a corrupt on-disk value can't leak through.
  */
 export function resolveCurationConfig(

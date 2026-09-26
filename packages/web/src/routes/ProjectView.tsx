@@ -1332,7 +1332,7 @@ export function ProjectView({
           )}
           {!project.managed && !project.repo && project.path && (
             <span
-              title={`Claude works in ${project.path}. Paddock writes no project files there.`}
+              title={`Claude works in ${project.path}. Managers writes no project files there.`}
               className="hidden items-center gap-1 rounded-md bg-info-soft px-1.5 py-0.5 text-2xs font-medium text-info lg:inline-flex"
             >
               <BranchIcon width={11} height={11} />
@@ -1553,7 +1553,7 @@ export function ProjectView({
           {/* Settings: this workspace's own `project.yaml`, and nothing else.
               ONE pane, at the root exactly as in a project — which is what makes
               this tab scroll at all. It used to render the instance-wide
-              `paddock.config.yaml` form as a second root-only section (#516
+              `managers.config.yaml` form as a second root-only section (#516
               Phase 5), and two panes in one tab is what broke it: that form is a
               fragment whose `min-h-0 flex-1 overflow-y-auto` body only works as a
               flex-column child, so wrapped in a plain <div> it grew to its full

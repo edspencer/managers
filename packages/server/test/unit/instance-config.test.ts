@@ -107,7 +107,7 @@ describe("instance-config (#385)", () => {
     it("reports the resolved config file path", () => {
       const cfg = loadPaddockConfig();
       const dto = buildInstanceConfig(cfg);
-      expect(dto.configPath).toBe(path.join(cfg.dataDir, "paddock.config.yaml"));
+      expect(dto.configPath).toBe(path.join(cfg.dataDir, "managers.config.yaml"));
       expect(dto.restartRequired).toBe(false);
       expect(dto.configVersion).toBeNull(); // no file yet
     });
@@ -122,7 +122,7 @@ describe("instance-config (#385)", () => {
    */
   describe("pending (on-disk) values vs effective (frozen) values (#722)", () => {
     const writeFile = (body: string) =>
-      fs.writeFileSync(path.join(dataDir, "paddock.config.yaml"), body, "utf8");
+      fs.writeFileSync(path.join(dataDir, "managers.config.yaml"), body, "utf8");
 
     it("reports the file's value as pendingValue and flags the divergence", () => {
       const cfg = loadPaddockConfig(); // boots with no file → defaults
@@ -202,7 +202,7 @@ describe("instance-config (#385)", () => {
    */
   describe("posture profile row + attribution (#878)", () => {
     const writeFile = (body: string) =>
-      fs.writeFileSync(path.join(dataDir, "paddock.config.yaml"), body, "utf8");
+      fs.writeFileSync(path.join(dataDir, "managers.config.yaml"), body, "utf8");
 
     it("surfaces the resolved profile as a read-only row in Advanced", () => {
       const dto = buildInstanceConfig(loadPaddockConfig());
@@ -459,7 +459,7 @@ describe("instance-config (#385)", () => {
 
   describe("writeInstanceConfig (comment-preserving, atomic, create-on-missing)", () => {
     it("creates the file when absent", () => {
-      const p = path.join(dataDir, "paddock.config.yaml");
+      const p = path.join(dataDir, "managers.config.yaml");
       expect(fs.existsSync(p)).toBe(false);
       writeInstanceConfig(p, [{ key: "curation.overviewMaxTokens", value: 2500 }]);
       expect(fs.existsSync(p)).toBe(true);
@@ -468,7 +468,7 @@ describe("instance-config (#385)", () => {
     });
 
     it("preserves operator comments and unmanaged keys", () => {
-      const p = path.join(dataDir, "paddock.config.yaml");
+      const p = path.join(dataDir, "managers.config.yaml");
       fs.writeFileSync(
         p,
         [
@@ -497,7 +497,7 @@ describe("instance-config (#385)", () => {
     });
 
     it("round-trips a change the loader then reads back", () => {
-      const p = path.join(dataDir, "paddock.config.yaml");
+      const p = path.join(dataDir, "managers.config.yaml");
       writeInstanceConfig(p, [
         { key: "driveMode", value: "batch" },
         { key: "selfMcpEnabled", value: true },
@@ -510,7 +510,7 @@ describe("instance-config (#385)", () => {
     });
 
     it("deletes a key when the value is null (clear back to default)", () => {
-      const p = path.join(dataDir, "paddock.config.yaml");
+      const p = path.join(dataDir, "managers.config.yaml");
       writeInstanceConfig(p, [{ key: "sweepMinIntervalMs", value: 12345 }]);
       expect(loadPaddockConfig().sweepMinIntervalMs).toBe(12345);
       writeInstanceConfig(p, [{ key: "sweepMinIntervalMs", value: null }]);

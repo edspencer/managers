@@ -24,8 +24,8 @@ const isComplete = (sessionId?: string) => (e: WsEvent) =>
   e.payload?.projectSlug === SLUG &&
   (sessionId ? e.payload?.sessionId === sessionId : typeof e.payload?.sessionId === "string");
 
-/** A recovery nudge is unmistakable in the transcript by its "[Paddock recovery]" lead. */
-const isNudge = (text: string) => text.includes("[Paddock recovery]");
+/** A recovery nudge is unmistakable in the transcript by its "[Managers recovery]" lead. */
+const isNudge = (text: string) => text.includes("[Managers recovery]");
 
 describe("integration: recovery re-drive double-dispatch guard (#352)", () => {
   let t: TestApp;

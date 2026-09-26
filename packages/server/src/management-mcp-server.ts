@@ -28,7 +28,7 @@ import type { InjectedMcpServerDef } from "@herdctl/core";
 import { ManagementDeniedError, type ManagementPrincipal } from "./management-policy.js";
 
 /** Server identity advertised in the MCP `initialize` handshake. */
-export const MANAGEMENT_MCP_SERVER_NAME = "paddock";
+export const MANAGEMENT_MCP_SERVER_NAME = "managers";
 
 /**
  * Package version, advertised to the client so it can report which Paddock it

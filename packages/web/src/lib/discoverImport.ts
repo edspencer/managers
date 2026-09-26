@@ -148,7 +148,7 @@ const SKIP_LABELS: Record<string, string> = {
   sidechain: "sub-agent transcript",
   "already-adopted": "already adopted",
   "destination-exists": "a chat with that id already exists here",
-  "attributed-to-run": "belongs to a Paddock run",
+  "attributed-to-run": "belongs to a Managers run",
   unreadable: "transcript unreadable",
   "placement-failed": "copy failed",
   "record-failed": "could not be recorded",

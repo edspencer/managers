@@ -4,7 +4,7 @@ import { AlertIcon } from "./icons";
 
 /**
  * The shared inline image embed used by BOTH an agent-sent image
- * (`mcp__paddock__send_file`, issue #112) and an image `Read` tool result
+ * (`mcp__managers_files__send_file`, issue #112) and an image `Read` tool result
  * (issue #239). A checkerboard mat behind the image, a hover-reveal action bar
  * (download / open-in-new-tab / maximize), and a full-screen lightbox. The image
  * itself is click-to-maximize with a zoom cursor, so you don't have to hunt for

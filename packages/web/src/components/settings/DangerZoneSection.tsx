@@ -42,7 +42,7 @@ export function DangerZoneSection({
       title="Danger zone"
       description={
         unlinks
-          ? "Deleting unlinks this project: Paddock’s notes, settings and chats go, and the directory it works in is left untouched."
+          ? "Deleting unlinks this project: Managers’ notes, settings and chats go, and the directory it works in is left untouched."
           : "Deleting removes this project’s directory — its notes, settings, chats and files."
       }
     >

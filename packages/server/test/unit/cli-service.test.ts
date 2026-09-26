@@ -1,5 +1,5 @@
 /**
- * Unit tests for `paddock service` (#796).
+ * Unit tests for `managers service` (#796).
  *
  * ## What these can and cannot prove
  *
@@ -84,11 +84,11 @@ function withEnv(name: string, value: string, body: () => void): void {
 // Verb dispatch
 // ---------------------------------------------------------------------------
 
-describe("paddock CLI: verb dispatch (#796)", () => {
+describe("managers CLI: verb dispatch (#796)", () => {
   /**
    * The compatibility property the whole design hangs off. `parseCommand` must
    * be a superset of `parseArgs`: anything that used to work has to keep
-   * producing the same options, because bare `paddock` is the demo path.
+   * producing the same options, because bare `managers` is the demo path.
    */
   it.each([
     [[]],
@@ -149,7 +149,7 @@ describe("paddock CLI: verb dispatch (#796)", () => {
   });
 
   it("still rejects an unrecognised leading token as an unknown option", () => {
-    // The pre-#796 behaviour, unchanged: dropping it would let `paddock 4100`
+    // The pre-#796 behaviour, unchanged: dropping it would let `managers 4100`
     // look like it worked while starting on the default port.
     expect(() => parseCommand(["4100"])).toThrow(/unknown option: 4100/);
     expect(() => parseCommand(["scan"])).toThrow(/unknown option: scan/);
@@ -168,12 +168,12 @@ describe("paddock CLI: verb dispatch (#796)", () => {
 
 const BASE = {
   nodePath: "/opt/node/bin/node",
-  scriptPath: "/usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/paddock.js",
-  dataDir: "/home/ed/.paddock",
+  scriptPath: "/usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/managers.js",
+  dataDir: "/home/ed/.managers",
   pathEnv: "/opt/node/bin:/usr/bin:/bin",
 };
 
-describe("paddock service: the spec", () => {
+describe("managers service: the spec", () => {
   it("leads the argument vector with the `start` verb", () => {
     // So `launchctl print` shows an argv you can read rather than recognise.
     expect(buildSpec(BASE).args).toEqual(["start"]);
@@ -181,7 +181,7 @@ describe("paddock service: the spec", () => {
 
   /**
    * The load-bearing default. With no data dir named anywhere, the service and
-   * a `paddock` typed into a terminal both fall through to `~/.paddock` and are
+   * a `managers` typed into a terminal both fall through to `~/.managers` and are
    * the same instance — which is the whole point of "one home instance, two
    * ways to reach it".
    */
@@ -207,11 +207,11 @@ describe("paddock service: the spec", () => {
 
   it("puts the working directory and logs inside the data dir, not $HOME", () => {
     const spec = buildSpec(BASE);
-    expect(spec.workingDirectory).toBe(serviceDir("/home/ed/.paddock"));
+    expect(spec.workingDirectory).toBe(serviceDir("/home/ed/.managers"));
     expect(spec.stdoutPath.startsWith(spec.workingDirectory)).toBe(true);
     // $HOME is the obvious choice and the wrong one: a background process has
     // no cwd anyone chose, and it should not sit in a directory full of the
-    // user's things. (Until #798 it was worse than untidy — `.paddock` was both
+    // user's things. (Until #798 it was worse than untidy — `.managers` was both
     // the here-marker and the default data dir, so $HOME read as an already
     // opened workspace and the instance adopted the entire home.)
     expect(spec.workingDirectory).not.toBe("/home/ed");
@@ -229,7 +229,7 @@ describe("paddock service: the spec", () => {
   it("reads the port and host back out of an argv", () => {
     expect(portFromArgv(["start", "--port", "7299"])).toBe("7299");
     expect(portFromArgv(["start", "-p", "7299"])).toBe("7299");
-    expect(portFromArgv(["start"])).toBe("7233");
+    expect(portFromArgv(["start"])).toBe("7234");
     expect(hostFromArgv(["start", "--host", "0.0.0.0"])).toBe("0.0.0.0");
     expect(hostFromArgv(["start"])).toBe("127.0.0.1");
   });
@@ -239,8 +239,8 @@ describe("paddock service: the spec", () => {
 // launchd: the golden plist
 // ---------------------------------------------------------------------------
 
-describe("paddock service: the generated plist", () => {
-  const spec = buildSpec({ ...BASE, dataDir: "/Users/ed/.paddock" });
+describe("managers service: the generated plist", () => {
+  const spec = buildSpec({ ...BASE, dataDir: "/Users/ed/.managers" });
   const plist = renderPlist(spec);
 
   it("matches the golden output", () => {
@@ -250,11 +250,11 @@ describe("paddock service: the generated plist", () => {
       <plist version="1.0">
         <dict>
           <key>Label</key>
-          <string>net.edspencer.paddock</string>
+          <string>net.edspencer.managers</string>
           <key>ProgramArguments</key>
           <array>
             <string>/opt/node/bin/node</string>
-            <string>/usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/paddock.js</string>
+            <string>/usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/managers.js</string>
             <string>start</string>
           </array>
           <key>RunAtLoad</key>
@@ -264,11 +264,11 @@ describe("paddock service: the generated plist", () => {
           <key>ThrottleInterval</key>
           <integer>10</integer>
           <key>WorkingDirectory</key>
-          <string>/Users/ed/.paddock/service</string>
+          <string>/Users/ed/.managers/service</string>
           <key>StandardOutPath</key>
-          <string>/Users/ed/.paddock/service/paddock.log</string>
+          <string>/Users/ed/.managers/service/managers.log</string>
           <key>StandardErrorPath</key>
-          <string>/Users/ed/.paddock/service/paddock.error.log</string>
+          <string>/Users/ed/.managers/service/managers.error.log</string>
           <key>EnvironmentVariables</key>
           <dict>
             <key>PATH</key>
@@ -289,16 +289,16 @@ describe("paddock service: the generated plist", () => {
   it("invokes node explicitly, by absolute path, with the script after it", () => {
     const argv = parsePlistArgv(plist);
     expect(argv[0]).toBe("/opt/node/bin/node");
-    expect(argv[1]).toMatch(/dist\/cli\/paddock\.js$/);
+    expect(argv[1]).toMatch(/dist\/cli\/managers\.js$/);
     expect(argv).not.toContain("/usr/bin/env");
   });
 
   /**
    * The inversion of an earlier assertion, and worth saying why (#872).
    *
-   * `SuccessfulExit: false` restarts Paddock only when it exits NON-zero — and
+   * `SuccessfulExit: false` restarts Managers only when it exits NON-zero — and
    * `start.ts` handles SIGTERM by exiting `0`. So the survivable case was a
-   * crash, and the terminal one was the OS politely asking Paddock to stop at
+   * crash, and the terminal one was the OS politely asking Managers to stop at
    * sleep or logout. `bootout` (what `uninstall` runs) unloads the job rather
    * than stopping it, so unconditional KeepAlive does not make it unstoppable.
    */
@@ -381,20 +381,20 @@ describe("paddock service: the generated plist", () => {
 // systemd: the golden unit
 // ---------------------------------------------------------------------------
 
-describe("paddock service: the generated systemd unit", () => {
+describe("managers service: the generated systemd unit", () => {
   const spec = buildSpec(BASE);
   const unit = renderUnit(spec);
 
   it("matches the golden output", () => {
     expect(unit).toMatchInlineSnapshot(`
       "[Unit]
-      Description=Paddock — persistent, resumable Claude Code sessions, by project
+      Description=Managers — persistent, resumable Claude Code sessions, by project
       Documentation=https://paddock.edspencer.net
 
       [Service]
       Type=simple
-      ExecStart=/opt/node/bin/node /usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/paddock.js start
-      WorkingDirectory=/home/ed/.paddock/service
+      ExecStart=/opt/node/bin/node /usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/managers.js start
+      WorkingDirectory=/home/ed/.managers/service
       Environment=PATH=/opt/node/bin:/usr/bin:/bin
       Restart=always
       RestartSec=10
@@ -413,7 +413,7 @@ describe("paddock service: the generated systemd unit", () => {
 
   /**
    * The launchd note applies verbatim (#872): `on-failure` plus a SIGTERM
-   * handler that exits `0` means a logout stops Paddock for good. `always` does
+   * handler that exits `0` means a logout stops Managers for good. `always` does
    * not make the unit unstoppable — systemd never restarts a unit it was itself
    * asked to stop, so `systemctl --user stop` still works.
    */
@@ -450,7 +450,7 @@ describe("paddock service: the generated systemd unit", () => {
    * was green locally and red there — and the red was not a flake. Two real
    * consequences, in order of severity:
    *
-   * 1. The suite WROTE a `paddock.service` into the runner's actual config
+   * 1. The suite WROTE a `managers.service` into the runner's actual config
    *    directory, outside every temp dir it believed it was confined to. On a
    *    contributor's Linux machine that is a unit file they did not ask for.
    * 2. Test isolation silently stopped working, so which assertion passed
@@ -521,7 +521,7 @@ function contextFor(platform: "darwin" | "linux", home: string, run: Runner) {
 
 const OPTS = { open: false, verbose: false, help: false, version: false };
 
-describe("paddock service: install / uninstall / status flows", () => {
+describe("managers service: install / uninstall / status flows", () => {
   let home: string;
 
   beforeEach(() => {
@@ -531,7 +531,7 @@ describe("paddock service: install / uninstall / status flows", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const spec = () => buildSpec({ ...BASE, dataDir: path.join(home, ".paddock") });
+  const spec = () => buildSpec({ ...BASE, dataDir: path.join(home, ".managers") });
 
   it("launchd install boots out first, then bootstraps — never load/unload", () => {
     const { run, calls } = recorder();
@@ -559,14 +559,14 @@ describe("paddock service: install / uninstall / status flows", () => {
     createSystemdBackend(run, home).install(spec());
     expect(calls).toEqual([
       ["systemctl", "--user", "daemon-reload"],
-      ["systemctl", "--user", "enable", "--now", "paddock.service"],
+      ["systemctl", "--user", "enable", "--now", "managers.service"],
     ]);
   });
 
   it("status reports the port recorded in the INSTALLED unit, not today's default", () => {
     const { run } = recorder();
     const backend = createLaunchdBackend(run, home);
-    backend.install(buildSpec({ ...BASE, dataDir: path.join(home, ".paddock"), port: "7299" }));
+    backend.install(buildSpec({ ...BASE, dataDir: path.join(home, ".managers"), port: "7299" }));
 
     const printing = recorder({ stdout: "\tstate = running\n\tpid = 99\n" });
     const state = createLaunchdBackend(printing.run, home).status();
@@ -586,7 +586,7 @@ describe("paddock service: install / uninstall / status flows", () => {
     // a directory the service never writes to. darwin because that is where the
     // log path is a real file rather than journald.
     const { run } = recorder();
-    createLaunchdBackend(run, home).install(buildSpec({ ...BASE, dataDir: path.join(home, ".paddock") }));
+    createLaunchdBackend(run, home).install(buildSpec({ ...BASE, dataDir: path.join(home, ".managers") }));
 
     const printing = recorder({ stdout: "\tstate = running\n\tpid = 99\n" });
     const ctx = contextFor("darwin", home, printing.run);
@@ -604,7 +604,7 @@ describe("paddock service: install / uninstall / status flows", () => {
    *
    * Upgrading the package rewrites no unit file, so the fix only lands when
    * someone re-runs `install` — and nobody re-runs install for a service that
-   * looks fine. The symptom is Paddock absent one morning with a clean log, and
+   * looks fine. The symptom is Managers absent one morning with a clean log, and
    * `status` is the one place that can connect the two.
    */
   it("status warns when the INSTALLED unit predates the always-restart fix (#872)", async () => {
@@ -620,7 +620,7 @@ describe("paddock service: install / uninstall / status flows", () => {
 
     const stale = await capture(() => runService("status", OPTS, ctx));
     expect(stale).toContain("#872");
-    expect(stale).toContain("paddock service install");
+    expect(stale).toContain("managers service install");
 
     // The control: the unit we write TODAY draws no warning.
     rewrite("Restart=on-failure", "Restart=always");
@@ -658,7 +658,7 @@ describe("paddock service: install / uninstall / status flows", () => {
         backend.install(spec());
 
         expect(backend.unitPath.startsWith(home)).toBe(true);
-        expect(fs.existsSync(path.join(home, ".config/systemd/user/paddock.service"))).toBe(true);
+        expect(fs.existsSync(path.join(home, ".config/systemd/user/managers.service"))).toBe(true);
         // The decoy stands in for the contributor's real config directory.
         expect(fs.readdirSync(decoy)).toEqual([]);
 
@@ -702,7 +702,7 @@ describe("paddock service: install / uninstall / status flows", () => {
 // start / stop / restart (#873)
 // ---------------------------------------------------------------------------
 
-describe("paddock service: start / stop / restart (#873)", () => {
+describe("managers service: start / stop / restart (#873)", () => {
   let home: string;
 
   beforeEach(() => {
@@ -712,11 +712,11 @@ describe("paddock service: start / stop / restart (#873)", () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
-  const spec = () => buildSpec({ ...BASE, dataDir: path.join(home, ".paddock") });
+  const spec = () => buildSpec({ ...BASE, dataDir: path.join(home, ".managers") });
   const ready = async () => "ready" as const;
 
   it("parses each new action, and none of them collides with the `start` VERB", () => {
-    // `paddock start` is a server in this terminal; `paddock service start` is
+    // `managers start` is a server in this terminal; `managers service start` is
     // a request to the supervisor. Dispatch is on argv[0] alone, so the shared
     // word is never ambiguous — but it is exactly the kind of thing that breaks
     // silently, so it is pinned.
@@ -728,11 +728,11 @@ describe("paddock service: start / stop / restart (#873)", () => {
       });
     }
     expect(parseCommand(["start"])).toEqual({ verb: "start", opts: parseArgs([]) });
-    expect(SERVICE_USAGE).toContain("paddock service restart");
+    expect(SERVICE_USAGE).toContain("managers service restart");
   });
 
   it("launchd start BOOTSTRAPS rather than `launchctl start`", () => {
-    // `stop` boots the job out, so a stopped Paddock is absent from the domain
+    // `stop` boots the job out, so a stopped Managers is absent from the domain
     // entirely — `launchctl start` on a label launchd does not know fails.
     const { run, calls } = recorder();
     const backend = createLaunchdBackend(run, home);
@@ -779,7 +779,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
   });
 
   it("systemd start/stop/restart use the verbs, and never touch enable/disable", () => {
-    // enable/disable decide whether Paddock returns at the NEXT login, which is
+    // enable/disable decide whether Managers returns at the NEXT login, which is
     // a different question from whether it is running now. `uninstall` is the
     // only command that gets to answer both.
     const { run, calls } = recorder();
@@ -800,7 +800,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
   });
 
   it("systemd surfaces the manager's own words rather than claiming success", () => {
-    const { run } = recorder({ status: 5, stderr: "Failed to start paddock.service: Unit not found." });
+    const { run } = recorder({ status: 5, stderr: "Failed to start managers.service: Unit not found." });
     expect(() => createSystemdBackend(run, home).start()).toThrow(/Unit not found/);
   });
 
@@ -809,7 +809,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
     const ctx = { ...contextFor("linux", home, run), checkReady: ready };
     return capture(() => runService("start", OPTS, ctx)).then((out) => {
       expect(out).toContain("not installed as a service");
-      expect(out).toContain("paddock service install");
+      expect(out).toContain("managers service install");
       expect(calls).toEqual([]);
     });
   });
@@ -838,7 +838,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
     );
 
     expect(out).toContain("still installed");
-    expect(out).toContain("paddock service start");
+    expect(out).toContain("managers service start");
     expect(active.calls).toContainEqual(["systemctl", "--user", "stop", SYSTEMD_UNIT]);
     // The distinction from `uninstall`, and the whole reason `stop` exists.
     expect(fs.existsSync(path.join(home, ".config", "systemd", "user", SYSTEMD_UNIT))).toBe(true);
@@ -867,7 +867,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
    */
   it("restart claims success only after the URL answers", async () => {
     const { run } = recorder();
-    createSystemdBackend(run, home).install(buildSpec({ ...BASE, dataDir: path.join(home, ".paddock"), port: "7299" }));
+    createSystemdBackend(run, home).install(buildSpec({ ...BASE, dataDir: path.join(home, ".managers"), port: "7299" }));
     const active = recorder({ stdout: "active" });
 
     const good = await capture(() =>
@@ -876,7 +876,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
         checkReady: ready,
       }),
     );
-    expect(good).toContain("✓ Paddock is running");
+    expect(good).toContain("✓ Managers is running");
     // The port comes from the INSTALLED unit, not from today's default.
     expect(good).toContain("http://127.0.0.1:7299");
 
@@ -888,7 +888,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
     );
     expect(bad).not.toContain("✓");
     expect(bad).toContain("did not");
-    expect(bad).toContain("paddock service status");
+    expect(bad).toContain("managers service status");
   });
 });
 
@@ -896,7 +896,7 @@ describe("paddock service: start / stop / restart (#873)", () => {
 // install: progress, and a success line that has been checked (#861)
 // ---------------------------------------------------------------------------
 
-describe("paddock service: install progress + readiness (#861)", () => {
+describe("managers service: install progress + readiness (#861)", () => {
   let home: string;
 
   beforeEach(() => {
@@ -938,7 +938,7 @@ describe("paddock service: install progress + readiness (#861)", () => {
       console.log = original;
     }
 
-    expect(printedBeforeInstall ?? "").toMatch(/Installing the LaunchAgent and starting Paddock/);
+    expect(printedBeforeInstall ?? "").toMatch(/Installing the LaunchAgent and starting Managers/);
     // macOS's Background-Task-Management approval is most of the delay and is
     // out of our control, so it gets named rather than waited out in silence.
     expect(printedBeforeInstall ?? "").toMatch(/macOS may take a few seconds/);
@@ -951,7 +951,7 @@ describe("paddock service: install progress + readiness (#861)", () => {
         checkReady: ready,
       }),
     );
-    expect(out).toMatch(/Installing the user service and starting Paddock/);
+    expect(out).toMatch(/Installing the user service and starting Managers/);
     expect(out).not.toContain("LaunchAgent");
     // The macOS-only caveat must not follow the unit onto Linux.
     expect(out).not.toContain("macOS");
@@ -971,8 +971,8 @@ describe("paddock service: install progress + readiness (#861)", () => {
         checkReady: ready,
       }),
     );
-    expect(good).toMatch(/✓ Paddock is installed as a systemd --user service, and running at/);
-    expect(good).toContain("Waiting for http://127.0.0.1:7233 to answer…");
+    expect(good).toMatch(/✓ Managers is installed as a systemd --user service, and running at/);
+    expect(good).toContain("Waiting for http://127.0.0.1:7234 to answer…");
 
     const bad = await capture(() =>
       runService("install", OPTS, {
@@ -1025,8 +1025,8 @@ describe("paddock service: install progress + readiness (#861)", () => {
       "Logs: ",
       "LOG IN, not when the machine boots",
       "loginctl enable-linger",
-      "paddock service status",
-      "paddock service uninstall",
+      "managers service status",
+      "managers service uninstall",
     ]) {
       expect(out).toContain(expected);
     }
@@ -1068,7 +1068,7 @@ describe("paddock service: install progress + readiness (#861)", () => {
   });
 });
 
-describe("paddock service: refusals", () => {
+describe("managers service: refusals", () => {
   const ctx = {
     platform: "darwin" as NodeJS.Platform,
     nodePath: BASE.nodePath,

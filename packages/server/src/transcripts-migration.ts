@@ -1193,7 +1193,7 @@ async function collectMemoryCollisions(
     slug,
     message:
       `${collisions.length / 2} agent-memory file(s) already exist in the host store. ` +
-      `Nothing in your own ~/.claude is ever overwritten: Paddock's copies are set ` +
+      `Nothing in your own ~/.claude is ever overwritten: Managers' copies are set ` +
       `aside under ${path.join(path.dirname(chatsDir), PRESERVE_DIR_NAME, "memory")} ` +
       `for you to merge by hand.`,
     paths: collisions,

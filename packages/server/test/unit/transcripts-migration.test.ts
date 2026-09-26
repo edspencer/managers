@@ -101,7 +101,7 @@ describe("own → host migration preview (#882)", () => {
       envShadowed: false,
       projects,
       userHome,
-      configPath: path.join(tmp, "paddock.config.yaml"),
+      configPath: path.join(tmp, "managers.config.yaml"),
       configVersion: "v1",
       ...over,
     };

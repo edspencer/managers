@@ -45,10 +45,10 @@ export interface PaddockSchedule {
   resume_session?: boolean;
   /**
    * PADDOCK-ONLY convenience (DD-2): a git-tracked, keeper-editable prompt file
-   * under the project's `.paddock/schedules/` dir (e.g. `"daily-manager.md"`),
+   * under the project's `.managers/schedules/` dir (e.g. `"daily-manager.md"`),
    * relative to that dir. Read at fire time and forwarded as the schedule's
    * `prompt`. NEVER forwarded into the herdctl config (kept pure). Traversal
-   * outside `.paddock/schedules/` and non-`.md` names are rejected.
+   * outside `.managers/schedules/` and non-`.md` names are rejected.
    */
   promptFile?: string;
 }

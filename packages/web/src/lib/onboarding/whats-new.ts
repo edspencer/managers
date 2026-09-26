@@ -41,7 +41,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: "0-71-2-service-control",
     version: "0.71.2",
     title: "Service control",
-    body: "An installed Paddock service restarts after any stop rather than only after a crash, and paddock service gained start, stop and restart, which wait for the URL to answer before claiming success.",
+    body: "An installed Managers service restarts after any stop rather than only after a crash, and managers service gained start, stop and restart, which wait for the URL to answer before claiming success.",
     href: `${WHATS_NEW_PAGE}#0712--service-control`,
   },
   {
@@ -111,7 +111,7 @@ export const WHATS_NEW: WhatsNewEntry[] = [
     id: "0-66-0-config-screen-and-port",
     version: "0.66.0",
     title: "Config screen, and a new default port",
-    body: "The instance Config screen gained a section rail, a Modified-only lens and a filter that matches environment variable names — and the default port moved from 4000 to 7233.",
+    body: "The instance Config screen gained a section rail, a Modified-only lens and a filter that matches environment variable names — and the default port moved from 4000 to 7234.",
     href: `${WHATS_NEW_PAGE}#0660--config-screen-and-a-new-default-port`,
   },
 ];

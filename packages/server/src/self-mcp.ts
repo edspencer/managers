@@ -1,7 +1,7 @@
 /**
  * Paddock self-management MCP — assembly root (issue #214).
  *
- * Exposes the `paddock_manage` tools that let a keeper agent inspect and drive
+ * Exposes the `managers` tools that let a keeper agent inspect and drive
  * Paddock itself: enumerate projects/chats + read transcripts (READ, always on),
  * create/fork/message/archive chats (WRITE, Phase 2), and manage a project's
  * unified triggers (Epic T / T3). This module is the thin assembly layer — it
@@ -23,7 +23,7 @@
  * agent is a separate `claude -p` process that can't reach one, so herdctl stands
  * up a localhost HTTP MCP bridge instead. Either way herdctl auto-allowlists the
  * server's `mcp__<name>__*` tools. The tools
- * surface to the agent as `mcp__paddock_manage__{list_projects,list_chats,…}`.
+ * surface to the agent as `mcp__managers__{list_projects,list_chats,…}`.
  *
  * The module stays pure: it takes narrow bags of async callbacks (wired to
  * ProjectStore/HerdctlService by the caller) so the trimming/validation logic is
@@ -101,7 +101,7 @@ export {
   coerceBoolean,
 } from "./self-mcp-util.js";
 
-const SERVER_NAME = "paddock_manage";
+const SERVER_NAME = "managers";
 
 type ServerTools = InjectedMcpServerDef["tools"];
 
@@ -109,7 +109,7 @@ type ServerTools = InjectedMcpServerDef["tools"];
 export interface SelfMcpServerDefOptions {
   /**
    * Which tools to OFFER, by bare tool name (`"read_chat"`, not the
-   * `mcp__paddock_manage__` form). Used by the Management API (#312) to hide
+   * `mcp__managers__` form). Used by the Management API (#312) to hide
    * out-of-scope verbs from an external principal. Omit to offer everything.
    */
   toolFilter?: (toolName: string) => boolean;
@@ -451,7 +451,7 @@ function triggerTools(write: SelfMcpWriteContext): ServerTools {
           prompt_file: {
             type: "string",
             description:
-              'A `.md` file under the project\'s `.paddock/triggers/` dir (e.g. "daily.md"), ' +
+              'A `.md` file under the project\'s `.managers/triggers/` dir (e.g. "daily.md"), ' +
               "read at fire time. Alternative to `prompt` for long, version-tracked prompts.",
           },
           session: {

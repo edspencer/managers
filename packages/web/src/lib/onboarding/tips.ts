@@ -101,7 +101,7 @@ export const TIPS: Tip[] = [
   // ── Projects, settings, and the curated notes ─────────────────────────────
   {
     id: "curated-notes-is-the-only-managed-section",
-    title: "CLAUDE.md has a section Paddock owns",
+    title: "CLAUDE.md has a section Managers owns",
     body: "In a managed project the automatic curator rewrites only the body under the ## Curated notes heading. Everything you write above that heading is preserved verbatim, sweep after sweep.",
     href: `${DOCS}/concepts/sweeper/#what-it-produces`,
   },
@@ -114,7 +114,7 @@ export const TIPS: Tip[] = [
   {
     id: "steer-the-curator-with-a-file",
     title: "Steer the curator with one file",
-    body: "Drop a .paddock/hooks/sweep.md into a project and its contents are appended to the curator's prompt every sweep — \"always keep a Glossary section\", say. It is git-tracked, has no UI, and changes only how the notes are written.",
+    body: "Drop a .managers/hooks/sweep.md into a project and its contents are appended to the curator's prompt every sweep — \"always keep a Glossary section\", say. It is git-tracked, has no UI, and changes only how the notes are written.",
     href: `${DOCS}/using/automating-with-hooks/#steer-the-built-in-curator`,
   },
   {
@@ -164,7 +164,7 @@ export const TIPS: Tip[] = [
   {
     id: "trigger-prompts-can-live-in-git",
     title: "A trigger's prompt can live in git",
-    body: "Instead of pasting text into the form, point a trigger at a .md file under the project's .paddock/triggers/ directory. It is read fresh on every firing, so a long runbook prompt can evolve in version control.",
+    body: "Instead of pasting text into the form, point a trigger at a .md file under the project's .managers/triggers/ directory. It is read fresh on every firing, so a long runbook prompt can evolve in version control.",
     href: `${DOCS}/using/automating-with-hooks/#create-an-onarchive-hook`,
   },
   {
@@ -178,19 +178,19 @@ export const TIPS: Tip[] = [
   {
     id: "your-user-claude-md-is-not-loaded",
     title: "Your own CLAUDE.md is not loaded",
-    body: "By default Paddock borrows only your Claude Code login — your ~/.claude/CLAUDE.md, agents, commands and plugins are deliberately left out. Set claude.instructions: host in paddock.config.yaml to bring them in.",
+    body: "By default Managers borrows only your Claude Code login — your ~/.claude/CLAUDE.md, agents, commands and plugins are deliberately left out. Set claude.instructions: host in managers.config.yaml to bring them in.",
     href: `${DOCS}/guides/what-paddock-touches/#turning-sharing-on`,
   },
   {
     id: "host-claude-hooks-do-not-run",
     title: "Your Claude Code hooks do not run here",
-    body: "Hooks configured in your own ~/.claude/settings.json are not executed inside Paddock turns unless you set claude.hooks: host. The rest of that file still applies either way.",
+    body: "Hooks configured in your own ~/.claude/settings.json are not executed inside Managers turns unless you set claude.hooks: host. The rest of that file still applies either way.",
     href: `${DOCS}/configuration/config-file/#hooks`,
   },
   {
     id: "declare-mcp-servers-to-paddock",
-    title: "MCP servers must be declared to Paddock",
-    body: "Running claude mcp add inside the instance attaches a server that can never be called: agents carry an explicit tool allow-list, and a server Paddock did not attach itself is refused silently. Declare it in the top-level mcpServers: block instead.",
+    title: "MCP servers must be declared to Managers",
+    body: "Running claude mcp add inside the instance attaches a server that can never be called: agents carry an explicit tool allow-list, and a server Managers did not attach itself is refused silently. Declare it in the top-level mcpServers: block instead.",
     href: `${DOCS}/configuration/config-file/#mcpservers--the-servers-this-instance-declares-itself`,
   },
   {
@@ -216,7 +216,7 @@ export const TIPS: Tip[] = [
   {
     id: "a-project-is-not-a-sandbox",
     title: "A project is not a security boundary",
-    body: "Project agents have Bash and no confinement, so one can read and edit another project's files and notes. If two bodies of work need different trust levels, that means two Paddock instances, not two projects.",
+    body: "Project agents have Bash and no confinement, so one can read and edit another project's files and notes. If two bodies of work need different trust levels, that means two Managers instances, not two projects.",
     href: `${DOCS}/guides/agent-capabilities/#reach-where-an-agent-can-go`,
   },
   {

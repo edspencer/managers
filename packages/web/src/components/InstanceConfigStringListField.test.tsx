@@ -47,7 +47,7 @@ const JOINED = CATALOG.join(", ");
 
 function configWith(value: unknown): InstanceConfig {
   return {
-    configPath: "/data/paddock.config.yaml",
+    configPath: "/data/managers.config.yaml",
     restartRequired: false,
     configVersion: "v1",
     groups: [
@@ -82,7 +82,7 @@ describe("InstanceConfigForm — `string-list` field (#756)", () => {
     updateInstanceConfig.mockReset();
     updateInstanceConfig.mockResolvedValue({
       restartRequired: true,
-      configPath: "/data/paddock.config.yaml",
+      configPath: "/data/managers.config.yaml",
     });
   });
 

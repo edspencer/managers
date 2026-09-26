@@ -552,7 +552,7 @@ function NoticeBlock({ notice }: { notice: TurnNotice }) {
 function ToolBlock({ tool }: { tool: ToolCall }) {
   // Paddock's own MCP tools (issue #253): a prettified name + brand badge for any
   // `mcp__…` tool (Phase 0), and a structured body parsed from the tool's JSON
-  // output for the `paddock_manage` server (Phase 1). send_file is diverted to
+  // output for the `managers` server (Phase 1). send_file is diverted to
   // SentFileBlock before this, so it never reaches here.
   const mcp = mcpToolInfo(tool.toolName);
   const paddockManage = parsePaddockManage(tool.toolName, tool.output);
@@ -791,7 +791,7 @@ function ToolBlock({ tool }: { tool: ToolCall }) {
             <span className="shrink-0 whitespace-nowrap rounded bg-accent-soft px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-accent">
               {paddockManage && "project" in paddockManage && paddockManage.project
                 ? paddockManage.project
-                : "Paddock"}
+                : "Managers"}
             </span>
           )}
           {mcp.isMcp && !mcp.isPaddock && (

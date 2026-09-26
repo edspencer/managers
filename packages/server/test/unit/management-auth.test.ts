@@ -140,7 +140,7 @@ describe("authenticateManagementRequest", () => {
 
 describe("challengeHeader", () => {
   it("is a bearer challenge, never a redirect", () => {
-    expect(challengeHeader("missing")).toBe('Bearer realm="paddock"');
+    expect(challengeHeader("missing")).toBe('Bearer realm="managers"');
   });
 
   it("marks an invalid token with the RFC 6750 error code", () => {

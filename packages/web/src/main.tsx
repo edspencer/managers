@@ -122,7 +122,7 @@ const router = createBrowserRouter([
       // a second section, which read as two pages in one; that lives at `/config`
       // now (below), so this is the plain workspace tab it should always have been.
       { path: "settings", element: <ProjectView root /> },
-      // Instance-wide admin config (edits `paddock.config.yaml`) — #385. Named
+      // Instance-wide admin config (edits `managers.config.yaml`) — #385. Named
       // for the file it writes, and separate from `/settings` because its
       // lifecycle is different: frozen at boot, so every save is restart-required.
       { path: "config", element: <InstanceConfigPage /> },

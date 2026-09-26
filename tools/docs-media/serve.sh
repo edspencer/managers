@@ -108,4 +108,4 @@ done
 unset MANAGERS_BRAND_NAME MANAGERS_BRAND_LOGO MANAGERS_BRAND_ACCENT || true
 
 echo "docs-media rig: HOME=$HOME DATA=$MANAGERS_DATA_DIR PROJECTS=$MANAGERS_PROJECTS_DIR PORT=${PORT:-unset}"
-exec node "$CLONE/packages/server/dist/cli/paddock.js" --port "${PORT:?PORT not injected}"
+exec node "$CLONE/packages/server/dist/cli/managers.js" --port "${PORT:?PORT not injected}"

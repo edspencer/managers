@@ -1,13 +1,13 @@
 /**
  * `managementApi.clients` config resolution (issue #312 M1).
  *
- * Turns the optional `managementApi` block of `paddock.config.yaml` into the
+ * Turns the optional `managementApi` block of `managers.config.yaml` into the
  * resolved list of external clients the token authenticator will accept, each
  * carrying its {@link ManagementScope}. Pure over an injected environment map so
  * the whole validation matrix is unit-testable without touching `process.env`.
  *
  * ── Why token material is REFERENCED, never inlined ─────────────────────────
- * `paddock.config.yaml` is git-tracked (and editable from the instance Settings
+ * `managers.config.yaml` is git-tracked (and editable from the instance Settings
  * screen, #385). A secret written there leaks into history the moment it is
  * committed, and no later edit removes it. So a client's credential is given as
  * an env REFERENCE (`ref: env:MANAGERS_MCP_TOKEN_MY_LAPTOP`) and an inline value
@@ -367,7 +367,7 @@ export function resolveManagementApiConfig(
     if (embedded === undefined) {
       warnings.push(
         `${where}: token from ${varName} has no \`${TOKEN_PREFIX}<instanceId>_\` prefix, so it is ` +
-          `NOT bound to this instance — the same value would authenticate at any Paddock that ` +
+          `NOT bound to this instance — the same value would authenticate at any Managers that ` +
           `configures it. Prefer a prefixed token.`,
       );
     } else if (instanceId && embedded !== instanceId) {

@@ -5,7 +5,7 @@
  * second one:
  *
  *   per-device override   localStorage, instant, no reload    <- implemented
- *   instance default      paddock.config.yaml / env           <- stubbed
+ *   instance default      managers.config.yaml / env           <- stubbed
  *
  * The instance-default half is a stub on this branch. `MANAGERS_BRAND_ACCENT`
  * already exists and already composes correctly: with no per-device hue picked,

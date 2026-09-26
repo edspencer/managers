@@ -1,5 +1,5 @@
 /**
- * `paddock config show` end to end, through the real entrypoint (#878).
+ * `managers config show` end to end, through the real entrypoint (#878).
  *
  * The unit tests cover parsing, provenance and rendering separately. What only a
  * spawn can cover is the wiring between them: the verb reaching its handler, the
@@ -9,7 +9,7 @@
  *
  * Each case runs with a **constructed** environment rather than an inherited
  * one. That is not tidiness: this box, and any developer machine that runs
- * Paddock, exports `MANAGERS_*` variables that would legitimately relabel these
+ * Managers, exports `MANAGERS_*` variables that would legitimately relabel these
  * rows `env` and turn every assertion below into a false failure.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -22,12 +22,12 @@ import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 
 const run = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const entry = path.resolve(here, "../../src/cli/paddock.ts");
+const entry = path.resolve(here, "../../src/cli/managers.ts");
 const tsx = path.resolve(here, "../../node_modules/.bin/tsx");
 
 let tmp: string;
 
-/** A minimal, deterministic environment — nothing Paddock reads leaks in. */
+/** A minimal, deterministic environment — nothing Managers reads leaks in. */
 const cleanEnv = (dataDir: string): NodeJS.ProcessEnv => ({
   PATH: process.env.PATH ?? "",
   HOME: tmp,
@@ -41,12 +41,12 @@ afterAll(async () => {
   await rmTmpDir(tmp);
 });
 
-describe("paddock config show (#878)", () => {
+describe("managers config show (#878)", () => {
   it("prints every value with the layer it came from, all four distinguishable", async () => {
     const dataDir = path.join(tmp, "layered");
     await fs.mkdir(dataDir, { recursive: true });
     await fs.writeFile(
-      path.join(dataDir, "paddock.config.yaml"),
+      path.join(dataDir, "managers.config.yaml"),
       // A thin file in exactly the shape #878 argues for: a posture, plus the
       // levers this operator disagrees with.
       "profile: yolo\nclaude:\n  hooks: own\nlogLevel: debug\n",
@@ -86,13 +86,13 @@ describe("paddock config show (#878)", () => {
   it("fails, loudly and non-zero, on a config file the server could not boot with", async () => {
     const dataDir = path.join(tmp, "broken");
     await fs.mkdir(dataDir, { recursive: true });
-    await fs.writeFile(path.join(dataDir, "paddock.config.yaml"), "a:\n b: [1,\n  c: 2\n", "utf8");
+    await fs.writeFile(path.join(dataDir, "managers.config.yaml"), "a:\n b: [1,\n  c: 2\n", "utf8");
 
     await expect(
       run(tsx, [entry, "config", "show"], { timeout: 60_000, env: cleanEnv(dataDir) }),
     ).rejects.toMatchObject({
       code: 1,
-      stderr: expect.stringContaining("This is what `paddock start` would fail with too."),
+      stderr: expect.stringContaining("This is what `managers start` would fail with too."),
     });
   }, 70_000);
 });
