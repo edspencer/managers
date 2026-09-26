@@ -332,3 +332,37 @@ describe("api: error handling", () => {
   });
 
 });
+
+describe("api: Managers read routes (M4)", () => {
+  it("addresses the root workspace at /api/root and a project by slug", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ tasks: [], doneMonths: [] }));
+    await api.managersTasks("");
+    await api.managersTasks("acme site", { status: ["awaiting-ed", "open"], objective: "grow" });
+    expect(call(0)[0]).toBe("/api/root/managers/tasks");
+    expect(call(1)[0]).toBe("/api/projects/acme%20site/managers/tasks?status=awaiting-ed%2Copen&objective=grow");
+  });
+
+  it("unwraps single items and passes paging through", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ objective: { id: "grow" } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ log: { entries: [], months: [], nextBefore: null } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ fact: { name: "f" } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ reports: [{ type: "status" }] }));
+    expect(await api.managersObjective("acme", "grow", { before: "2026-09", months: 2 })).toEqual({ id: "grow" });
+    expect(await api.managersLog("acme")).toEqual({ entries: [], months: [], nextBefore: null });
+    expect(await api.managersFact("acme", "f", "root")).toEqual({ name: "f" });
+    expect(await api.managersReports("")).toEqual([{ type: "status" }]);
+    expect(call(0)[0]).toBe("/api/projects/acme/managers/objectives/grow?before=2026-09&months=2");
+    expect(call(1)[0]).toBe("/api/projects/acme/managers/log");
+    expect(call(2)[0]).toBe("/api/projects/acme/managers/memory/facts/f?scope=root");
+    expect(call(3)[0]).toBe("/api/root/managers/reports");
+  });
+
+  it("surfaces a 422 parse_error as an ApiError with its code", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ error: "tasks/open/t-1.md does not parse", code: "parse_error" }, { ok: false, status: 422 }),
+    );
+    const err = await api.managersTask("acme", "t-260920-aaaa").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 422, code: "parse_error" });
+  });
+});

@@ -32,6 +32,7 @@ import type { PaddockEventBus } from "./event-bus.js";
 import type { ChatHandlerContext } from "./ws-context.js";
 import type { TriggerService } from "./triggers.js";
 import { type ChatUsage, toChatUsage } from "./chat-dto.js";
+import type { ManagersState } from "./managers/state.js";
 
 /**
  * The subset of @fastify/multipart's decorated request we use. The plugin
@@ -128,6 +129,11 @@ export interface RouteDeps {
    * {@link TriggerService}. Optional so tests that don't exercise triggers can omit it.
    */
   triggers?: TriggerService;
+  /**
+   * The Managers domain stores (M4). Optional so tests that build routes by hand
+   * can omit it; the managers routes then build their own over `cfg.projectsRoot`.
+   */
+  managers?: ManagersState;
   cfg: PaddockConfig;
 }
 

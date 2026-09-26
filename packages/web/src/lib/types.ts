@@ -1919,3 +1919,224 @@ export interface TranscriptsMigrationRequest {
   /** Report what WOULD happen; move nothing, write nothing. */
   dryRun?: boolean;
 }
+
+// --- Managers domain state (M4, read-only) -----------------------------------
+//
+// Mirrors the server's `…/managers/…` read routes (`routes/managers.ts`). Every
+// `file` is workspace-relative. List responses carry `parseErrors` only when a
+// file was skipped because it would not parse.
+
+/** A file the server skipped because it would not parse or validate. */
+export interface ManagersParseError {
+  file: string;
+  line?: number;
+  error: string;
+}
+
+export type ObjectiveStatus = "active" | "paused" | "done" | "retired";
+
+export interface ObjectiveSummary {
+  id: string;
+  title: string;
+  status: ObjectiveStatus;
+  success: string | null;
+  triggers: string[];
+  created: string | null;
+  updated: string | null;
+  file: string;
+}
+
+export interface Episode {
+  id: string;
+  /** `YYYY-MM-DDTHH:MM:00Z`. */
+  at: string;
+  importance: number;
+  run: string | null;
+  chat: string | null;
+  source: string | null;
+  tags: string[];
+  text: string;
+  refs: string[];
+  /** The objective whose journal holds it; `null` for the project log. */
+  objective: string | null;
+  file: string;
+  line: number;
+}
+
+/** One month-paged slice of a journal or log, newest first. */
+export interface EpisodePage {
+  entries: Episode[];
+  months: string[];
+  /** Pass as `before` for the next (older) page; `null` at the end. */
+  nextBefore: string | null;
+  parseErrors?: ManagersParseError[];
+}
+
+export interface ObjectiveDetail extends ObjectiveSummary {
+  preamble: string;
+  whereWeAre: string;
+  strategy: string;
+  lessons: string;
+  lessonLinks: string[];
+  otherSections: { heading: string; body: string }[];
+  journal: EpisodePage;
+}
+
+export interface PageQuery {
+  /** `YYYY-MM`: only months strictly before this. */
+  before?: string;
+  /** Month files per page (1–24, default 3). */
+  months?: number;
+}
+
+export type TaskStatus = "open" | "doing" | "blocked" | "awaiting-ed" | "done" | "dropped";
+export type TaskSource = "ed" | "manager" | "harvested";
+
+export interface TaskAnswer {
+  by: string | null;
+  at: string | null;
+  choice: string | null;
+  text: string | null;
+}
+
+export interface TaskSummary {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  objective: string | null;
+  source: TaskSource;
+  ask: string | null;
+  options: string[];
+  answer: TaskAnswer | null;
+  github: string[];
+  dispatched: { connection: string | null; project: string | null; chat: string | null; at: string | null }[];
+  shovel_ready: boolean;
+  due: string | null;
+  created: string | null;
+  updated: string | null;
+  location: "open" | "done";
+  /** The `tasks/done/` month, when closed. */
+  month: string | null;
+  file: string;
+}
+
+export interface TaskDetail extends TaskSummary {
+  notes: string;
+  log: string[];
+}
+
+export interface TaskList {
+  tasks: TaskSummary[];
+  /** Closed-task months on disk, newest first. */
+  doneMonths: string[];
+  parseErrors?: ManagersParseError[];
+}
+
+export interface TaskQuery {
+  status?: TaskStatus[];
+  objective?: string;
+  /** Read this `YYYY-MM` done month instead of the open tasks. */
+  month?: string;
+}
+
+export type MemoryScope = "root" | "project";
+export type FactType = "user" | "feedback" | "project" | "reference" | "pattern" | "playbook";
+
+export interface MemoryIndex {
+  scope: MemoryScope;
+  file: string;
+  preamble: string;
+  index: string;
+}
+
+export interface FactSummary {
+  name: string;
+  description: string | null;
+  type: FactType;
+  since: string | null;
+  until: string | null;
+  confidence: "low" | "medium" | "high" | null;
+  evidence: string[];
+  scope: MemoryScope;
+  file: string;
+}
+
+export interface FactDetail extends FactSummary {
+  body: string;
+  history: string[];
+}
+
+export interface PlaybookSummary {
+  name: string;
+  description: string | null;
+  scope: MemoryScope;
+  file: string;
+}
+
+export interface MemoryView {
+  indexes: Record<MemoryScope, MemoryIndex | null>;
+  facts: FactSummary[];
+  playbooks: PlaybookSummary[];
+  parseErrors?: (ManagersParseError & { scope: MemoryScope })[];
+}
+
+export type RunStatus = "running" | "succeeded" | "failed" | "cancelled";
+
+export interface RunRecord {
+  id: string;
+  trigger: string | null;
+  kind: "wake" | "report" | "consolidation" | "event";
+  objective: string | null;
+  status: RunStatus;
+  started: string | null;
+  finished: string | null;
+  sessionId: string | null;
+  model: string | null;
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number } | null;
+  episodes: string[];
+  tasksTouched: string[];
+  reports: string[];
+  artifacts: { kind: string | null; ref: string | null; note: string | null; at: string | null }[];
+  mcpCalls: Record<string, Record<string, number>>;
+  expect: { kind: "episode" | "report" | "artifact" | "none"; within: string | null; report: string | null; description: string | null } | null;
+  expectResult: "met" | "missing" | "n/a" | null;
+  briefing: { path: string | null; sha256: string | null } | null;
+  error: string | null;
+  file: string;
+}
+
+export interface RunPage {
+  runs: RunRecord[];
+  months: string[];
+  nextBefore: string | null;
+  parseErrors?: ManagersParseError[];
+}
+
+export interface RunQuery extends PageQuery {
+  trigger?: string;
+  status?: RunStatus;
+}
+
+export interface ReportDoc {
+  type: string;
+  /** `null` for `current.md`. */
+  date: string | null;
+  file: string;
+  frontmatter: Record<string, unknown>;
+  title: string | null;
+  body: string;
+  updated: string;
+  parseError: ManagersParseError | null;
+}
+
+export interface ReportTypeSummary {
+  type: string;
+  current: Omit<ReportDoc, "body"> | null;
+  dates: string[];
+}
+
+export interface ReportTypeDetail {
+  type: string;
+  current: ReportDoc | null;
+  dates: string[];
+}

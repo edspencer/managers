@@ -43,10 +43,38 @@ import {
   type TriggerRuntimeResponse,
   type TriggersResponse,
   type UpdateProjectInput,
+  type ObjectiveSummary,
+  type ObjectiveDetail,
+  type EpisodePage,
+  type PageQuery,
+  type TaskList,
+  type TaskQuery,
+  type TaskDetail,
+  type MemoryView,
+  type MemoryScope,
+  type FactDetail,
+  type RunPage,
+  type RunQuery,
+  type RunRecord,
+  type ReportTypeSummary,
+  type ReportTypeDetail,
+  type ReportDoc,
+  type ManagersParseError,
 } from "./types";
 import { apiBase } from "../routes/ProjectView/urls";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
+
+/** `?a=1&b=2` from the defined entries (empty string when none). */
+function qs(params: Record<string, string | number | undefined>): string {
+  const u = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") u.set(k, String(v));
+  const s = u.toString();
+  return s ? `?${s}` : "";
+}
+
+/** `<workspace api base>/managers` — the Managers read routes (M4). */
+const mgr = (slug: string) => `${apiBase(slug)}/managers`;
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -1080,5 +1108,83 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+
+  // --- Managers domain state (M4, read-only) -------------------------------
+  //
+  // Every call takes a workspace key: `""` is the root (Home) workspace. A list
+  // never fails on one bad file — it comes back in `parseErrors` — while a
+  // single-item read of a file that will not parse is an `ApiError` 422
+  // (`code: "parse_error"`).
+
+  async managersObjectives(
+    slug: string,
+  ): Promise<{ objectives: ObjectiveSummary[]; parseErrors?: ManagersParseError[] }> {
+    return req(`${mgr(slug)}/objectives`);
+  },
+
+  /** One objective with a page of its journal (see {@link PageQuery}). */
+  async managersObjective(slug: string, id: string, page: PageQuery = {}): Promise<ObjectiveDetail> {
+    const { objective } = await req<{ objective: ObjectiveDetail }>(
+      `${mgr(slug)}/objectives/${encodeURIComponent(id)}${qs({ before: page.before, months: page.months })}`,
+    );
+    return objective;
+  },
+
+  /** The workspace's project-level episodic log, paged by month. */
+  async managersLog(slug: string, page: PageQuery = {}): Promise<EpisodePage> {
+    const { log } = await req<{ log: EpisodePage }>(
+      `${mgr(slug)}/log${qs({ before: page.before, months: page.months })}`,
+    );
+    return log;
+  },
+
+  async managersTasks(slug: string, q: TaskQuery = {}): Promise<TaskList> {
+    return req<TaskList>(
+      `${mgr(slug)}/tasks${qs({ status: q.status?.join(","), objective: q.objective, month: q.month })}`,
+    );
+  },
+
+  async managersTask(slug: string, id: string): Promise<TaskDetail> {
+    const { task } = await req<{ task: TaskDetail }>(`${mgr(slug)}/tasks/${encodeURIComponent(id)}`);
+    return task;
+  },
+
+  async managersMemory(slug: string): Promise<MemoryView> {
+    return req<MemoryView>(`${mgr(slug)}/memory`);
+  },
+
+  async managersFact(slug: string, name: string, scope?: MemoryScope): Promise<FactDetail> {
+    const { fact } = await req<{ fact: FactDetail }>(
+      `${mgr(slug)}/memory/facts/${encodeURIComponent(name)}${qs({ scope })}`,
+    );
+    return fact;
+  },
+
+  async managersRuns(slug: string, q: RunQuery = {}): Promise<RunPage> {
+    return req<RunPage>(
+      `${mgr(slug)}/runs${qs({ before: q.before, months: q.months, trigger: q.trigger, status: q.status })}`,
+    );
+  },
+
+  async managersRun(slug: string, id: string): Promise<RunRecord> {
+    const { run } = await req<{ run: RunRecord }>(`${mgr(slug)}/runs/${encodeURIComponent(id)}`);
+    return run;
+  },
+
+  async managersReports(slug: string): Promise<ReportTypeSummary[]> {
+    const { reports } = await req<{ reports: ReportTypeSummary[] }>(`${mgr(slug)}/reports`);
+    return reports;
+  },
+
+  async managersReport(slug: string, type: string): Promise<ReportTypeDetail> {
+    return req<ReportTypeDetail>(`${mgr(slug)}/reports/${encodeURIComponent(type)}`);
+  },
+
+  async managersDatedReport(slug: string, type: string, date: string): Promise<ReportDoc> {
+    const { report } = await req<{ report: ReportDoc }>(
+      `${mgr(slug)}/reports/${encodeURIComponent(type)}/${encodeURIComponent(date)}`,
+    );
+    return report;
   },
 };

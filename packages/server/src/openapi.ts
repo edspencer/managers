@@ -34,6 +34,11 @@ export const OPENAPI_TAGS = [
     description: "Unified schedule/event/webhook triggers: CRUD, runtime status, run-now.",
   },
   {
+    name: "Managers",
+    description:
+      "Managers domain state per workspace (root and project): objectives with journals, the episodic log, tasks, memory, runs and reports.",
+  },
+  {
     name: "Chats",
     description:
       "Chat (session) lifecycle: list, read messages, usage/context, fork, archive, star, rename, delete, run history, promote. NOTE: sending a message is WebSocket-only (GET /ws).",

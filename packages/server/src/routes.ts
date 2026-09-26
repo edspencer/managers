@@ -20,6 +20,8 @@
  *              probe + plan) and POST /api/transcripts/migration (execute)
  *              (instance-level, #882)
  *   triggers — project triggers CRUD + runtime + run-now
+ *   managers — Managers domain state, read-only in M4 (objectives, log, tasks,
+ *              memory, runs, reports), all under `…/managers/…`
  *   chats    — workspace chat lifecycle (list/runs/usage/create/messages/
  *              subagents/context/delete/rename/fork/archive/star/seen/promote)
  */
@@ -34,6 +36,7 @@ import { registerMcpRoutes } from "./routes/mcp.js";
 import { registerDiscoverRoutes } from "./routes/discover.js";
 import { registerTranscriptsRoutes } from "./routes/transcripts.js";
 import { mountWorkspaceRoutes } from "./routes/workspace-mount.js";
+import { registerManagerWorkspaceRoutes } from "./routes/managers.js";
 
 // Re-exported for callers/tests that reference the dep bag or the byte helper by
 // name; the definitions now live in the extracted modules (issue #403).
@@ -58,6 +61,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
     registerGitWorkspaceRoutes(scoped, ctx);
     registerTriggerWorkspaceRoutes(scoped, ctx);
     registerMetaWorkspaceRoutes(scoped, ctx);
+    registerManagerWorkspaceRoutes(scoped, ctx);
   });
   // #312 M1: the external Management API gate. Registered unconditionally (it
   // answers 404 when unconfigured) so an unconfigured `/mcp` can never fall
