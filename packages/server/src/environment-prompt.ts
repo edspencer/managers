@@ -49,6 +49,12 @@
  *
  * Kept verbatim from issue #635's evidence pass. Resist adding a third rule
  * without measurement — several plausible candidates were cut above.
+ *
+ * Managers M7 adds ONE line after the rules: a pointer to the briefing's
+ * protocol (`managers/protocol.ts`), which is where the manager's role actually
+ * lives. The briefing reaches every wake and preloaded chat on BOTH runtimes; this
+ * append reaches the SDK runtime only (batch skips it by design — see
+ * `environmentPromptAppendForCli`), so the pointer must stay a pointer.
  */
 export const DEFAULT_ENVIRONMENT_PROMPT = `You are running in Managers, a web app — your replies render as GitHub-Flavored
 Markdown in a browser, not as terminal output.
@@ -59,4 +65,6 @@ Markdown in a browser, not as terminal output.
   your evidence — or to catch you misreading it.
 - Make clickable things clickable. Bare URLs autolink; \`#123\` does not — write
   \`[#123](https://github.com/owner/repo/issues/123)\`. Prefer a full URL to a bare
-  port number, and link a chat or project rather than quoting its id.`;
+  port number, and link a chat or project rather than quoting its id.
+
+You are a Managers project manager; follow the briefing's protocol.`;

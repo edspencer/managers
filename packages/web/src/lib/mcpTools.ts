@@ -122,7 +122,13 @@ export type PaddockManage =
   | { tool: "read_task"; project: string; task: PmTask }
   | { tool: "read_objective"; project: string; objective: PmObjective }
   | { tool: "list_memory"; project: string; facts: number; playbooks: number }
-  | { tool: "list_alerts"; project: string; count: number; alerts: PmAlert[] };
+  | { tool: "list_alerts"; project: string; count: number; alerts: PmAlert[] }
+  | { tool: "get_briefing"; project: string; objective: string | null; sections: PmBriefingSection[]; chars: number };
+
+export interface PmBriefingSection {
+  name: string;
+  chars: number;
+}
 
 export interface PmAlert {
   id: string;
@@ -353,6 +359,17 @@ export function parsePaddockManage(
       const alerts = data.alerts as PmAlert[];
       return { tool, project: String(data.project ?? ""), count: num(data.count, alerts.length), alerts };
     }
+    case "get_briefing": {
+      if (!Array.isArray(data.sections)) return null;
+      const sections = (data.sections as PmBriefingSection[]).map((s) => ({ name: String(s.name), chars: num(s.chars, 0) }));
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        objective: str(data.objective) ?? null,
+        sections,
+        chars: typeof data.text === "string" ? data.text.length : sections.reduce((n, s) => n + s.chars, 0),
+      };
+    }
     default:
       return null;
   }
@@ -401,5 +418,7 @@ export function paddockManageSummary(pm: PaddockManage): string {
       return `${pm.facts} ${pm.facts === 1 ? "fact" : "facts"}, ${pm.playbooks} ${pm.playbooks === 1 ? "playbook" : "playbooks"}`;
     case "list_alerts":
       return pm.count === 0 ? "No alerts" : `${pm.count} ${pm.count === 1 ? "alert" : "alerts"}`;
+    case "get_briefing":
+      return `${pm.sections.length} sections · ${pm.chars.toLocaleString("en-US")} chars${pm.objective ? ` · ${pm.objective}` : ""}`;
   }
 }

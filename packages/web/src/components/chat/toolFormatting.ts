@@ -100,6 +100,7 @@ export function paddockMcpIcon(tool: string) {
       return ListIcon;
     case "list_memory":
     case "memory_op":
+    case "get_briefing":
       return SparkIcon;
     default:
       // list_chats, read_chat, and any future paddock tool.

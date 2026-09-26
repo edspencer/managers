@@ -20,6 +20,7 @@
  * (`invalid` → 400, `not_found` → 404, `conflict` → 409); the MCP layer turns the
  * message into an error tool result.
  */
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
@@ -829,6 +830,28 @@ export class StateWriter {
       await writeFileAtomic(file, YAML.stringify(r.data, { lineWidth: 0 }));
       this.notify(ws, actor, `run start (${input.trigger})`);
       return { id, file: ws.layout.rel(file) };
+    });
+  }
+
+  /**
+   * Keep "what the manager saw" (M7): write the briefing a run was woken with to
+   * the gitignored `.managers/briefings/<run>.md` and note its path and sha256 on
+   * the run record.
+   */
+  async recordBriefing(
+    ws: WriteWorkspace,
+    runId: string,
+    text: string,
+    actor: WriteActor,
+  ): Promise<{ path: string; sha256: string }> {
+    if (!isRunId(runId)) throw invalid(`Invalid run id: ${runId}`);
+    return this.locked(ws, actor, async () => {
+      const abs = path.join(ws.layout.briefingsDir, `${runId}.md`);
+      await writeFileAtomic(abs, text);
+      const briefing = { path: ws.layout.rel(abs), sha256: createHash("sha256").update(text, "utf8").digest("hex") };
+      await this.mutateRun(ws, runId, (known) => ({ ...known, briefing }));
+      this.notify(ws, actor, `run briefing (${runId})`);
+      return briefing;
     });
   }
 

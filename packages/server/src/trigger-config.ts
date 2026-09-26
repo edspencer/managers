@@ -148,6 +148,19 @@ const runSchema = z.object({
    * `stale` alert (no `met` run inside the window).
    */
   expect: triggerExpectSchema.optional(),
+  /**
+   * Managers M7: the wake briefing. A schedule fire is briefed unless this is
+   * `false`; an event (or webhook) fire only when it is set. `objective` names
+   * the objective to brief on in full (it beats the objective's `triggers:` binding).
+   */
+  briefing: z
+    .union([
+      z.literal(false),
+      z.strictObject({
+        objective: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "must be a kebab-case objective id").optional(),
+      }),
+    ])
+    .optional(),
 });
 
 /**

@@ -231,6 +231,13 @@ export const LIST_ALERTS_DESC =
   "schedule is overdue) and `run-stuck` (running for over 2 hours). Computed fresh by the " +
   "server; read-only. Each has a stable `id` (`<kind>:<trigger>`), `severity` and `message`.";
 
+export const GET_BRIEFING_DESC =
+  "Get this project's BRIEFING — the same deterministic document a scheduled wake starts " +
+  "from: the protocol, shared and project memory, objectives, open tasks (awaiting-ed first), " +
+  "answers since the last wake, recent runs, alerts, the recent log and OVERVIEW.md. Built " +
+  "fresh by the server; read-only. Pass `objective` to brief on one objective in full, or " +
+  "`trigger` to see what a wake of that trigger would see. Returns `{ text, sections }`.";
+
 export const RECORD_EPISODE_DESC =
   "Record an EPISODE — one thing that happened or that you did — in this project's episodic " +
   "log, or in an objective's journal when `objective` is given. Episodes are append-only and " +

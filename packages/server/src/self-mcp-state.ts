@@ -1,13 +1,13 @@
 /**
  * The Managers state tools on the `managers` MCP server (M5, plan §2.3).
  *
- *   state-read   list_objectives, read_objective, list_tasks, read_task, list_memory, list_alerts
+ *   state-read   get_briefing, list_objectives, read_objective, list_tasks, read_task, list_memory, list_alerts
  *   state-write  record_episode, upsert_task, update_objective, write_report, record_artifact
  *   memory       memory_op (a stub until M14; refused unless Ed is present)
  *
  *   list_alerts  (M6) the dead-man's-switch alerts, computed fresh
  *
- * `get_briefing` (M7) is in the policy catalogue but has no tool yet.
+ *   get_briefing (M7) the deterministic wake briefing, built fresh
  *
  * The block is injected on EVERY keeper and trigger turn (unlike the chat-read
  * and spawn-write blocks, which keep their opt-in gates): the tools start no
@@ -36,6 +36,7 @@ import {
   READ_TASK_DESC,
   LIST_MEMORY_DESC,
   LIST_ALERTS_DESC,
+  GET_BRIEFING_DESC,
   RECORD_EPISODE_DESC,
   UPSERT_TASK_DESC,
   UPDATE_OBJECTIVE_DESC,
@@ -246,6 +247,27 @@ export function stateTools(state: ManagementStateOps): ServerTools {
         const project = projectOf(state, args);
         const alerts = await state.listAlerts(project);
         return ok({ project, count: alerts.length, alerts });
+      }),
+    },
+
+    {
+      name: "get_briefing",
+      description: GET_BRIEFING_DESC,
+      inputSchema: {
+        type: "object",
+        properties: {
+          objective: { type: "string", description: "Objective id to brief on in full (kebab-case)." },
+          trigger: { type: "string", description: "Trigger name: brief as a wake of that trigger would." },
+          ...projectProp,
+        },
+      },
+      handler: guarded("building the briefing", async (args) => {
+        const project = projectOf(state, args);
+        const objective = optStr(args.objective)?.trim() || undefined;
+        const trigger = optStr(args.trigger)?.trim() || undefined;
+        if (objective !== undefined && !isName(objective)) return fail(`Error: objective must be a kebab-case id, got ${JSON.stringify(objective)}`);
+        const b = await state.getBriefing(project, { objective, trigger });
+        return ok({ project, objective: b.objective, sections: b.sections, text: b.text });
       }),
     },
 

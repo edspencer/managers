@@ -65,6 +65,8 @@ import {
 import type { TurnOrigin } from "./run-provenance.js";
 import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
 import { loadAlerts } from "./managers/alerts.js";
+import { briefingForWorkspace } from "./managers/briefing.js";
+import { boundObjective } from "./managers/trigger-runs.js";
 
 /**
  * Frame an agent-initiated FORK kickoff (issue #214 Phase 2). A fork inherits the
@@ -221,6 +223,25 @@ export function buildManagementOps(
             project,
             schedules: () => deps.herdctl.listAgentSchedules(project),
           });
+        },
+        loadBriefing: async (slug, o) => {
+          const project = await deps.projects.get(slug);
+          const trigger = o.trigger ? project.triggers?.[o.trigger] : undefined;
+          return briefingForWorkspace(
+            { state: deps.managers!, projects: deps.projects, herdctl: deps.herdctl },
+            slug,
+            {
+              kind: o.kind ?? "wake",
+              trigger: o.trigger ?? null,
+              objective:
+                o.objective ??
+                (trigger && o.trigger
+                  ? await boundObjective({ state: deps.managers!, dir: project.dir, trigger: { name: o.trigger, ...trigger } })
+                  : null),
+              now: new Date(),
+            },
+            project,
+          );
         },
       })
     : undefined;
@@ -601,6 +622,7 @@ function enforceStatePolicy(
     readTask: (p, id) => readGuard("read_task", p, () => s.readTask(p, id)),
     listMemory: (p) => readGuard("list_memory", p, () => s.listMemory(p)),
     listAlerts: (p) => readGuard("list_alerts", p, () => s.listAlerts(p)),
+    getBriefing: (p, o) => readGuard("get_briefing", p, () => s.getBriefing(p, o)),
     recordEpisode: (p, i) => writeGuard("record_episode", p, () => s.recordEpisode(p, i)),
     upsertTask: (p, i) => writeGuard("upsert_task", p, () => s.upsertTask(p, i)),
     updateObjective: (p, i) => writeGuard("update_objective", p, () => s.updateObjective(p, i)),

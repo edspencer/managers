@@ -305,6 +305,17 @@ export function PaddockManageBody({ data }: { data: PaddockManage }) {
         </div>
       );
 
+    case "get_briefing":
+      return (
+        <div className={wrap}>
+          {data.sections.map((s) => (
+            <Row key={s.name} label={s.name}>
+              {s.chars.toLocaleString("en-US")} chars
+            </Row>
+          ))}
+        </div>
+      );
+
     case "list_alerts":
       return (
         <div className={wrap}>

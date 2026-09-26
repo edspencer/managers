@@ -14,8 +14,10 @@
  *   GET managers/memory                 MEMORY.md + facts + playbooks, root and project, scope-tagged
  *   GET managers/memory/facts/:name     (?scope=root|project)
  *   GET managers/runs                   paged by month (?before&months&trigger&status)
- *   GET managers/runs/:id               the record + durationSeconds, chat, and the alerts naming it (M6)
+ *   GET managers/runs/:id               the record + durationSeconds, chat, the alerts naming it (M6)
+ *                                       and briefingText, the briefing the run was woken with (M7)
  *   GET managers/alerts                 the dead-man's-switch alerts, computed fresh (M6)
+ *   GET managers/briefing               the wake briefing preview (M7) (?objective=&trigger=&kind=wake|chat)
  *   GET managers/reports                every report type with its current report's metadata
  *   GET managers/reports/:type          current report + dated list
  *   GET managers/reports/:type/:date
@@ -45,6 +47,10 @@ import { sendProjectError } from "../route-errors.js";
 import type { RouteCtx } from "../route-context.js";
 import { ManagersState } from "../managers/state.js";
 import { loadAlerts, type Alert } from "../managers/alerts.js";
+import { briefingForWorkspace } from "../managers/briefing.js";
+import { boundObjective } from "../managers/trigger-runs.js";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { isDate, isMonth, isName, isRunId, isTaskId, type WorkspaceLayout } from "../managers/layout.js";
 import { RUN_STATUSES, type TaskStatus } from "../managers/schemas.js";
 import { MAX_PAGE_MONTHS, type PageOpts } from "../managers/episodes-store.js";
@@ -493,11 +499,19 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const start = got.started ? Date.parse(got.started) : NaN;
         const end = got.finished ? Date.parse(got.finished) : NaN;
         const alerts = (await alertsFor(req.params.slug).catch(() => [] as Alert[])).filter((a) => a.runId === id);
+        // M7: the briefing the run was woken with. Only ever read from the
+        // workspace's own `.managers/briefings/`, whatever the record says.
+        let briefingText: string | null = null;
+        const bp = got.briefing?.path;
+        if (bp && /^\.managers\/briefings\/r-[a-z0-9-]+\.md$/.test(bp)) {
+          briefingText = await fs.readFile(path.join(layout.dir, bp), "utf8").catch(() => null);
+        }
         return {
           run: got,
           durationSeconds: Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : null,
           chat: got.sessionId ? { project: req.params.slug, sessionId: got.sessionId } : null,
           alerts,
+          briefingText,
         };
       }),
   );
@@ -534,6 +548,55 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       },
     },
     (req, reply) => withWorkspace(req, reply, async () => alertsFor(req.params.slug)),
+  );
+
+  // --- briefing (M7) ----------------------------------------------------------------------
+
+  app.get<{ Params: { slug: string }; Querystring: Q }>(
+    "/managers/briefing",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Preview the wake briefing",
+        description:
+          "The deterministic briefing a wake starts from (the same builder the fire path, the new-chat preload " +
+          "and the `get_briefing` tool use), built fresh with no run id: `{ text, sections: [{ name, chars }], " +
+          "objective }`. `?objective=` briefs on one objective in full; `?trigger=` briefs as a wake of that " +
+          "trigger would (its bound objective, its runs); `?kind=chat` is the new-chat preload. 400 for a " +
+          "malformed objective or kind, 404 for an unknown trigger.",
+        params: paramsSchema(),
+        querystring: {
+          type: "object",
+          properties: {
+            objective: { type: "string", description: "Objective id to brief on in full." },
+            trigger: { type: "string", description: "Trigger name to brief as." },
+            kind: { type: "string", description: "`wake` (default) or `chat`." },
+          },
+        },
+        response: ok200("`{ text, sections, objective }`."),
+      },
+    },
+    (req, reply) =>
+      withWorkspace(req, reply, async () => {
+        const q = req.query;
+        if (q.objective !== undefined && !isName(q.objective)) throw new Invalid(`Invalid objective id: ${q.objective}`);
+        if (q.kind !== undefined && q.kind !== "wake" && q.kind !== "chat") {
+          throw new Invalid(`kind must be wake or chat, got ${JSON.stringify(q.kind)}`);
+        }
+        const project = await projects.get(req.params.slug);
+        const trig = q.trigger ? project.triggers?.[q.trigger] : undefined;
+        if (q.trigger && !trig) return notFound(reply, `No such trigger: ${q.trigger}`);
+        const objective =
+          q.objective ??
+          (trig && q.trigger ? await boundObjective({ state, dir: project.dir, trigger: { name: q.trigger, ...trig } }) : null);
+        const b = await briefingForWorkspace(
+          { state, projects, herdctl: ctx.herdctl },
+          req.params.slug,
+          { kind: (q.kind as "wake" | "chat" | undefined) ?? "wake", trigger: q.trigger ?? null, objective, now: new Date() },
+          project,
+        );
+        return { text: b.text, sections: b.sections, objective: b.objective };
+      }),
   );
 
   // --- reports ---------------------------------------------------------------------------

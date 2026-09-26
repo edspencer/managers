@@ -628,6 +628,7 @@ export const SELF_MCP_STATE_TOOL_NAMES = {
   readTask: `mcp__${SERVER_NAME}__read_task`,
   listMemory: `mcp__${SERVER_NAME}__list_memory`,
   listAlerts: `mcp__${SERVER_NAME}__list_alerts`,
+  getBriefing: `mcp__${SERVER_NAME}__get_briefing`,
   recordEpisode: `mcp__${SERVER_NAME}__record_episode`,
   upsertTask: `mcp__${SERVER_NAME}__upsert_task`,
   updateObjective: `mcp__${SERVER_NAME}__update_objective`,

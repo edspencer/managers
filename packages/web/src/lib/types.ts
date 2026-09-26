@@ -662,6 +662,8 @@ export interface TriggerRun {
   maxTurns?: number;
   /** Managers M6: what a fire is expected to produce (evaluated per run; `within` arms `stale`). */
   expect?: TriggerExpect;
+  /** Managers M7: `false` = no wake briefing; `{objective}` = brief on that objective in full. */
+  briefing?: false | { objective?: string };
 }
 
 export interface TriggerExpect {
@@ -2121,6 +2123,8 @@ export interface RunDetail {
   chat: { project: string; sessionId: string } | null;
   /** The alerts that name this run. */
   alerts: ManagersAlert[];
+  /** M7: the briefing the run was woken with (its `.managers/briefings/<run>.md`), or null. */
+  briefingText: string | null;
 }
 
 export type AlertKind = "run-failed" | "schedule-stalled" | "run-stuck" | "stale" | "artifact-missing";

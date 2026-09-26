@@ -29,7 +29,14 @@ import {
   type TriggerEvent,
 } from "./trigger-config.js";
 import type { ChatHandlerDeps, StartAgentTurn } from "./ws-context.js";
-import { beginTriggerRun } from "./managers/trigger-runs.js";
+import { beginTriggerRun, boundObjective } from "./managers/trigger-runs.js";
+import { briefingForWorkspace, triggerWantsBriefing } from "./managers/briefing.js";
+
+/** How a fire came about, for the briefing's "why woken" line. */
+export interface TriggerFireOpts {
+  /** Replaces the derived reason (e.g. "Run now (manual)"). */
+  why?: string;
+}
 
 /**
  * The context a fired lifecycle event carries into an EVENT trigger's prompt (Epic T /
@@ -54,6 +61,7 @@ export interface TriggerCluster {
     project: Awaited<ReturnType<ChatHandlerDeps["projects"]["get"]>>,
     trigger: TriggerDto,
     ctx?: TriggerEventContext,
+    opts?: TriggerFireOpts,
   ): Promise<string | null>;
   /** Fire every enabled EVENT trigger matching `event` for a project (after-commit). */
   dispatchEventTriggers(slug: string, event: TriggerEvent, ctx: TriggerEventContext): Promise<void>;
@@ -159,6 +167,7 @@ async function fireTriggerForProject(
   project: Awaited<ReturnType<typeof deps.projects.get>>,
   trigger: TriggerDto,
   ctx?: TriggerEventContext,
+  opts: TriggerFireOpts = {},
 ): Promise<string | null> {
   const slug = project.slug;
   const isSchedule = trigger.trigger.type === "schedule";
@@ -167,7 +176,7 @@ async function fireTriggerForProject(
   // unscoped schedule runs as the keeper (project-agent default toolset, unchanged).
   const onOwnAgent = triggerRunsOnOwnAgent(trigger);
   const agentName = onOwnAgent ? triggerAgentName(slug, trigger.name) : keeperAgentName(slug);
-  const prompt = await resolveTriggerPrompt(project, trigger, ctx);
+  const body = await resolveTriggerPrompt(project, trigger, ctx);
 
   // run.session: "resume" accretes into an owned session; "new" starts fresh.
   let resume: string | null = null;
@@ -192,6 +201,42 @@ async function fireTriggerForProject(
         flush: deps.flushManagersCommit,
       })
     : null;
+
+  // Managers M7: brief the wake. The briefing rides in the SAME preload wrapper a
+  // new chat uses, so the sidebar name stays the trigger body (stripPreloadWrapper),
+  // and is kept on disk as "what the manager saw". A briefing that fails to build
+  // never stops the fire: the trigger runs on its bare prompt.
+  let prompt = body;
+  if (deps.managers && triggerWantsBriefing(trigger)) {
+    try {
+      const briefing = await briefingForWorkspace(
+        { state: deps.managers, projects: deps.projects, herdctl: deps.herdctl },
+        slug,
+        {
+          kind: "wake",
+          trigger: trigger.name,
+          runId: run?.runId ?? null,
+          objective: run ? run.objective : await boundObjective({ state: deps.managers, dir: project.dir, trigger }),
+          why: opts.why ?? null,
+          now: new Date(),
+        },
+        project,
+      );
+      prompt = wrapPreload(briefing.text, body);
+      if (run) {
+        await deps.managers.writer
+          .recordBriefing(
+            { key: slug, layout: deps.managers.layout(project.dir) },
+            run.runId,
+            briefing.text,
+            { kind: "agent", name: "manager", author: deps.cfg.botGitAuthor, runId: run.runId },
+          )
+          .catch(() => undefined);
+      }
+    } catch {
+      prompt = body;
+    }
+  }
 
   try {
     const sessionId = await startAgentTurn({
@@ -306,19 +351,38 @@ async function fireTrigger(slug: string, triggerName: string): Promise<string | 
   // a non-existent agent (defence-in-depth — the REST route + run_trigger MCP reject it
   // up front with a clear message; this guards any other caller).
   if (isCuratorTrigger(rec)) return null;
-  return fireTriggerForProject(project, { name: triggerName, agentName: triggerAgentName(slug, triggerName), ...rec });
+  return fireTriggerForProject(
+    project,
+    { name: triggerName, agentName: triggerAgentName(slug, triggerName), ...rec },
+    undefined,
+    { why: "Run now (a manual fire)" },
+  );
 }
 
 /**
- * Compose the OVERVIEW.md + CHANGELOG.md preload block onto `baseMessage` for
- * a NEW chat (issues #1/#188), shared (C2 / #264) by the human New-Chat path
- * and the self-MCP `create_chat` spawn path so both inject the SAME context.
- * Injects only when the project has an OVERVIEW.md (the signal that a sweep
- * has curated real state); when it fires it prepends BOTH the overview
- * (current state) AND the CHANGELOG.md (cross-session history), matching the
- * UI checkbox. Returns `baseMessage` unchanged when there's no overview yet.
+ * Compose the preload block onto `baseMessage` for a NEW chat (issues #1/#188),
+ * shared (C2 / #264) by the human New-Chat path and the self-MCP `create_chat`
+ * spawn path so both inject the SAME context.
+ *
+ * Managers M7: the context is the deterministic CHAT briefing
+ * (`managers/briefing.ts`, kind `chat`) — the same document a wake gets, with no
+ * run or trigger — instead of OVERVIEW.md + CHANGELOG.md. It always has content,
+ * so it always wraps. Without the Managers state bundle (a bare test harness) the
+ * old OVERVIEW + CHANGELOG behaviour stands, including "no overview → unchanged".
  */
 async function composePreloadedPrompt(projectSlug: string, baseMessage: string): Promise<string> {
+  if (deps.managers) {
+    try {
+      const briefing = await briefingForWorkspace(
+        { state: deps.managers, projects: deps.projects, herdctl: deps.herdctl },
+        projectSlug,
+        { kind: "chat", now: new Date() },
+      );
+      return wrapPreload(briefing.text, baseMessage);
+    } catch {
+      // Fall through to the curated-docs preload rather than losing the context.
+    }
+  }
   const overview = await deps.projects.readOverview(projectSlug).catch(() => "");
   if (overview.trim().length === 0) return baseMessage;
   const changelog = await deps.projects.readChangelog(projectSlug).catch(() => "");

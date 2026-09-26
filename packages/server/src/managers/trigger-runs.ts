@@ -20,6 +20,8 @@ import type { RunWrite } from "./schemas.js";
 
 export interface TriggerRunHandle {
   runId: string;
+  /** The objective the run is bound to (see {@link boundObjective}). */
+  objective: string | null;
   onComplete: (r: TurnCompletion) => Promise<void>;
 }
 
@@ -42,10 +44,16 @@ export function runKindOf(trigger: TriggerDto): RunWrite["kind"] {
 }
 
 /**
- * The objective a trigger is bound to: the first active objective (by id) whose
- * `triggers:` lists it. M7's `run.briefing.objective` will take precedence.
+ * The objective a trigger is bound to: its `run.briefing.objective` when set
+ * (M7), else the first active objective (by id) whose `triggers:` lists it.
  */
-async function boundObjective(p: BeginTriggerRunParams): Promise<string | null> {
+export async function boundObjective(p: {
+  state: ManagersState;
+  dir: string;
+  trigger: { name: string; run: Pick<TriggerDto["run"], "briefing"> };
+}): Promise<string | null> {
+  const b = p.trigger.run.briefing;
+  if (b && typeof b === "object" && b.objective) return b.objective;
   const { objectives } = await p.state.objectives.list(p.state.layout(p.dir)).catch(() => ({ objectives: [] }));
   const hit = objectives
     .filter((o) => o.status === "active" && (o.triggers ?? []).includes(p.trigger.name))
@@ -62,13 +70,14 @@ export async function beginTriggerRun(p: BeginTriggerRunParams): Promise<Trigger
   const ws: WriteWorkspace = { key: p.slug, layout: p.state.layout(p.dir) };
   const actor = (runId: string | null): WriteActor => ({ kind: "agent", name: "manager", author: p.author, runId });
   let runId: string;
+  const objective = await boundObjective(p);
   try {
     const started = await p.state.writer.startRun(
       ws,
       {
         trigger: p.trigger.name,
         kind: runKindOf(p.trigger),
-        objective: await boundObjective(p),
+        objective,
         model: p.trigger.run.model ?? null,
         expect: p.trigger.run.expect ?? null,
       },
@@ -82,6 +91,7 @@ export async function beginTriggerRun(p: BeginTriggerRunParams): Promise<Trigger
 
   return {
     runId,
+    objective,
     onComplete: async (r) => {
       try {
         await p.state.writer.finishRun(

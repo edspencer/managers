@@ -21,6 +21,7 @@ import type { MemoryView } from "./memory-store.js";
 import type { PageOpts } from "./episodes-store.js";
 import type { ParseError } from "./store-util.js";
 import type { Alert } from "./alerts.js";
+import type { Briefing } from "./briefing.js";
 import {
   StateWriteError,
   type ArtifactResult,
@@ -56,6 +57,8 @@ export interface ManagementStateOps {
   listMemory(project: string): Promise<MemoryView>;
   /** The workspace's dead-man's-switch alerts (M6), computed fresh. */
   listAlerts(project: string): Promise<Alert[]>;
+  /** The workspace's briefing (M7), built fresh: what a wake of `trigger` would see. */
+  getBriefing(project: string, opts?: BriefingRequest): Promise<Briefing>;
 
   recordEpisode(project: string, input: RecordEpisodeInput): Promise<EpisodeResult>;
   upsertTask(project: string, input: UpsertTaskInput): Promise<TaskResult>;
@@ -64,6 +67,13 @@ export interface ManagementStateOps {
   recordArtifact(project: string, input: RecordArtifactInput): Promise<ArtifactResult>;
   /** Stub until M14: refuses unless {@link memoryAvailable}, then reports "not implemented". */
   memoryOp(project: string, input: Record<string, unknown>): Promise<never>;
+}
+
+/** What `get_briefing` / the REST preview may ask for. */
+export interface BriefingRequest {
+  objective?: string | null;
+  trigger?: string | null;
+  kind?: "wake" | "chat";
 }
 
 export interface StateOpsParams {
@@ -79,6 +89,8 @@ export interface StateOpsParams {
   botAuthor: GitAuthor;
   /** Compute a workspace's alerts (M6; shared with the REST route). */
   loadAlerts: (project: string) => Promise<Alert[]>;
+  /** Build a workspace's briefing (M7; shared with the REST preview). */
+  loadBriefing: (project: string, opts: BriefingRequest) => Promise<Briefing>;
 }
 
 export const MEMORY_OP_UNAVAILABLE =
@@ -110,6 +122,7 @@ export function buildStateOps(p: StateOpsParams): ManagementStateOps {
       return state.memory.view({ project: project === "" ? null : layout, root: state.rootLayout });
     },
     listAlerts: (project) => p.loadAlerts(project),
+    getBriefing: (project, opts = {}) => p.loadBriefing(project, opts),
     recordEpisode: async (project, input) => state.writer.recordEpisode(await ws(project), input, actor()),
     upsertTask: async (project, input) => state.writer.upsertTask(await ws(project), input, actor()),
     updateObjective: async (project, input) => state.writer.updateObjective(await ws(project), input, actor()),
