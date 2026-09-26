@@ -172,11 +172,15 @@ Runbooks inherited from Paddock: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEV.md`
 - **Never point a server, rig or test at real data or a real Claude home.** Isolate
   `HOME` and `CLAUDE_CONFIG_DIR`, and unset the Claude credentials so no real API
   call can happen. The data-dir guard is a backstop, not a licence.
-- **QA rig.** Until M2 lands `scripts/managers-rig/`, the credential-free rig is
-  `scripts/demo-gif/` (`seed.mjs` + `serve.mjs`), run under `pm` as `managers-qa`
-  with a wrapper in `/data/paddock-servers/managers-qa/` that `exec`s the server
-  and forces `HOST=127.0.0.1`. Screenshots and scratch go in `.playwright-mcp/` or
-  `qa-scratch/` (both gitignored) and are never committed.
+- **QA rig.** The credential-free rig is `scripts/managers-rig/` (read its
+  README): synthetic fixtures, run under `pm` as `managers-qa` via
+  `/data/paddock-servers/managers-qa/run.sh`, re-seeded on every start, with
+  `HOST=127.0.0.1` forced. The fake `claude`'s `[[MCP <server>.<tool> <json>]]`
+  directive makes a turn really call an MCP tool, with no model involved.
+  `scripts/managers-rig/leak-check.mjs` is the isolation proof that can actually
+  fail. Add new fixtures to `fixtures.mjs` and never remove one. Screenshots and
+  scratch go in `.playwright-mcp/` or `qa-scratch/` (both gitignored) and are
+  never committed.
 - **Commits.** Work on `main`, Conventional Commits (`type(scope): summary`), one
   lightweight tag `m<N>` per milestone. **There is no remote to push to — never
   push**, never force anything, and leave the `paddock` remote's config alone.

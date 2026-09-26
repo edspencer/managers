@@ -29,6 +29,12 @@ scanned only `packages/**/*.ts`, which missed a second real occurrence in
 The fix is always to spell the character as an escape rather than paste the raw
 byte — see the `KEY_SEP` constants in `packages/server/src`.
 
+## `managers-rig/` — the credential-free Managers QA rig
+
+Synthetic fixtures, a seeder, and a scrubbed-env server launcher, run under `pm`
+as `managers-qa`. `leak-check.mjs` proves the server neutralises a leaked Paddock
+environment. See [`managers-rig/README.md`](managers-rig/README.md).
+
 ## `demo-gif/` — regenerate the README / docs demo GIF
 
 `npm run demo:gif` seeds a throwaway synthetic Paddock instance, boots it, drives
