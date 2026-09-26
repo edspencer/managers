@@ -47,6 +47,7 @@ import {
 } from "./managers/templates/wake.js";
 import { sanitizeRecoveryOverride } from "./recovery-config.js";
 import { sanitizeCurationOverride } from "./curation-config.js";
+import { sanitizeBehaviours, isBehaviourName } from "./managers/behaviours.js";
 import { sanitizeAttachmentsOverride } from "./attachments-config.js";
 import {
   PROJECT_SCHEMA_VERSION,
@@ -1232,6 +1233,23 @@ export class ProjectStore {
   }
 
   /**
+   * Switch one behaviour on or off in THIS workspace's `project.yaml` (Managers
+   * M8). Only `enabled` is written: an entry that exists only to switch an
+   * inherited (Home or built-in) definition is created as `{ enabled }`, and an
+   * existing entry keeps its other fields. The caller checks the behaviour is
+   * defined somewhere; an invalid name throws `ProjectError("invalid")`.
+   */
+  async setBehaviourEnabled(slug: string, name: string, enabled: boolean): Promise<Project> {
+    const current = await this.get(slug);
+    if (!isBehaviourName(name)) throw new ProjectError(`Invalid behaviour name: ${name}`, "invalid");
+    const behaviours = { ...(current.behaviours ?? {}) };
+    behaviours[name] = { ...(behaviours[name] ?? {}), enabled };
+    const next: ProjectYaml = { ...this.stripDto(current), behaviours, updated: today() };
+    await this.writeYaml(slug, next);
+    return this.toDto(current.dir, next, await this.overviewExists(slug));
+  }
+
+  /**
    * Remove a trigger from `project.yaml` (no-op if absent). Returns the updated
    * project DTO. The caller disarms the trigger's agent / schedule via `TriggerService`.
    *
@@ -1507,6 +1525,14 @@ export class ProjectStore {
       ...(() => {
         const t = sanitizeTriggers(p.triggers);
         return t && Object.keys(t).length > 0 ? { triggers: t } : {};
+      })(),
+      // behaviours (Managers M8): same discipline — carried only when at least one
+      // entry survives, so behaviour-less files round-trip byte-identically. The
+      // sanitiser drops a bad FIELD, never a whole entry (fail closed: an off
+      // behaviour keeps its tool denials through a typo elsewhere in it).
+      ...(() => {
+        const b = sanitizeBehaviours(p.behaviours);
+        return b ? { behaviours: b } : {};
       })(),
     };
   }

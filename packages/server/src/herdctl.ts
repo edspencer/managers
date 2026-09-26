@@ -90,6 +90,7 @@ import {
   isCuratorTrigger,
   type PaddockTrigger,
 } from "./trigger-config.js";
+import { effectiveBehaviours, type EffectiveBehaviour } from "./managers/behaviours.js";
 import {
   buildAgentConfig,
   buildSweeperConfig,
@@ -490,6 +491,27 @@ export class HerdctlService {
   ) {}
 
   /**
+   * Managers M8: the root (Home) record whose `behaviours:` are the DEFINITIONS
+   * every project inherits. Captured at {@link init} and refreshed on every
+   * {@link ensureProjectAgent} (through {@link setRootProvider} when wired), so
+   * the synchronous agent-config builders can gate schedules and deny tools.
+   * The fire path re-reads the root itself, so a stale copy here can only ever
+   * leave a schedule armed that the fire then refuses — never the reverse.
+   */
+  private rootRecord: Pick<Project, "slug" | "behaviours"> | null = null;
+  private rootProvider: (() => Promise<Pick<Project, "slug" | "behaviours">>) | null = null;
+
+  /** Wire how {@link ensureProjectAgent} re-reads Home's behaviour definitions (Managers M8). */
+  setRootProvider(fn: () => Promise<Pick<Project, "slug" | "behaviours">>): void {
+    this.rootProvider = fn;
+  }
+
+  /** A workspace's effective behaviours against the cached Home definitions (Managers M8). */
+  private behavioursOf(project: Project): EffectiveBehaviour[] {
+    return effectiveBehaviours(project, project.slug === "" ? project : this.rootRecord);
+  }
+
+  /**
    * The Claude home every transcript symlink is planted in, plus where those
    * symlinks point (#620, #691). One accessor, so no call site can quietly take
    * a default and land in a different home than the FleetManager was built with
@@ -569,6 +591,7 @@ export class HerdctlService {
    */
   async init(projects: Project[]): Promise<void> {
     await this.ensureConfigFile();
+    this.rootRecord = projects.find((p) => p.slug === "") ?? this.rootRecord;
 
     this.fleet = new FleetManager({
       configPath: this.cfg.herdctlConfigPath,
@@ -674,6 +697,9 @@ export class HerdctlService {
    */
   async ensureProjectAgent(project: Project): Promise<void> {
     if (!this.fleet) return;
+    // Managers M8: pick up Home's current behaviour definitions first.
+    if (project.slug === "") this.rootRecord = project;
+    else if (this.rootProvider) this.rootRecord = await this.rootProvider().catch(() => this.rootRecord);
     await this.ensureChats(project.workingDir, project.dir);
     await this.ensureSweeperHome(project);
     await this.fleet.addAgent(this.keeperAgentConfig(project), { replace: true });
@@ -2133,6 +2159,7 @@ export class HerdctlService {
       modelOverride,
       this.mcpSources,
       this.hostPlugins,
+      this.behavioursOf(project),
     );
   }
 
@@ -2174,7 +2201,7 @@ export class HerdctlService {
     triggerName: string,
     trigger: PaddockTrigger,
   ): Record<string, unknown> & { name: string } {
-    return buildTriggerConfig(this.cfg, project, triggerName, trigger);
+    return buildTriggerConfig(this.cfg, project, triggerName, trigger, this.behavioursOf(project));
   }
 
   private async ensureConfigFile(): Promise<void> {

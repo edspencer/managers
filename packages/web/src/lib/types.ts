@@ -664,6 +664,8 @@ export interface TriggerRun {
   expect?: TriggerExpect;
   /** Managers M7: `false` = no wake briefing; `{objective}` = brief on that objective in full. */
   briefing?: false | { objective?: string };
+  /** Managers M8: the behaviour gating this trigger (off ⇒ not armed, every fire refused). */
+  behaviour?: string;
 }
 
 export interface TriggerExpect {
@@ -2127,15 +2129,22 @@ export interface RunDetail {
   briefingText: string | null;
 }
 
-export type AlertKind = "run-failed" | "schedule-stalled" | "run-stuck" | "stale" | "artifact-missing";
+export type AlertKind =
+  | "run-failed"
+  | "schedule-stalled"
+  | "run-stuck"
+  | "stale"
+  | "artifact-missing"
+  /** M8: autonomy changed other than through Settings → Behaviours. */
+  | "behaviours-changed-outside-ui";
 
 /** One dead-man's-switch alert (M6), `GET …/managers/alerts`. */
 export interface ManagersAlert {
-  /** `<kind>:<trigger>`. */
+  /** `<kind>:<trigger>` (`behaviours-changed-outside-ui` has no trigger: `""`). */
   id: string;
   kind: AlertKind;
   trigger: string;
-  severity: "error" | "warning";
+  severity: "error" | "warning" | "info";
   message: string;
   runId: string | null;
   at: string | null;
@@ -2217,4 +2226,46 @@ export interface ObjectiveWriteInput {
   strategy?: string;
   lessons?: string;
   triggers?: string[];
+}
+
+// --- Managers M8: behaviours --------------------------------------------------
+
+/** Where a behaviour's definition comes from. */
+export type BehaviourOrigin = "builtin" | "home" | "project";
+
+/** One trigger a behaviour gates. */
+export interface BehaviourBoundTrigger {
+  name: string;
+  /** Whether a trigger by that name exists in this workspace. */
+  exists: boolean;
+  enabled: boolean;
+  type: "schedule" | "event" | "webhook" | null;
+}
+
+/** A behaviour as it applies to one workspace (`GET …/managers/behaviours`). */
+export interface Behaviour {
+  name: string;
+  /** Only ever true when this workspace's own project.yaml says so. */
+  enabled: boolean;
+  description: string;
+  triggers: string[];
+  tools: string[];
+  instructions: string;
+  origin: BehaviourOrigin;
+  inherited: boolean;
+  overridden: boolean;
+  boundTriggers: BehaviourBoundTrigger[];
+}
+
+export interface BehaviourList {
+  behaviours: Behaviour[];
+  /** Autonomy changed other than through the Behaviours route (the info alert). */
+  changedOutsideUi: boolean;
+  changedSince: string | null;
+}
+
+export interface BehaviourSwitchResult {
+  behaviour: Behaviour;
+  changed: boolean;
+  episode?: { id: string; file: string };
 }

@@ -161,6 +161,13 @@ const runSchema = z.object({
       }),
     ])
     .optional(),
+  /**
+   * Managers M8: the behaviour gating this trigger (a kebab-case behaviour name).
+   * While that behaviour is off here — or undefined, which fails closed — the
+   * trigger is not armed and refuses every fire. A behaviour's own `triggers:`
+   * list gates by name the same way.
+   */
+  behaviour: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "must be a kebab-case behaviour name").optional(),
 });
 
 /**
@@ -441,12 +448,18 @@ export function scheduleTriggerToHerdctl(
  */
 export function triggersToHerdctlSchedules(
   map: Record<string, PaddockTrigger> | undefined,
+  /**
+   * Managers M8: an extra arming gate (the behaviour gate). A schedule is armed
+   * only when it is `enabled` AND this says yes; absent means no extra gate.
+   */
+  gate?: (name: string, trigger: PaddockTrigger) => boolean,
 ): Record<string, Record<string, unknown>> | undefined {
   if (!map) return undefined;
   const out: Record<string, Record<string, unknown>> = {};
   for (const [name, t] of Object.entries(map)) {
     if (t.trigger.type !== "schedule") continue;
-    out[name] = scheduleTriggerToHerdctl(t.trigger, t.run, t.enabled === true);
+    const armed = t.enabled === true && (gate ? gate(name, t) : true);
+    out[name] = scheduleTriggerToHerdctl(t.trigger, t.run, armed);
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

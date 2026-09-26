@@ -9,7 +9,7 @@
  *
  *   1  Header          project, now, run, trigger, why woken
  *   2  Protocol        MANAGER_PROTOCOL (protocol.ts)
- *   3  Behaviours      placeholder until M8
+ *   3  Behaviours      ON behaviours with their instructions, then "Not permitted" (M8)
  *   4  Connections     placeholder until M9 (names only)
  *   5  Shared memory   root memory/MEMORY.md          (≤20k chars)
  *      Project memory  <project>/memory/MEMORY.md     (≤20k chars)
@@ -38,7 +38,16 @@ import type { WorkspaceLayout } from "./layout.js";
 import type { Episode } from "./episodes-store.js";
 import type { TaskSummary } from "./tasks-store.js";
 import type { RunSummary } from "./runs-store.js";
-import { computeAlerts, alertTriggers, monthsToRead, type Alert, type AlertSchedule } from "./alerts.js";
+import { computeAlerts, alertTriggers, monthsToRead, sortAlerts, type Alert, type AlertSchedule } from "./alerts.js";
+import {
+  behavioursBriefingBody,
+  behavioursFor,
+  effectiveBehaviours,
+  triggerGatePredicate,
+  type BehaviourConfig,
+  type EffectiveBehaviour,
+} from "./behaviours.js";
+import { behaviourDriftAlert } from "./behaviour-state.js";
 import { MANAGER_PROTOCOL } from "./protocol.js";
 import { isMissing, isParseFailure } from "./store-util.js";
 
@@ -108,6 +117,10 @@ export interface BriefingSources {
   readOverview: () => Promise<string>;
   /** herdctl's live schedules for the alerts (none when absent). */
   schedules?: () => Promise<AlertSchedule[]>;
+  /** M8: the workspace's effective behaviours (the built-ins alone when absent). */
+  behaviours?: EffectiveBehaviour[];
+  /** M8: alerts computed outside the pure M6 set (the out-of-UI behaviour change). */
+  extraAlerts?: () => Promise<Alert[]>;
 }
 
 export interface Briefing {
@@ -360,7 +373,8 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
   const now = p.now;
 
   // Runs: enough months for the alert windows; this run itself is excluded below.
-  const aTriggers = alertTriggers(project.triggers);
+  const effective = src.behaviours ?? effectiveBehaviours({ slug: project.slug }, null);
+  const aTriggers = alertTriggers(project.triggers, triggerGatePredicate(effective));
   const runPage = await state.runs.list(layout, { months: monthsToRead(aTriggers) });
   const allRuns = runPage.runs;
   const earlier = allRuns.filter((r) => r.id !== p.runId && (p.trigger ? r.trigger === p.trigger : true));
@@ -384,7 +398,7 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
   const behaviours: Section = {
     name: "Behaviours",
     title: "Behaviours",
-    body: "(none configured) Every autonomous behaviour is OFF: propose, don't act.",
+    body: behavioursBriefingBody(effective),
   };
   const connections: Section = { name: "Connections", title: "Connections", body: "(none configured)" };
 
@@ -425,7 +439,8 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
 
   // 10 Alerts
   const schedules = src.schedules ? await src.schedules().catch(() => [] as AlertSchedule[]) : [];
-  const alerts = computeAlerts({ triggers: aTriggers, runs: allRuns, schedules, now });
+  const extra = src.extraAlerts ? await src.extraAlerts().catch(() => [] as Alert[]) : [];
+  const alerts = sortAlerts([...computeAlerts({ triggers: aTriggers, runs: allRuns, schedules, now }), ...extra]);
   const alertsSec: Section = {
     name: "Alerts",
     title: "Alerts",
@@ -477,23 +492,39 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
 // --- wiring ----------------------------------------------------------------------------
 
 /** What a caller (the fire path, the REST preview, the tool, the chat preload) supplies. */
-export interface BriefingDeps<P extends { slug: string; dir: string; triggers?: Record<string, PaddockTrigger> }> {
+type BriefedWorkspace = {
+  slug: string;
+  dir: string;
+  triggers?: Record<string, PaddockTrigger>;
+  behaviours?: Record<string, BehaviourConfig>;
+};
+
+export interface BriefingDeps<P extends BriefedWorkspace> {
   state: ManagersState;
   projects: { get(slug: string): Promise<P>; readOverview(slug: string): Promise<string> };
   herdctl?: { listAgentSchedules(project: P): Promise<AlertSchedule[]> };
 }
 
 /** Resolve a workspace (throws the ProjectStore's not-found) and build its briefing. */
-export async function briefingForWorkspace<
-  P extends { slug: string; dir: string; triggers?: Record<string, PaddockTrigger> },
->(deps: BriefingDeps<P>, slug: string, params: BriefingParams, project?: P): Promise<Briefing> {
+export async function briefingForWorkspace<P extends BriefedWorkspace>(
+  deps: BriefingDeps<P>,
+  slug: string,
+  params: BriefingParams,
+  project?: P,
+): Promise<Briefing> {
   const p = project ?? (await deps.projects.get(slug));
+  const behaviours = await behavioursFor(deps.projects, { slug, behaviours: p.behaviours });
   return buildBriefing(
     {
       state: deps.state,
       project: { slug, dir: p.dir, triggers: p.triggers },
       readOverview: () => deps.projects.readOverview(slug),
       schedules: deps.herdctl ? () => deps.herdctl!.listAgentSchedules(p) : undefined,
+      behaviours,
+      extraAlerts: async () => {
+        const a = await behaviourDriftAlert(p.dir, behaviours, p.triggers);
+        return a ? [a] : [];
+      },
     },
     params,
   );

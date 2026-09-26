@@ -57,6 +57,8 @@ import {
   type RunQuery,
   type RunRecord,
   type RunDetail,
+  type BehaviourList,
+  type BehaviourSwitchResult,
   type ManagersAlert,
   type ReportTypeSummary,
   type ReportTypeDetail,
@@ -1240,6 +1242,26 @@ export const api = {
       body: JSON.stringify(input),
     });
     return objective;
+  },
+
+  // --- Managers behaviours (M8) -------------------------------------------------
+
+  /** Every behaviour that applies to the workspace, with its bound triggers. */
+  async managersBehaviours(slug: string): Promise<BehaviourList> {
+    return req<BehaviourList>(`${mgr(slug)}/behaviours`);
+  },
+
+  /** Ed's autonomy switch: writes project.yaml, re-arms the agents, logs an #autonomy episode. */
+  async managersSetBehaviour(slug: string, name: string, enabled: boolean): Promise<BehaviourSwitchResult> {
+    return req<BehaviourSwitchResult>(`${mgr(slug)}/behaviours/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
+  },
+
+  /** Accept an out-of-UI behaviour change as known-good (clears its alert). */
+  async managersAcknowledgeBehaviours(slug: string): Promise<void> {
+    await req<{ ok: true }>(`${mgr(slug)}/behaviours/acknowledge`, { method: "POST", body: "{}" });
   },
 
   async managersUpdateObjective(slug: string, id: string, patch: ObjectiveWriteInput): Promise<ObjectiveDetail> {

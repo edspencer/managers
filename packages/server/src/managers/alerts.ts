@@ -14,6 +14,13 @@
  *   schedule-stalled  an ENABLED schedule whose herdctl `nextRunAt` is more than
  *                     15 minutes in the past
  *   run-stuck         a run still `running` more than 2 hours after it started
+ *   behaviours-changed-outside-ui
+ *                     (M8, info) the workspace's autonomy — a behaviour flag,
+ *                     definition or trigger binding — changed other than
+ *                     through the Behaviours route (`managers/behaviour-state.ts`)
+ *
+ * M8: a trigger whose behaviour is off counts as DISABLED here (it cannot fire,
+ * so it is not stale and its schedule is not stalled).
  *
  * Ids are `<kind>:<trigger>`, one alert per kind per trigger. A failed run is
  * reported as `run-failed` only, never also as `artifact-missing`: the failure
@@ -27,10 +34,19 @@ import type { RunRecord } from "./schemas.js";
 import type { ManagersState } from "./state.js";
 import { withinMs } from "./expect.js";
 import { MAX_PAGE_MONTHS } from "./episodes-store.js";
+import { triggerGatePredicate, type EffectiveBehaviour } from "./behaviours.js";
+import { behaviourDriftAlert } from "./behaviour-state.js";
 
-export const ALERT_KINDS = ["run-failed", "schedule-stalled", "run-stuck", "stale", "artifact-missing"] as const;
+export const ALERT_KINDS = [
+  "run-failed",
+  "schedule-stalled",
+  "run-stuck",
+  "stale",
+  "artifact-missing",
+  "behaviours-changed-outside-ui",
+] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
-export type AlertSeverity = "error" | "warning";
+export type AlertSeverity = "error" | "warning" | "info";
 
 export interface Alert {
   /** `<kind>:<trigger>` — stable across calls, so a UI can key on it. */
@@ -71,7 +87,10 @@ const SEVERITY: Record<AlertKind, AlertSeverity> = {
   "run-stuck": "warning",
   stale: "warning",
   "artifact-missing": "warning",
+  "behaviours-changed-outside-ui": "info",
 };
+
+const SEVERITY_RANK: Record<AlertSeverity, number> = { error: 0, warning: 1, info: 2 };
 
 const ts = (s: string | null | undefined): number | null => {
   if (!s) return null;
@@ -175,21 +194,30 @@ export function computeAlerts(input: {
     }
   }
 
+  return sortAlerts(out);
+}
+
+/** The one alert order: severity (error, warning, info), then kind, then trigger. */
+export function sortAlerts(alerts: Alert[]): Alert[] {
   const order = (k: AlertKind) => ALERT_KINDS.indexOf(k);
-  return out.sort(
+  return [...alerts].sort(
     (a, b) =>
-      (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1) ||
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
       order(a.kind) - order(b.kind) ||
       a.trigger.localeCompare(b.trigger),
   );
 }
 
 /** A project's trigger map → the alert view of it. */
-export function alertTriggers(map: Record<string, PaddockTrigger> | undefined): AlertTrigger[] {
+export function alertTriggers(
+  map: Record<string, PaddockTrigger> | undefined,
+  /** M8: the behaviour gate; a gated-off trigger reads as disabled. */
+  gate?: (name: string, trigger: PaddockTrigger) => boolean,
+): AlertTrigger[] {
   return Object.entries(map ?? {}).map(([name, t]) => ({
     name,
     type: t.trigger.type,
-    enabled: t.enabled === true,
+    enabled: t.enabled === true && (gate ? gate(name, t) : true),
     expect: t.run.expect ?? null,
   }));
 }
@@ -206,13 +234,20 @@ export async function loadAlerts(opts: {
   state: ManagersState;
   project: { dir: string; triggers?: Record<string, PaddockTrigger> };
   schedules: () => Promise<AlertSchedule[]>;
+  /** M8: the workspace's effective behaviours — gates triggers and checks for out-of-UI changes. */
+  behaviours?: EffectiveBehaviour[];
   now?: Date;
 }): Promise<Alert[]> {
-  const triggers = alertTriggers(opts.project.triggers);
+  const gate = opts.behaviours ? triggerGatePredicate(opts.behaviours) : undefined;
+  const triggers = alertTriggers(opts.project.triggers, gate);
   const layout = opts.state.layout(opts.project.dir);
   const [page, schedules] = await Promise.all([
     opts.state.runs.list(layout, { months: monthsToRead(triggers) }),
     opts.schedules().catch(() => [] as AlertSchedule[]),
   ]);
-  return computeAlerts({ triggers, runs: page.runs, schedules, now: opts.now ?? new Date() });
+  const now = opts.now ?? new Date();
+  const out = computeAlerts({ triggers, runs: page.runs, schedules, now });
+  if (!opts.behaviours) return out;
+  const drift = await behaviourDriftAlert(opts.project.dir, opts.behaviours, opts.project.triggers).catch(() => null);
+  return drift ? sortAlerts([...out, drift]) : out;
 }

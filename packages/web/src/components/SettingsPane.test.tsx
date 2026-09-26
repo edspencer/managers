@@ -27,6 +27,8 @@ vi.mock("../lib/api", async () => {
       updateProject: (...a: unknown[]) => updateProject(...a),
       getModels: (...a: unknown[]) => getModels(...a),
       promoteProject: (...a: unknown[]) => promoteProject(...a),
+      // Managers M8: the Behaviours card loads its own list.
+      managersBehaviours: () => Promise.resolve({ behaviours: [], changedOutsideUi: false, changedSince: null }),
       // Schedules moved out of Settings into the Triggers tab (Epic T / T4), so
       // SettingsPane no longer fetches them on mount.
     },

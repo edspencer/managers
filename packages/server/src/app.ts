@@ -29,6 +29,8 @@ import { loadHostMcpSource } from "./claude-mcp.js";
 import { loadHostPlugins } from "./claude-plugins.js";
 import { declaredMcpNotices } from "./mcp-servers.js";
 import { installHerdctlLogBridge } from "./agent-errors.js";
+import { effectiveBehaviours } from "./managers/behaviours.js";
+import { adoptBaselineIfAbsent } from "./managers/behaviour-state.js";
 import { ProjectStore, ROOT_KEY } from "./projects.js";
 import { AttachmentStore } from "./attachments.js";
 import { HerdctlService } from "./herdctl.js";
@@ -226,6 +228,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     { ...hostMcp.source, declared: cfg.mcpServers },
     hostPlugins.source,
   );
+  // Managers M8: Home's behaviour DEFINITIONS reach every project's agent config.
+  herdctl.setRootProvider(() => projects.get(ROOT_KEY));
   const git = new GitService(cfg.projectsRoot, cfg.gitAuthor);
   // Managers M5 (plan §2.6): every state write schedules a commit of the owned
   // state paths; a turn ending flushes its workspace's pending commit at once.
@@ -335,6 +339,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
       { retentionOverrides: retentionOverrides.length },
       describeRetentionOverrides(retentionOverrides),
     );
+  }
+  // Managers M8: adopt each workspace's autonomy as the out-of-UI baseline the
+  // first time it is seen (a no-op once recorded), so a later hand edit alerts.
+  for (const p of initialProjects) {
+    const list = effectiveBehaviours(p, rootWorkspace);
+    await adoptBaselineIfAbsent(p.dir, list, p.triggers).catch(() => undefined);
   }
   try {
     await herdctl.init(initialProjects);

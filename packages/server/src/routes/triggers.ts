@@ -11,6 +11,7 @@
  * Verb collapse (GG-3): enable/disable is NOT a separate route — it's `set` (PUT)
  * with the `enabled` field flipped; new triggers default disabled.
  */
+import { BehaviourOffError } from "../managers/behaviours.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { keeperAgentName } from "../herdctl.js";
 import { GRANTABLE_TOOLS } from "../hook-config.js";
@@ -317,7 +318,8 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           "Fires a trigger immediately (\"Run now\") through the same hub path a cron/event fire uses, producing " +
           "a first-class badged run. Fires any trigger type regardless of its `enabled` flag. Success is 202 with " +
           "an object containing `ok: true`, the `name`, and the started `sessionId`. Returns 503 when firing is " +
-          "unavailable, 404 for an unknown trigger, 409 for the post-turn curator trigger (not runnable on demand), " +
+          "unavailable, 404 for an unknown trigger, 409 for the post-turn curator trigger (not runnable on demand) " +
+          "or when a behaviour gating the trigger is off (`code: behaviour_off`, `behaviours: [...]`; nothing runs), " +
           "and 502 if the fire started no chat.",
         params: {
           type: "object",
@@ -360,7 +362,20 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
             code: "not_runnable",
           });
         }
-        const sessionId = await fireTrigger(slug, name);
+        let sessionId: string | null;
+        try {
+          sessionId = await fireTrigger(slug, name);
+        } catch (err) {
+          // Managers M8: a behaviour gating this trigger is off. Nothing ran.
+          if (err instanceof BehaviourOffError) {
+            return reply.code(409).send({
+              error: err.message,
+              code: "behaviour_off",
+              behaviours: err.gate.off,
+            });
+          }
+          throw err;
+        }
         if (!sessionId) {
           return reply
             .code(502)

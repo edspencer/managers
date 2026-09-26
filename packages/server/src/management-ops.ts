@@ -65,6 +65,7 @@ import {
 import type { TurnOrigin } from "./run-provenance.js";
 import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
 import { loadAlerts } from "./managers/alerts.js";
+import { behavioursFor } from "./managers/behaviours.js";
 import { briefingForWorkspace } from "./managers/briefing.js";
 import { boundObjective } from "./managers/trigger-runs.js";
 
@@ -222,6 +223,7 @@ export function buildManagementOps(
             state: deps.managers!,
             project,
             schedules: () => deps.herdctl.listAgentSchedules(project),
+            behaviours: await behavioursFor(deps.projects, project),
           });
         },
         loadBriefing: async (slug, o) => {
@@ -551,6 +553,16 @@ export function buildManagementOps(
       if (!deps.triggers) throw new Error("trigger management is unavailable");
       const existing = await deps.triggers.get(projectSlug, name).catch(() => null);
       const record = mergeTriggerUpdate(existing, incoming);
+      // Managers M8: agents get no tool to change their own autonomy, and a
+      // trigger's `run.behaviour` binding IS autonomy — rebinding or unbinding it
+      // would ungate the trigger. Only Ed changes it (project.yaml / git).
+      const before = existing?.run.behaviour ?? null;
+      const after = (record.run as { behaviour?: unknown } | undefined)?.behaviour ?? null;
+      if (before !== after) {
+        throw new Error(
+          "set_trigger cannot change a trigger's run.behaviour (its autonomy gate); Ed changes that in project.yaml",
+        );
+      }
       const dto = await deps.triggers.set(projectSlug, name, record);
       const p = await deps.projects.get(projectSlug).catch(() => null);
       const runtime = p ? await deps.herdctl.listAgentSchedules(p).catch(() => []) : [];

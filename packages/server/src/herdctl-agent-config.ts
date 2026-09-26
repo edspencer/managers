@@ -45,6 +45,29 @@ import {
   KEEPER_SESSION_TIMEOUT,
 } from "./herdctl-agent-names.js";
 import { MANAGERS_SETTING_SOURCES } from "./managers/claude-overlay.js";
+import {
+  BEHAVIOUR_TAMPER_DENIED_TOOLS,
+  disabledBehaviourTools,
+  effectiveBehaviours,
+  triggerGatePredicate,
+  type EffectiveBehaviour,
+} from "./managers/behaviours.js";
+
+/**
+ * Managers M8: the `denied_tools` every keeper and trigger agent carries — the
+ * fleet defaults RESTATED (herdctl's merge replaces arrays, it does not append),
+ * the anti-tamper edits of `project.yaml` / `.managers/**`, and every tool of
+ * every behaviour that is OFF here. So an off behaviour's tools are unusable on
+ * every turn of this project, human chats included.
+ */
+export function behaviourDeniedTools(behaviours: EffectiveBehaviour[]): string[] {
+  return [...new Set([...DENIED_TOOLS, ...BEHAVIOUR_TAMPER_DENIED_TOOLS, ...disabledBehaviourTools(behaviours)])];
+}
+
+/** The behaviours a builder uses: the caller's resolved list, else the project's own (no Home definitions). */
+function behavioursOf(project: Project, behaviours?: EffectiveBehaviour[]): EffectiveBehaviour[] {
+  return behaviours ?? effectiveBehaviours(project, null);
+}
 
 /**
  * Managers M3: every agent (keeper, trigger, sweeper) loads the `user` setting
@@ -105,7 +128,9 @@ export function buildAgentConfig(
   modelOverride?: string,
   mcpSources: McpSources = EMPTY_MCP_SOURCES,
   hostPlugins: HostPluginSource = EMPTY_HOST_PLUGINS,
+  behaviours?: EffectiveBehaviour[],
 ): Record<string, unknown> & { name: string } {
+  const effective = behavioursOf(project, behaviours);
   const config: Record<string, unknown> & { name: string } = {
     name: keeperAgentName(project.slug),
     description: project.summary || `Claude Code agent for project ${project.name}.`,
@@ -141,6 +166,8 @@ export function buildAgentConfig(
     // its own settings.json and loads via `setting_sources` below (M3).
     session: { timeout: KEEPER_SESSION_TIMEOUT },
     setting_sources: settingSources(),
+    // Managers M8: off behaviours' tools + the anti-tamper edits (see behaviourDeniedTools).
+    denied_tools: behaviourDeniedTools(effective),
     default_prompt: "Summarize the current state of this project.",
   };
   // Docker isolation: only set it when the project opts in, so a project that
@@ -162,7 +189,8 @@ export function buildAgentConfig(
   // is stripped (the schedule-trigger handler resolves it at fire time). Event/webhook
   // triggers are excluded by triggersToHerdctlSchedules. Only set the key when
   // non-empty so a trigger-less project stays byte-identical to before.
-  const schedules = triggersToHerdctlSchedules(project.triggers);
+  // Managers M8: a schedule whose behaviour is off is not armed at all.
+  const schedules = triggersToHerdctlSchedules(project.triggers, triggerGatePredicate(effective));
   if (schedules) config.schedules = schedules;
   // MCP servers, from three sources, all landing on the SAME `mcp_servers` key:
   //
@@ -347,6 +375,7 @@ export function buildTriggerConfig(
   project: Project,
   triggerName: string,
   trigger: PaddockTrigger,
+  behaviours?: EffectiveBehaviour[],
 ): Record<string, unknown> & { name: string } {
   const config: Record<string, unknown> & { name: string } = {
     name: triggerAgentName(project.slug, triggerName),
@@ -365,6 +394,9 @@ export function buildTriggerConfig(
     // run → tool config (allowed tools, permission mode, model, max_turns).
     ...triggerToAgentToolConfig(trigger.run),
     setting_sources: settingSources(),
+    // Managers M8: the same denials as the keeper — a scoped trigger must not be
+    // a way round an off behaviour's tools.
+    denied_tools: behaviourDeniedTools(behavioursOf(project, behaviours)),
   };
   if (project.docker) config.docker = { enabled: true };
   const browser = browserMcpServers(cfg.browserMcp);

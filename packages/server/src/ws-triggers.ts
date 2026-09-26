@@ -31,6 +31,7 @@ import {
 import type { ChatHandlerDeps, StartAgentTurn } from "./ws-context.js";
 import { beginTriggerRun, boundObjective } from "./managers/trigger-runs.js";
 import { briefingForWorkspace, triggerWantsBriefing } from "./managers/briefing.js";
+import { BehaviourOffError, behavioursFor, triggerGate } from "./managers/behaviours.js";
 
 /** How a fire came about, for the briefing's "why woken" line. */
 export interface TriggerFireOpts {
@@ -99,10 +100,14 @@ deps.herdctl.onScheduleTrigger(async (info: TriggerInfo) => {
   // single trigger fire path.
   const trig = project.triggers?.[info.scheduleName];
   if (trig && trig.trigger.type === "schedule" && trig.enabled === true) {
+    // Managers M8: a schedule whose behaviour is off is not armed, but a stale
+    // arming (a root definition edited since registration) is refused here too.
     await fireTriggerForProject(project, {
       name: info.scheduleName,
       agentName: triggerAgentName(slug, info.scheduleName),
       ...trig,
+    }).catch((err) => {
+      if (!(err instanceof BehaviourOffError)) throw err;
     });
   }
   // A fired keeper schedule with no matching enabled SCHEDULE trigger is ignored:
@@ -161,7 +166,9 @@ async function resolveTriggerPrompt(
  * is forgotten so the next fire re-creates one. FIRE-AND-FORGET: a rejection (the
  * turn never produced a session id — its own failure frame already emitted) is
  * swallowed so a transient failure never wedges the trigger. Resolves the
- * created/resumed session id, or `null`.
+ * created/resumed session id, or `null`. The one exception (Managers M8): a trigger
+ * gated by an OFF behaviour REJECTS with a {@link BehaviourOffError} before any run
+ * record, briefing or turn exists.
  */
 async function fireTriggerForProject(
   project: Awaited<ReturnType<typeof deps.projects.get>>,
@@ -171,6 +178,13 @@ async function fireTriggerForProject(
 ): Promise<string | null> {
   const slug = project.slug;
   const isSchedule = trigger.trigger.type === "schedule";
+
+  // Managers M8: an OFF behaviour means the trigger does not happen at all — no
+  // run record, no briefing, no turn. Checked here, on the one fire path, so cron,
+  // event and "Run now" fires all refuse the same way; the caller decides whether
+  // that is an error (Run now, run_trigger) or silence (cron, events).
+  const gate = triggerGate(trigger.name, trigger, await behavioursFor(deps.projects, project));
+  if (!gate.open) throw new BehaviourOffError(trigger.name, gate, slug);
   // T2: a scoped trigger (every event; a schedule with a `run.tools` allow-list) runs
   // on its OWN `trigger-<slug>-<name>` agent so herdctl enforces its capability; an
   // unscoped schedule runs as the keeper (project-agent default toolset, unchanged).
@@ -293,7 +307,15 @@ async function dispatchEventTriggers(
   const project = await deps.projects.get(slug).catch(() => null);
   if (!project) return;
   const matching = await deps.triggers.enabledForEvent(slug, event).catch(() => []);
-  await Promise.all(matching.map((trigger) => fireTriggerForProject(project, trigger, ctx)));
+  await Promise.all(
+    matching.map((trigger) =>
+      // M8: an event trigger whose behaviour is off simply does not fire.
+      fireTriggerForProject(project, trigger, ctx).catch((err) => {
+        if (!(err instanceof BehaviourOffError)) throw err;
+        return null;
+      }),
+    ),
+  );
 }
 
 // Dispatch enabled EVENT triggers on the SAME lifecycle events hooks fire on — the
@@ -338,7 +360,9 @@ deps.events?.on("afterTurn", (payload) => {
  * webhook trigger you want to smoke-test before its ingress lands) regardless of its
  * `enabled` flag — a manual run is a deliberate act (mirrors the schedule DD-1 rule).
  * Returns the started chat's session id, or `null` if the project/trigger is gone or
- * the turn never produced a session.
+ * the turn never produced a session. Managers M8: REJECTS with a
+ * {@link BehaviourOffError} when a behaviour gating the trigger is off — a manual
+ * run is deliberate, but it does not override Ed's autonomy switch.
  */
 async function fireTrigger(slug: string, triggerName: string): Promise<string | null> {
   const project = await deps.projects.get(slug).catch(() => null);

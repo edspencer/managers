@@ -18,6 +18,7 @@ import { isRootKey } from "../routes/ProjectView/urls";
 import { Caution, Hint, ReadOnly } from "./settings/fields";
 import { DangerZoneSection } from "./settings/DangerZoneSection";
 import { DerivedSection } from "./settings/DerivedSection";
+import { BehavioursSection } from "./settings/BehavioursSection";
 import { RepoBackingSection } from "./settings/RepoBackingSection";
 
 const STATUSES: ProjectStatus[] = ["idea", "active", "paused", "blocked", "done", "abandoned"];
@@ -513,6 +514,9 @@ export function SettingsPane({
               <ReadOnly label="Started" value={project.started} />
             </dl>
           </Section>
+
+          {/* Managers M8: autonomy switches. Saves per switch, outside the Save bar. */}
+          <BehavioursSection slug={project.slug} />
 
           <Section
             title="Claude"

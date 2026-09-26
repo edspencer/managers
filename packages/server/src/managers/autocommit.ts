@@ -69,6 +69,8 @@ interface Pending {
   author: GitAuthor;
   timer: ReturnType<typeof setTimeout> | null;
   reasons: Set<string>;
+  /** Paths beyond the owned set this commit must also stage (M8: `project.yaml`). */
+  extra: Set<string>;
 }
 
 const sameAuthor = (a: GitAuthor, b: GitAuthor) => a.name === b.name && a.email === b.email;
@@ -77,6 +79,21 @@ const sameAuthor = (a: GitAuthor, b: GitAuthor) => a.name === b.name && a.email 
 export async function ownedPathsPresent(dir: string): Promise<string[]> {
   const out: string[] = [];
   for (const p of OWNED_STATE_PATHS) {
+    try {
+      await fs.lstat(path.join(dir, p));
+      out.push(p);
+    } catch {
+      /* absent */
+    }
+  }
+  return out;
+}
+
+/** Which of `rel` exist under `dir` (M8's extra paths, e.g. `project.yaml`). Never `.`. */
+async function presentPaths(dir: string, rel: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const p of rel) {
+    if (!p || p === "." || path.isAbsolute(p) || p.split(/[\\/]/).includes("..")) continue;
     try {
       await fs.lstat(path.join(dir, p));
       out.push(p);
@@ -103,7 +120,7 @@ export class Autocommitter {
    * message (`acme-site`, or `Home` for the root); `reason` is a short verb
    * phrase ("record_episode") collected into the message body.
    */
-  schedule(dir: string, label: string, author: GitAuthor, reason: string): void {
+  schedule(dir: string, label: string, author: GitAuthor, reason: string, extraPaths: readonly string[] = []): void {
     if (!this.enabled) return;
     const key = path.resolve(dir);
     const cur = this.pending.get(key);
@@ -112,10 +129,11 @@ export class Autocommitter {
     if (cur && !sameAuthor(cur.author, author)) void this.flush(key);
     let p = this.pending.get(key);
     if (!p) {
-      p = { dir: key, label, author, timer: null, reasons: new Set() };
+      p = { dir: key, label, author, timer: null, reasons: new Set(), extra: new Set() };
       this.pending.set(key, p);
     }
     p.reasons.add(reason);
+    for (const x of extraPaths) p.extra.add(x);
     if (p.timer) clearTimeout(p.timer);
     const target = p;
     p.timer = setTimeout(() => {
@@ -173,7 +191,7 @@ export class Autocommitter {
 
   private commit(p: Pending): Promise<CommitResult> {
     const run = async (): Promise<CommitResult> => {
-      const paths = await ownedPathsPresent(p.dir);
+      const paths = [...new Set([...(await ownedPathsPresent(p.dir)), ...(await presentPaths(p.dir, [...p.extra]))])];
       if (paths.length === 0) return { committed: false };
       const reasons = [...p.reasons].sort();
       const message = `managers: update ${p.label} state\n\n${reasons.map((r) => `- ${r}`).join("\n")}`;

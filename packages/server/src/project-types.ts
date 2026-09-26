@@ -14,6 +14,7 @@ import { type PaddockTrigger } from "./trigger-config.js";
 import { type RecoveryOverride } from "./recovery-config.js";
 import { type CurationOverride } from "./curation-config.js";
 import { type AttachmentsOverride } from "./attachments-config.js";
+import { type BehaviourConfig } from "./managers/behaviours.js";
 
 // Re-export the config types so importers reaching through projects.js (which
 // re-exports this module) keep finding them in one place, as before.
@@ -303,6 +304,15 @@ export interface ProjectYaml {
    * Absent/empty ⇒ the project has no triggers. New triggers default `enabled: false`.
    */
   triggers?: Record<string, PaddockTrigger>;
+  /**
+   * Managers M8: opt-in autonomy, keyed by kebab-case behaviour name
+   * (`managers/behaviours.ts`). The ROOT's entries are definitions for every
+   * project (plus Home's own switches); a project's entries switch a behaviour
+   * on (`enabled: true` — the default is off) and may override its definition.
+   * Not patchable through the generic PATCH: only the Behaviours route writes it.
+   * Absent/empty ⇒ nothing defined here.
+   */
+  behaviours?: Record<string, BehaviourConfig>;
 }
 
 /** API-facing project DTO (adds derived fields). */

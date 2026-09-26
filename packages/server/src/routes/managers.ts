@@ -32,6 +32,12 @@
  *   POST  managers/objectives            create {id, title, success, …}
  *   PATCH managers/objectives/:id        update fields / sections
  *
+ * Behaviours (M8): the one sanctioned way to switch autonomy.
+ *
+ *   GET   managers/behaviours                    effective behaviours + bound triggers + out-of-UI flag
+ *   PATCH managers/behaviours/:name              {enabled}: writes project.yaml, re-arms, #autonomy episode, commit
+ *   POST  managers/behaviours/acknowledge        accept an out-of-UI change (clears the alert)
+ *
  * Write errors: 400 `invalid` (validation), 404 `not_found`, 409 `conflict`
  * (e.g. answering a task that is not awaiting-ed, creating an objective that exists).
  *
@@ -49,6 +55,15 @@ import { ManagersState } from "../managers/state.js";
 import { loadAlerts, type Alert } from "../managers/alerts.js";
 import { briefingForWorkspace } from "../managers/briefing.js";
 import { boundObjective } from "../managers/trigger-runs.js";
+import {
+  behavioursFor,
+  isBehaviourName,
+  triggerGate,
+  type EffectiveBehaviour,
+} from "../managers/behaviours.js";
+import { behavioursChangedOutsideUi, writeBaseline } from "../managers/behaviour-state.js";
+import { workspaceLabel } from "../managers/state-writes.js";
+import type { Project } from "../projects.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { isDate, isMonth, isName, isRunId, isTaskId, type WorkspaceLayout } from "../managers/layout.js";
@@ -523,6 +538,7 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       state,
       project,
       schedules: () => ctx.herdctl.listAgentSchedules(project),
+      behaviours: await behavioursFor(projects, project),
     });
   }
 
@@ -735,7 +751,8 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` " +
           "must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, " +
           "and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With " +
-          "`wake: true` it also fires the project's `wake` trigger when that trigger exists and is enabled. " +
+          "`wake: true` it also fires the project's `wake` trigger when that trigger exists, is enabled and every " +
+          "behaviour gating it is on (M8). " +
           "409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
         params: paramsSchema({ id: { description: "Task id, t-YYMMDD-xxxx." } }),
         body: bodySchema("`{ choice?, text?, wake? }`."),
@@ -759,9 +776,17 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         if (wakeArg === true) {
           const project = await projects.get(req.params.slug);
           const rec = project.triggers?.wake;
+          // M8: the M5 follow-up — the wake's behaviour gate, checked up front so the
+          // reason is specific (the fire path would refuse it anyway).
+          const gate = rec ? triggerGate("wake", rec, await behavioursFor(projects, project)) : null;
           if (!rec) wake = { fired: false, reason: "this project has no wake trigger" };
           else if (rec.enabled !== true) wake = { fired: false, reason: "the wake trigger is disabled" };
-          else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
+          else if (gate && !gate.open) {
+            wake = {
+              fired: false,
+              reason: `the wake trigger's behaviour ${gate.off.map((n) => `"${n}"`).join(", ")} is off`,
+            };
+          } else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
           else {
             try {
               const sessionId = await ctx.fireTrigger(req.params.slug, "wake");
@@ -833,6 +858,150 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         }
         await state.writer.updateObjective(ws, objectiveInput(id, bodyOf(req)), actor);
         return { objective: await state.objectives.get(layout, id, { months: 1 }) };
+      }),
+  );
+
+  // --- behaviours (M8) -----------------------------------------------------------------
+
+  /** A behaviour plus the triggers it gates (by its list or their `run.behaviour`). */
+  function behaviourView(b: EffectiveBehaviour, project: Project) {
+    const t = project.triggers ?? {};
+    const names = [
+      ...new Set([...b.triggers, ...Object.entries(t).filter(([, v]) => v.run.behaviour === b.name).map(([n]) => n)]),
+    ].sort();
+    return {
+      ...b,
+      boundTriggers: names.map((name) => ({
+        name,
+        exists: !!t[name],
+        enabled: t[name]?.enabled === true,
+        type: t[name]?.trigger.type ?? null,
+      })),
+    };
+  }
+
+  app.get<{ Params: { slug: string } }>(
+    "/managers/behaviours",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "List the workspace's behaviours",
+        description:
+          "Every behaviour that applies here — built in, defined by Home (the root) or by this project — merged " +
+          "field by field, with `enabled` from this workspace's own `project.yaml` only (default OFF). Each has " +
+          "`origin` (`builtin|home|project`), `inherited`, `overridden` and `boundTriggers` (`{ name, exists, " +
+          "enabled, type }`). `changedOutsideUi` is true when autonomy changed other than through the PATCH route " +
+          "(the `behaviours-changed-outside-ui` alert). Returns `{ behaviours, changedOutsideUi, changedSince }`.",
+        params: paramsSchema(),
+        response: ok200("`{ behaviours, changedOutsideUi, changedSince }`."),
+      },
+    },
+    (req, reply) =>
+      withWorkspace(req, reply, async () => {
+        const project = await projects.get(req.params.slug);
+        const list = await behavioursFor(projects, project);
+        const drift = await behavioursChangedOutsideUi(project.dir, list, project.triggers).catch(() => ({
+          changed: false,
+          since: null,
+        }));
+        return {
+          behaviours: list.map((b) => behaviourView(b, project)),
+          changedOutsideUi: drift.changed,
+          changedSince: drift.changed ? drift.since : null,
+        };
+      }),
+  );
+
+  app.patch<{ Params: { slug: string; name: string } }>(
+    "/managers/behaviours/:name",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Switch a behaviour on or off",
+        description:
+          "Ed's autonomy switch: `{ enabled: boolean }`. Writes `behaviours.<name>.enabled` into THIS workspace's " +
+          "`project.yaml` (creating a `{ enabled }` entry for an inherited behaviour), re-registers the keeper and " +
+          "trigger agents (so schedules are re-armed or disarmed and tools denied or allowed), records an " +
+          "`#autonomy` episode (`source ed`) in the project log, and commits `project.yaml` with the log at once. " +
+          "No agent tool can do this. 400 for a malformed name or body, 404 for a behaviour not defined here. " +
+          "Returns `{ behaviour, changed, episode? }` (`changed: false` and no episode when it already had that value).",
+        params: paramsSchema({ name: { description: "Behaviour name (kebab-case)." } }),
+        body: bodySchema("`{ enabled: boolean }`."),
+        response: ok200("`{ behaviour, changed, episode? }`."),
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async ({ ws, actor }) => {
+        const { name } = req.params;
+        if (!isBehaviourName(name)) throw new Invalid(`Invalid behaviour name: ${name}`);
+        const enabled = bodyOf(req).enabled;
+        if (typeof enabled !== "boolean") throw new Invalid("enabled must be a boolean");
+        const project = await projects.get(req.params.slug);
+        const before = (await behavioursFor(projects, project)).find((b) => b.name === name);
+        if (!before) return notFound(reply, `No such behaviour: ${name}`);
+        if (before.enabled === enabled) return { behaviour: behaviourView(before, project), changed: false };
+
+        const updated = await projects.setBehaviourEnabled(req.params.slug, name, enabled);
+        const after = await behavioursFor(projects, updated);
+        const now = after.find((b) => b.name === name)!;
+        // Re-arm schedules and re-deny tools from the new state. A registration
+        // failure must not undo Ed's switch: the fire path re-checks the gate.
+        await ctx.herdctl.ensureProjectAgent(updated).catch((err: unknown) => {
+          req.log.warn({ err, behaviour: name }, "behaviour switched but agent re-registration failed");
+        });
+        const scope = [
+          now.triggers.length || behaviourView(now, updated).boundTriggers.length
+            ? `triggers: ${behaviourView(now, updated).boundTriggers.map((t) => t.name).join(", ")}`
+            : null,
+          now.tools.length ? `tools: ${now.tools.join(", ")}` : null,
+        ]
+          .filter(Boolean)
+          .join("; ");
+        const episode = await state.writer.recordEpisode(
+          ws,
+          {
+            text:
+              `Ed turned behaviour ${name} ${enabled ? "ON: it may now act" : "OFF: it must not happen, nor be proposed"}` +
+              `${scope ? ` (${scope})` : ""}.`,
+            importance: 7,
+            tags: ["autonomy"],
+          },
+          actor,
+        );
+        await writeBaseline(updated.dir, after, updated.triggers, "ed").catch(() => undefined);
+        // project.yaml rides in the same commit as the log, committed now rather than debounced.
+        if (ctx.autocommit) {
+          ctx.autocommit.schedule(
+            updated.dir,
+            workspaceLabel(req.params.slug),
+            actor.author,
+            `behaviour ${name} ${enabled ? "on" : "off"}`,
+            ["project.yaml"],
+          );
+          await ctx.autocommit.flush(updated.dir).catch(() => null);
+        }
+        return { behaviour: behaviourView(now, updated), changed: true, episode };
+      }),
+  );
+
+  app.post<{ Params: { slug: string } }>(
+    "/managers/behaviours/acknowledge",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Accept an out-of-UI behaviour change",
+        description:
+          "Records the workspace's CURRENT autonomy as known-good, clearing the `behaviours-changed-outside-ui` " +
+          "alert. Changes nothing else. Returns `{ ok: true }`.",
+        params: paramsSchema(),
+        response: ok200("`{ ok: true }`."),
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async () => {
+        const project = await projects.get(req.params.slug);
+        await writeBaseline(project.dir, await behavioursFor(projects, project), project.triggers, "acknowledged");
+        return { ok: true };
       }),
   );
 }
