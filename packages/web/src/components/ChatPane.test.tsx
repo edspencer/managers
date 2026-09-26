@@ -896,6 +896,14 @@ describe("ChatPane: preload toggle (issue #1)", () => {
     expect(cb).toBeDisabled();
   });
 
+  it("does not send preloadContext when the toggle is unavailable, even though it defaults on (M7)", async () => {
+    render(<ChatPane projectSlug="proj" preloadAvailable={false} />);
+    await screen.findByRole("checkbox");
+    await userEvent.type(screen.getByPlaceholderText(/Message Claude/i), "first");
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/ }));
+    expect((sends[0].opts as { preloadContext?: boolean }).preloadContext).toBe(false);
+  });
+
   it("sends preloadContext on the first turn of a new project chat when available + checked", async () => {
     render(<ChatPane projectSlug="proj" preloadAvailable />);
     await screen.findByRole("checkbox");

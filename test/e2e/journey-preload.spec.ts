@@ -31,7 +31,7 @@ test("preload checkbox: disabled with no overview, enabled + default-on once OVE
   const enabled = page.getByRole("checkbox", { name: /Preload project context/i });
   await expect(enabled).toBeEnabled();
   await expect(enabled).toBeChecked();
-  await expect(page.getByText(/injects OVERVIEW\.md/i)).toBeVisible();
+  await expect(page.getByText(/sends the project briefing/i)).toBeVisible();
 
   // The header also shows the "Overview" hint pill once an overview exists.
   await expect(page.getByText("Overview", { exact: true })).toBeVisible();
@@ -44,6 +44,8 @@ test("preload checkbox: disabled with no overview, enabled + default-on once OVE
   await composer.fill("kick off with context");
   await page.getByRole("button", { name: /^Send$/ }).click();
   await expect(page.getByText(/Seeded project state/i).first()).toBeVisible({ timeout: 30_000 });
+  // Managers M7: the preload is the project briefing, which embeds the overview.
+  await expect(page.getByRole("heading", { name: "Open tasks" }).first()).toBeVisible();
   await expect(page.getByText(/kick off with context/).first()).toBeVisible();
 
   // After the first turn established the session, the preload toggle is gone

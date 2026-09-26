@@ -6,9 +6,10 @@ import { BranchIcon, ClockIcon, PencilIcon, XIcon } from "../icons";
 
 /**
  * Issue #1/#188 — the "Preload project context" checkbox shown on a NEW project
- * chat's composer. When checked, the first turn injects the project's curated
- * OVERVIEW.md (current state) and CHANGELOG.md (history) as context. Disabled
- * (with an explanatory note) until a sweep has produced an overview.
+ * chat's composer. Managers M7: when checked, the first turn is prefixed with the
+ * project's BRIEFING (the same document a scheduled wake starts from). It is
+ * still only offered once a sweep has produced an OVERVIEW.md (unchanged gating;
+ * the briefing itself does not need one — see the M7 report's follow-ups).
  */
 export function PreloadToggle({
   checked,
@@ -28,7 +29,7 @@ export function PreloadToggle({
       }`}
       title={
         available
-          ? "Inject this project's curated OVERVIEW.md (current state) and CHANGELOG.md (history) as context on the first message of this new chat, so the agent starts already knowing the project's state and narrative."
+          ? "Start this chat from the project's briefing — the protocol, memory, objectives, open tasks, recent runs, alerts and OVERVIEW.md — the same document a scheduled wake starts from."
           : "No project overview yet — a sweep writes OVERVIEW.md after some activity. The agent will still see the project's files."
       }
     >
@@ -46,7 +47,7 @@ export function PreloadToggle({
           hidden on mobile (< sm) to keep the label on one line and reclaim
           vertical space (#372); it stays inline on desktop. */}
       <span className="hidden text-fg-subtle transition-opacity sm:inline">
-        {available ? "(injects OVERVIEW.md + CHANGELOG.md)" : "(no overview yet)"}
+        {available ? "(sends the project briefing)" : "(no overview yet)"}
       </span>
     </label>
   );

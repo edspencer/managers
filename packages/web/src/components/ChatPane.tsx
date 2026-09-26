@@ -1285,7 +1285,9 @@ export function ChatPane({
 
       // Preload only applies to the very first turn of a never-resumed chat.
       const isFirstTurnOfNewChat = isNewSessionRef.current && !firstTurnSentRef.current;
-      const preload = isFirstTurnOfNewChat && preloadContext;
+      // Managers M7: the server now briefs EVERY preloaded chat (it used to no-op
+      // without an OVERVIEW.md), so a disabled, un-offered checkbox must not send it.
+      const preload = isFirstTurnOfNewChat && preloadContext && preloadAvailable;
       firstTurnSentRef.current = true;
       chatClient.send(projectSlug, text, sessionRef.current, {
         preloadContext: preload,
@@ -1297,7 +1299,7 @@ export function ChatPane({
         attachments: atts.map((a) => ({ id: a.id, filename: a.filename, kind: a.kind })),
       });
     },
-    [projectSlug, preloadContext],
+    [projectSlug, preloadContext, preloadAvailable],
   );
 
   const send = useCallback(() => {
