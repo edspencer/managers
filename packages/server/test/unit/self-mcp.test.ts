@@ -35,7 +35,7 @@ import {
 type Result = { content: Array<{ type: string; text: string }>; isError?: boolean };
 
 function toolByName(context: SelfMcpContext, name: string) {
-  const def = selfMcpServerDef(context);
+  const def = selfMcpServerDef({ read: context });
   const tool = def.tools.find((t) => t.name === name);
   if (!tool) throw new Error(`no such tool: ${name}`);
   return tool;
@@ -85,7 +85,7 @@ describe("self-management MCP (Phase 1, read-only)", () => {
     expect(SELF_MCP_TOOL_NAMES.listProjects).toBe("mcp__managers__list_projects");
     expect(SELF_MCP_TOOL_NAMES.listChats).toBe("mcp__managers__list_chats");
     expect(SELF_MCP_TOOL_NAMES.readChat).toBe("mcp__managers__read_chat");
-    const def = selfMcpServerDef(fakeContext());
+    const def = selfMcpServerDef({ read: fakeContext() });
     expect(def.name).toBe("managers");
     expect(def.tools.map((t) => t.name).sort()).toEqual(["list_chats", "list_projects", "read_chat"]);
   });
@@ -532,7 +532,7 @@ function fakeWrite(over: Partial<SelfMcpWriteContext> = {}): RecordingWrite {
 }
 
 function writeToolByName(context: SelfMcpContext, write: SelfMcpWriteContext, name: string) {
-  const def = selfMcpServerDef(context, write);
+  const def = selfMcpServerDef({ read: context, write: write });
   const tool = def.tools.find((t) => t.name === name);
   if (!tool) throw new Error(`no such tool: ${name}`);
   return tool;
@@ -551,12 +551,12 @@ async function callWrite(
 
 describe("self-management MCP (Phase 2, write tools)", () => {
   it("exposes only the 3 read tools WITHOUT a write ctx, and 9 tools WITH one (triggers gated OFF)", () => {
-    const readOnly = selfMcpServerDef(fakeContext());
+    const readOnly = selfMcpServerDef({ read: fakeContext() });
     expect(readOnly.tools.map((t) => t.name).sort()).toEqual(["list_chats", "list_projects", "read_chat"]);
 
     // Trigger tools default OFF (per-project opt-in), so the base write shape is the
     // 6 write tools + 3 read tools = 9 — no schedule/hook verbs (collapsed in T3).
-    const withWrite = selfMcpServerDef(fakeContext(), fakeWrite());
+    const withWrite = selfMcpServerDef({ read: fakeContext(), write: fakeWrite() });
     expect(withWrite.tools).toHaveLength(9);
     expect(withWrite.tools.map((t) => t.name).sort()).toEqual([
       "archive_chat",
@@ -614,7 +614,7 @@ describe("self-management MCP (Phase 2, write tools)", () => {
   });
 
   it("create_chat description guides a concise 3–5 word title and names both preload files (C2 / #264)", () => {
-    const def = selfMcpServerDef(fakeContext(), fakeWrite());
+    const def = selfMcpServerDef({ read: fakeContext(), write: fakeWrite() });
     const createChat = def.tools.find((t) => t.name === "create_chat");
     expect(createChat).toBeDefined();
 
@@ -787,7 +787,7 @@ describe("self-management MCP (Phase 2, write tools)", () => {
   });
 
   it("the spawn tools advertise the `model` param listing the picker allow-list", () => {
-    const def = selfMcpServerDef(fakeContext(), fakeWrite());
+    const def = selfMcpServerDef({ read: fakeContext(), write: fakeWrite() });
     for (const name of ["create_chat", "fork_chat", "fork_chat_batch"]) {
       const tool = def.tools.find((t) => t.name === name)!;
       const props = tool.inputSchema.properties as Record<string, { description?: string }>;
@@ -1063,7 +1063,7 @@ describe("coerceToolList", () => {
 
 describe("self-management MCP (trigger tools + per-project gate)", () => {
   it("trigger tools are ABSENT when triggersMcpEnabled is off (the default write ctx)", () => {
-    const def = selfMcpServerDef(fakeContext(), fakeWrite());
+    const def = selfMcpServerDef({ read: fakeContext(), write: fakeWrite() });
     const names = def.tools.map((t) => t.name);
     expect(names).not.toContain("list_triggers");
     expect(names).not.toContain("set_trigger");
@@ -1074,7 +1074,7 @@ describe("self-management MCP (trigger tools + per-project gate)", () => {
   });
 
   it("appends exactly the 4 trigger tools (13 total) when triggersMcpEnabled is on", () => {
-    const def = selfMcpServerDef(fakeContext(), fakeWrite({ triggersMcpEnabled: true }));
+    const def = selfMcpServerDef({ read: fakeContext(), write: fakeWrite({ triggersMcpEnabled: true }) });
     expect(def.tools).toHaveLength(13);
     expect(def.tools.map((t) => t.name).sort()).toEqual([
       "archive_chat",
@@ -1130,7 +1130,7 @@ describe("self-management MCP (trigger tools + per-project gate)", () => {
   });
 
   it("trigger tools are absent WITHOUT a write ctx even though they are a write-block feature", () => {
-    const def = selfMcpServerDef(fakeContext());
+    const def = selfMcpServerDef({ read: fakeContext() });
     expect(def.tools.map((t) => t.name)).not.toContain("set_trigger");
   });
 
@@ -1146,10 +1146,10 @@ describe("self-management MCP (trigger tools + per-project gate)", () => {
 
 describe("self-management MCP (create_project)", () => {
   it("is ABSENT unless projectsMcpEnabled is on — even with the write tools present", () => {
-    const off = selfMcpServerDef(fakeContext(), fakeWrite());
+    const off = selfMcpServerDef({ read: fakeContext(), write: fakeWrite() });
     expect(off.tools.map((t) => t.name)).not.toContain("create_project");
 
-    const on = selfMcpServerDef(fakeContext(), fakeWrite({ projectsMcpEnabled: true }));
+    const on = selfMcpServerDef({ read: fakeContext(), write: fakeWrite({ projectsMcpEnabled: true }) });
     expect(on.tools.map((t) => t.name)).toContain("create_project");
     // Its own gate — it does NOT drag the trigger tools in with it.
     expect(on.tools.map((t) => t.name)).not.toContain("set_trigger");
@@ -1158,7 +1158,7 @@ describe("self-management MCP (create_project)", () => {
   });
 
   it("is absent WITHOUT a write ctx at all (it lives in the write block)", () => {
-    const def = selfMcpServerDef(fakeContext());
+    const def = selfMcpServerDef({ read: fakeContext() });
     expect(def.tools.map((t) => t.name)).not.toContain("create_project");
   });
 
@@ -1307,10 +1307,10 @@ describe("self-management MCP (create_project)", () => {
 
 describe("self-management MCP (promote_project)", () => {
   it("is ABSENT unless projectsMcpEnabled is on — even with the write tools present", () => {
-    const off = selfMcpServerDef(fakeContext(), fakeWrite());
+    const off = selfMcpServerDef({ read: fakeContext(), write: fakeWrite() });
     expect(off.tools.map((t) => t.name)).not.toContain("promote_project");
 
-    const on = selfMcpServerDef(fakeContext(), fakeWrite({ projectsMcpEnabled: true }));
+    const on = selfMcpServerDef({ read: fakeContext(), write: fakeWrite({ projectsMcpEnabled: true }) });
     expect(on.tools.map((t) => t.name)).toContain("promote_project");
     // Shares create_project's gate — the project block is the two of them, and it
     // still does NOT drag the trigger tools in with it.
@@ -1320,7 +1320,7 @@ describe("self-management MCP (promote_project)", () => {
   });
 
   it("is absent WITHOUT a write ctx at all (it lives in the write block)", () => {
-    const def = selfMcpServerDef(fakeContext());
+    const def = selfMcpServerDef({ read: fakeContext() });
     expect(def.tools.map((t) => t.name)).not.toContain("promote_project");
   });
 

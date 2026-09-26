@@ -99,9 +99,10 @@ describe("integration: fake claude [[MCP …]] directive (Managers M2)", () => {
   let widget: Project;
 
   beforeAll(async () => {
-    // The `managers` self-MCP is still opt-in per instance until a later milestone
-    // makes it always-on; the rig sets the same flag.
-    t = await startTestApp({ sweepIntervalMs: 600_000, env: { MANAGERS_SELF_MCP: "1" } });
+    // Default posture, no flags: since M5 the `managers` server is on every turn,
+    // and its chat-read block (list_projects, used below) is on under the default
+    // `balanced` profile.
+    t = await startTestApp({ sweepIntervalMs: 600_000 });
     const mk = async (name: string) =>
       ((await t.app.inject({ method: "POST", url: "/api/projects", payload: { name } })).json() as { project: Project })
         .project;

@@ -24,6 +24,9 @@ import {
   DEFAULT_READ_ONLY_SCOPE,
   FULL_SCOPE,
   ALL_OPERATIONS,
+  STATE_READ_OPERATIONS,
+  STATE_WRITE_OPERATIONS,
+  MEMORY_OPERATIONS,
   READ_OPERATIONS,
   WRITE_OPERATIONS,
   TURN_SPAWNING_OPERATIONS,
@@ -157,6 +160,14 @@ describe("DEFAULT_READ_ONLY_SCOPE", () => {
     }
   });
 
+  // Managers M5 (plan §2.3): external principals get the state ops only by an
+  // explicit grant — the default must not pick them up through a wildcard.
+  it("grants none of the Managers state or memory operations", () => {
+    for (const op of [...STATE_READ_OPERATIONS, ...STATE_WRITE_OPERATIONS, ...MEMORY_OPERATIONS]) {
+      expect(isOperationAllowed(DEFAULT_READ_ONLY_SCOPE, op)).toBe(false);
+    }
+  });
+
   it("allows reading triggers but not writing or firing them", () => {
     expect(isOperationAllowed(DEFAULT_READ_ONLY_SCOPE, "list_triggers")).toBe(true);
     expect(isOperationAllowed(DEFAULT_READ_ONLY_SCOPE, "set_trigger")).toBe(false);
@@ -180,10 +191,15 @@ describe("grantsTurnSpawning", () => {
 
 describe("allowedOperations", () => {
   it("expands a pattern to concrete catalogue entries", () => {
+    // Managers M5: an operator's own `list_*` now also reaches the state reads.
     expect(allowedOperations(scope({ allow: ["list_*"] }))).toEqual([
       "list_projects",
       "list_chats",
       "list_triggers",
+      "list_objectives",
+      "list_tasks",
+      "list_alerts",
+      "list_memory",
     ]);
   });
 

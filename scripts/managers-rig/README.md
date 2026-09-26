@@ -28,8 +28,12 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
 - `HOST=127.0.0.1` (forced), `PORT`;
 - `MANAGERS_DATA_DIR`, `MANAGERS_PROJECTS_DIR`, `MANAGERS_WEB_DIST`;
 - `MANAGERS_DRIVE_MODE=batch`, `MANAGERS_AUTH_MODE=none`;
-- `MANAGERS_SELF_MCP=1`, so keeper and trigger turns get the `managers` self-MCP
-  (the target of `[[MCP managers.*]]`);
+- nothing for the `managers` MCP (the target of `[[MCP managers.*]]`): since M5 it
+  is injected on every keeper and trigger turn for its state tools
+  (`record_episode`, `upsert_task`, `list_tasks`, …), and its chat-read block
+  (`list_projects`, `list_chats`, `read_chat`) is on under the default `balanced`
+  profile. (M2–M4 set `MANAGERS_SELF_MCP=1`; it was redundant under that profile
+  and M5 dropped it, so the rig runs the default posture);
 - `MANAGERS_SWEEP_MIN_INTERVAL_MS=999999999` (the sweeper would rewrite seeded files).
   The interval counts from the last sweep, and a never-swept project counts as swept
   at epoch 0, so `seed.mjs` also writes `sweep-state.json` stamping every workspace
@@ -91,7 +95,13 @@ or a trigger prompt) and the fake **really calls that tool**:
 ```
 QA [[MCP managers.list_projects {}]]
 [[MCP managers.list_chats {"project":"acme-site"}]] then [[MCP managers.nope {}]]
+[[MCP managers.record_episode {"text":"QA wrote this","importance":4,"tags":["qa"]}]]
+[[MCP managers.upsert_task {"title":"QA ask","status":"awaiting-ed","ask":"Approve QA?"}]]
 ```
+
+The state tools (M5) write the data repo and are auto-committed as `managers-bot`
+(10 s debounce, or at once when the turn ends): check with
+`git -C /data/paddock-servers/managers-qa/state/data/projects log -1 --format=%an`.
 
 - It is repeatable; calls run in prompt order, before the reply.
 - `<json-args>` is an optional JSON object (default `{}`). A `]]` inside it is fine.

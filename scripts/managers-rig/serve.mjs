@@ -25,8 +25,10 @@
  * can drive real MCP tool calls with zero Anthropic calls.
  *
  * ── What the rig turns on ───────────────────────────────────────────────────
- *   MANAGERS_SELF_MCP=1   inject the `managers` self-MCP (read block) into keeper
- *                         and trigger turns, so `[[MCP managers.*]]` has a target.
+ *   (Since M5 there is no MANAGERS_SELF_MCP here: the `managers` MCP server is
+ *    injected on every keeper and trigger turn for its state tools, and its
+ *    chat-read block — list_projects/list_chats/read_chat — is on under the
+ *    default `balanced` profile. The rig runs that default posture.)
  *   MANAGERS_FAKE_INVOCATION_LOG=<rig>/invocations.jsonl
  *                         one JSON line per fake-claude spawn: argv-derived flags,
  *                         the --mcp-config, and `paddockEnvCount` (a COUNT of
@@ -75,7 +77,6 @@ export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv
   env.MANAGERS_WEB_DIST = path.join(REPO_ROOT, "packages", "web", "dist");
   env.MANAGERS_DRIVE_MODE = "batch";
   env.MANAGERS_AUTH_MODE = "none";
-  env.MANAGERS_SELF_MCP = "1";
   // The sweeper would rewrite seeded OVERVIEW.md/CHANGELOG.md mid-QA.
   env.MANAGERS_SWEEP_MIN_INTERVAL_MS = "999999999";
   env.LOG_LEVEL = env.LOG_LEVEL || "warn";

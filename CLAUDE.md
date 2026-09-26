@@ -59,6 +59,25 @@ What changed from Paddock, and what did not:
   helper sets `0`). Slugs `objectives tasks log runs reports memory archive` are
   reserved, and a new notebook is seeded with `.managers/triggers/wake.md` and a
   DISABLED `wake` trigger.
+- **State writes (M5).** Every write — the agents' `managers` MCP state tools and
+  the UI's write REST (`POST/PATCH …/managers/tasks`, `…/tasks/:id/answer`,
+  `POST/PATCH …/managers/objectives`) — goes through ONE writer,
+  `managers/state-writes.ts`: a per-workspace promise-chain lock
+  (`write-queue.ts`; temp-file + rename for rewrites, `appendFile` for journals),
+  ids minted under that lock, and every record validated through the STRICT
+  `*WriteSchema` (an update re-reads the raw frontmatter, never echoes the lenient
+  read DTO; hand-added keys are preserved). `managers/autocommit.ts` then commits
+  ONLY the owned paths (`objectives tasks log runs reports memory .gitattributes`)
+  per workspace — agent writes as `managers-bot` (`MANAGERS_BOT_GIT_*`), UI writes
+  as the request's user or `MANAGERS_GIT_AUTHOR_*` — 10 s debounced
+  (`MANAGERS_AUTOCOMMIT_DEBOUNCE_MS`), flushed when a turn ends, off with
+  `MANAGERS_AUTOCOMMIT=0`, never pushed. The `managers` MCP server is now injected
+  on EVERY keeper and trigger turn: its state block (`self-mcp-state.ts`) is
+  always on; the chat-read block keeps `selfMcpEnabled`, spawn-write keeps the
+  depth gate. `enforceManagementPolicy` polices state ops for every principal —
+  the in-process keeper may only WRITE its own project; external principals need
+  explicit grants (`DEFAULT_READ_ONLY_SCOPE` no longer uses `list_*`).
+  `memory_op` is a stub that refuses outside human-origin turns (M14).
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

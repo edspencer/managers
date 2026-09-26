@@ -250,3 +250,65 @@ describe("paddockManageSummary", () => {
     ).toBe("fanned out 4 chats");
   });
 });
+
+describe("Managers state tools (M5)", () => {
+  const out = (o: unknown) => JSON.stringify(o);
+
+  it("parses record_episode and summarizes it compactly", () => {
+    const pm = parsePaddockManage(
+      "mcp__managers__record_episode",
+      out({ project: "acme", id: "ep-260926-0704-c7", file: "log/2026-09.md", importance: 6, objective: null }),
+    );
+    expect(pm).toMatchObject({ tool: "record_episode", id: "ep-260926-0704-c7", importance: 6 });
+    expect(paddockManageSummary(pm!)).toBe("Recorded episode ep-260926-0704-c7 (imp 6)");
+  });
+
+  it("parses upsert_task, with created and moved variants", () => {
+    const created = parsePaddockManage(
+      "mcp__managers__upsert_task",
+      out({ project: "acme", id: "t-260926-7k3f", file: "tasks/open/t-260926-7k3f.md", status: "awaiting-ed", created: true }),
+    );
+    expect(paddockManageSummary(created!)).toBe("Task t-260926-7k3f created → awaiting-ed");
+    const moved = parsePaddockManage(
+      "mcp__managers__upsert_task",
+      out({
+        id: "t-260926-7k3f",
+        file: "tasks/done/2026-09/t-260926-7k3f.md",
+        status: "done",
+        created: false,
+        movedFrom: "tasks/open/t-260926-7k3f.md",
+      }),
+    );
+    expect(moved).toMatchObject({ movedFrom: "tasks/open/t-260926-7k3f.md" });
+    expect(paddockManageSummary(moved!)).toBe("Task t-260926-7k3f → done");
+  });
+
+  it("parses the other state tools", () => {
+    expect(
+      paddockManageSummary(
+        parsePaddockManage("mcp__managers__update_objective", out({ id: "grow", status: "active", created: false }))!,
+      ),
+    ).toBe("Objective grow updated");
+    expect(
+      paddockManageSummary(
+        parsePaddockManage(
+          "mcp__managers__write_report",
+          out({ type: "status", date: "2026-09-26", file: "reports/status/2026-09-26.md", currentFile: "reports/status/current.md" }),
+        )!,
+      ),
+    ).toBe("status report for 2026-09-26");
+    expect(
+      paddockManageSummary(
+        parsePaddockManage("mcp__managers__list_tasks", out({ count: 2, tasks: [{ id: "t-1", title: "a", status: "open" }] }))!,
+      ),
+    ).toBe("2 tasks");
+    expect(
+      paddockManageSummary(parsePaddockManage("mcp__managers__list_memory", out({ facts: [{}], playbooks: [] }))!),
+    ).toBe("1 fact, 0 playbooks");
+  });
+
+  it("an error result (plain text) falls back to the generic body", () => {
+    expect(parsePaddockManage("mcp__managers__upsert_task", "Error: upserting the task: task: ask: awaiting-ed requires an ask")).toBeNull();
+    expect(parsePaddockManage("mcp__managers__record_episode", out({ nope: true }))).toBeNull();
+  });
+});

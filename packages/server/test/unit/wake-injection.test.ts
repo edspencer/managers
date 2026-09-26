@@ -22,6 +22,8 @@ import { SELF_MCP_SERVER_KEY } from "../../src/self-mcp.js";
 
 /** A recognisable stand-in for the self-MCP def, so tests can read back its flags. */
 function markerSelfMcp(params: {
+  includeRead: boolean;
+  origin: string;
   includeWrite: boolean;
   includeTriggers: boolean;
   parentProvenance: { origin: string; depth: number };
@@ -84,7 +86,9 @@ describe("buildInjectedMcpServers", () => {
     expect(selfParams(servers)).toMatchObject({ includeWrite: true, includeTriggers: false });
   });
 
-  it("omits the self-MCP when the instance opt-in is off", async () => {
+  // Managers M5: the server is ALWAYS injected (its state block is on every turn);
+  // the instance opt-in now gates only its chat-read block (and so the write block).
+  it("still injects the server with only the state block when the instance opt-in is off", async () => {
     const servers = await buildInjectedMcpServers(
       BASE_ARGS,
       ctx({
@@ -96,16 +100,30 @@ describe("buildInjectedMcpServers", () => {
         },
       }),
     );
-    expect(servers[SELF_MCP_SERVER_KEY]).toBeUndefined();
+    expect(servers[SELF_MCP_SERVER_KEY]).toBeDefined();
+    expect(selfParams(servers)).toMatchObject({
+      includeRead: false,
+      includeWrite: false,
+      includeTriggers: false,
+      includeProjects: false,
+    });
   });
 
-  it("omits the self-MCP when the chat's depth exceeds maxSpawnDepth", async () => {
-    // depth 2, bound 1 → 2 <= 1 is false → no injection.
+  it("drops the chat-read and write blocks (not the server) when depth exceeds maxSpawnDepth", async () => {
+    // depth 2, bound 1 → 2 <= 1 is false → no chat-read/write blocks.
     const servers = await buildInjectedMcpServers(
       { ...BASE_ARGS, depth: 2, maxSpawnDepth: 1 },
       ctx(),
     );
-    expect(servers[SELF_MCP_SERVER_KEY]).toBeUndefined();
+    expect(servers[SELF_MCP_SERVER_KEY]).toBeDefined();
+    expect(selfParams(servers)).toMatchObject({ includeRead: false, includeWrite: false });
+  });
+
+  it("passes the turn's origin through (it gates memory_op)", async () => {
+    const human = await buildInjectedMcpServers(BASE_ARGS, ctx());
+    expect(selfParams(human)).toMatchObject({ origin: "human" });
+    const scheduled = await buildInjectedMcpServers({ ...BASE_ARGS, origin: "scheduled" }, ctx());
+    expect(selfParams(scheduled)).toMatchObject({ origin: "scheduled" });
   });
 
   it("read-only self-MCP when writes are disabled (no trigger tools)", async () => {
@@ -175,12 +193,13 @@ describe("buildInjectedMcpServers", () => {
   });
 
   it("gates a resume on the chat's OWN recorded depth (not the caller's depth)", async () => {
-    // Caller says depth 0, but the recorded chat depth is 2 → beyond bound 1 → no self-MCP.
+    // Caller says depth 0, but the recorded chat depth is 2 → beyond bound 1 → no
+    // chat-read/write blocks (the server itself stays, for its state block).
     const servers = await buildInjectedMcpServers(
       { ...BASE_ARGS, resume: "sess-1", depth: 0, maxSpawnDepth: 1 },
       ctx({ getProvenance: async () => ({ depth: 2 }) }),
     );
-    expect(servers[SELF_MCP_SERVER_KEY]).toBeUndefined();
+    expect(selfParams(servers)).toMatchObject({ includeRead: false, includeWrite: false });
   });
 
   it("passes the resolved injection depth through as the child parentProvenance", async () => {
