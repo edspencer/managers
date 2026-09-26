@@ -6,6 +6,22 @@ import { XIcon } from "./icons";
 
 const STATUSES: ProjectStatus[] = ["idea", "active", "paused", "blocked", "done"];
 
+/**
+ * Managers M3: projects are notebooks. A GitHub repo is recorded as metadata (a
+ * link), never cloned. Accepts `owner/name`, or a pasted github.com URL, and
+ * returns the canonical `owner/name` — or `null` when it is neither.
+ */
+export function parseGithubRepo(input: string): string | null {
+  const t = input
+    .trim()
+    .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "");
+  const m = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/.exec(t);
+  if (!m || m[2] === "." || m[2] === "..") return null;
+  return `${m[1]}/${m[2]}`;
+}
+
 export function NewProjectModal({
   open,
   onClose,
@@ -20,10 +36,7 @@ export function NewProjectModal({
   const [domain, setDomain] = useState("");
   const [group, setGroup] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("active");
-  const [repo, setRepo] = useState("");
-  const [linkPath, setLinkPath] = useState("");
-  // Only meaningful when a path is given with no repo — see the checkbox below.
-  const [managedNotes, setManagedNotes] = useState(false);
+  const [github, setGithub] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,9 +52,7 @@ export function NewProjectModal({
       setDomain("");
       setGroup("");
       setStatus("active");
-      setRepo("");
-      setLinkPath("");
-      setManagedNotes(false);
+      setGithub("");
       setError(null);
     }
   }, [open]);
@@ -60,6 +71,11 @@ export function NewProjectModal({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    const githubRepo = github.trim() ? parseGithubRepo(github) : null;
+    if (github.trim() && !githubRepo) {
+      setError("GitHub repo must look like owner/name (or a github.com URL).");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -68,12 +84,11 @@ export function NewProjectModal({
         status,
         group: group || undefined,
         summary: summary.trim() || undefined,
-        repo: repo.trim() || undefined,
-        path: linkPath.trim() || undefined,
-        // Send `managed` only for the ambiguous shape (a path with no repo);
-        // otherwise let the server derive it, so there is one rule not two.
-        managed:
-          linkPath.trim() && !repo.trim() ? managedNotes : undefined,
+        // Notebook only (Managers M3): no `repo`/`path`, so the server creates a
+        // managed notes project. The repo is a link, not a checkout.
+        links: githubRepo
+          ? [{ label: "GitHub", url: `https://github.com/${githubRepo}` }]
+          : undefined,
         domain: domain
           .split(",")
           .map((d) => d.trim())
@@ -142,59 +157,23 @@ export function NewProjectModal({
           </select>
         </label>
 
+        {/* Managers M3: projects are notebooks — Managers never clones or links
+            code. The directory / clone-URL options upstream offered here are
+            hidden (the server still accepts them); a repo is metadata only. */}
         <label className="mb-4 block">
-          <span className="field-label">Directory on this machine (optional)</span>
+          <span className="field-label">GitHub repo (optional)</span>
           <input
             className="input"
-            value={linkPath}
-            onChange={(e) => setLinkPath(e.target.value)}
-            placeholder="/home/ed/Code/foo"
+            value={github}
+            onChange={(e) => setGithub(e.target.value)}
+            placeholder="owner/name"
+            aria-describedby="new-project-github-help"
           />
-          <span className="mt-1 block text-xs text-fg-subtle">
-            Where this project's content lives. An existing checkout is used in
-            place — its real history, branches and remotes — and Managers writes
-            nothing into it. Absolute path; created for you if it doesn't exist.
+          <span id="new-project-github-help" className="mt-1 block text-xs text-fg-subtle">
+            Recorded as a link on the project. Nothing is cloned — the manager works from
+            notes, not source.
           </span>
         </label>
-
-        <label className="mb-4 block">
-          <span className="field-label">Git repository URL (optional)</span>
-          <input
-            className="input"
-            value={repo}
-            onChange={(e) => setRepo(e.target.value)}
-            placeholder="https://github.com/owner/repo.git"
-          />
-          <span className="mt-1 block text-xs text-fg-subtle">
-            {!linkPath.trim()
-              ? "Managers clones this repo into the project and works in the checkout. Leave both blank for a notes project."
-              : "Cloned into the directory above if it doesn't exist yet; otherwise the directory is used as-is and this just records which repo it is."}
-          </span>
-        </label>
-
-        {/*
-          `managed` is derived server-side as `!(repo || path)`, which decides the
-          two unambiguous cases on its own: naming a repo means code, naming
-          neither means notes. A path ALONE is the one genuinely ambiguous input —
-          `~/Code/foo` could be a checkout or a folder of notes — so that is the
-          only time the choice is worth putting to the user.
-        */}
-        {linkPath.trim() && !repo.trim() && (
-          <label className="mb-4 flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={managedNotes}
-              onChange={(e) => setManagedNotes(e.target.checked)}
-            />
-            <span className="text-xs text-fg-muted">
-              <span className="font-medium">These are notes — let Managers curate them.</span>{" "}
-              Its OVERVIEW.md, CHANGELOG.md and CLAUDE.md are written into that
-              directory. Leave unticked for a code checkout you version yourself,
-              and Managers will write nothing into it.
-            </span>
-          </label>
-        )}
 
         <div className="mb-5 grid grid-cols-2 gap-3">
           <label className="block">

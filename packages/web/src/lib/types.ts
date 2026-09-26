@@ -293,6 +293,8 @@ export interface CreateProjectInput {
   domain?: string[];
   group?: string;
   summary?: string;
+  /** Related links (Managers M3: the New Project modal's GitHub repo lands here). */
+  links?: ProjectLink[];
   /**
    * External git repo URL to back this project (issue #187). When set the
    * project is created repo-backed (Paddock clones it and the keeper's cwd is the
@@ -1649,6 +1651,7 @@ export interface TranscriptsMigrationProbe {
  * rather than as a type error at build time and a crash at runtime.
  */
 export type TranscriptsMigrationReason =
+  | "not-supported"
   | "already-host"
   | "env-shadowed"
   | "profile-paranoid"

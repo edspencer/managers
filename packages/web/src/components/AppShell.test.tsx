@@ -184,36 +184,25 @@ describe("AppShell: sidebar shell", () => {
   });
 
   /**
-   * The footer link above was the ONLY way in, and an early user couldn't find
-   * it there: grouped with Config and the theme toggle, it reads as instance
-   * chrome rather than as a way to get projects into the list (#922). So there
-   * is a second entry point beside the `+`, and the footer one stays.
+   * Managers M3: upstream #922 added a second Discover entry point beside the
+   * `+` in the Projects header. Managers projects are notebooks, so importing
+   * Claude Code history is not how projects get into the list: that prominent
+   * button is gone, and only the footer link (above) remains.
    */
-  it("also reaches /discover from a button beside the `+` in the Projects header (#922)", () => {
+  it("has NO Discover button beside the `+` in the Projects header (Managers M3)", () => {
     mockProjects = [makeProject({ slug: "a" })];
     renderShell();
-    const link = screen.getByRole("link", { name: "Discover projects" });
-    expect(link).toHaveAttribute("href", "/discover");
-    // In the header row, next to New Project — not floating elsewhere.
+    expect(screen.queryByRole("link", { name: "Discover projects" })).not.toBeInTheDocument();
     const header = screen.getByText("Projects").closest("div")!;
-    expect(header).toContainElement(link);
     expect(header).toContainElement(screen.getByRole("button", { name: "New Project" }));
-    // The footer link is still there. Both, not either.
     expect(screen.getByRole("link", { name: "Discover" })).toHaveAttribute("href", "/discover");
   });
 
-  it("lights up only ONE of the two /discover entry points while on /discover (#922)", () => {
-    // Both NavLinks match the route, so both go `isActive`. If both took the
-    // footer stack's filled `bg-surface-selected`, the sidebar would show two
-    // selected rows 671px apart, which reads as a rendering bug. The header
-    // button tints instead.
+  it("still marks the footer Discover link active on /discover", () => {
     renderShell("/discover");
     expect(screen.getByRole("link", { name: "Discover" }).className).toContain(
       "bg-surface-selected",
     );
-    const header = screen.getByRole("link", { name: "Discover projects" });
-    expect(header.className).not.toContain("bg-surface-selected");
-    expect(header.className).toContain("text-accent");
   });
 
   it("shows the empty state when there are no projects", () => {

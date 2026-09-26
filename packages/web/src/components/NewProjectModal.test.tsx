@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NewProjectModal } from "./NewProjectModal";
+import { NewProjectModal, parseGithubRepo } from "./NewProjectModal";
 import { makeProject } from "../test/factories";
 
 // Mock the api client so we can assert the payload the modal builds.
@@ -74,20 +74,18 @@ describe("NewProjectModal", () => {
     expect(payload.domain).toEqual([]);
   });
 
-  it("includes the git repo URL in the payload when provided (issue #187)", async () => {
+  // Managers M3: projects are notebooks. The clone-URL and directory options
+  // are gone from the modal; a GitHub repo is recorded as a link, never cloned.
+  it("offers no repo/clone or directory option (Managers M3)", () => {
     render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
-    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Repo Proj");
-    await userEvent.type(
-      screen.getByPlaceholderText(/github\.com\/owner\/repo/i),
-      "  https://github.com/owner/repo.git  ",
-    );
-    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
-    await waitFor(() => expect(createProject).toHaveBeenCalled());
-    const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.repo).toBe("https://github.com/owner/repo.git");
+    expect(screen.queryByText(/Git repository URL/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Directory on this machine/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("/home/ed/Code/foo")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText(/Nothing is cloned/i)).toBeInTheDocument();
   });
 
-  it("omits repo when the URL field is left blank (notebook project)", async () => {
+  it("creates a plain notebook: never sends repo, path or managed", async () => {
     render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
     await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Notebook");
     fireEvent.click(screen.getByRole("button", { name: /create project/i }));
@@ -95,63 +93,43 @@ describe("NewProjectModal", () => {
     const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
     expect(payload.repo).toBeUndefined();
     expect(payload.path).toBeUndefined();
-  });
-
-  it("includes the directory path in the payload when provided (issue #206)", async () => {
-    render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
-    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Linked Proj");
-    await userEvent.type(screen.getByPlaceholderText("/home/ed/Code/foo"), "  /home/ed/Code/foo  ");
-    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
-    await waitFor(() => expect(createProject).toHaveBeenCalled());
-    const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.path).toBe("/home/ed/Code/foo");
-    // A path is independent of `repo`; leaving the URL blank must not send one.
-    expect(payload.repo).toBeUndefined();
-    // A path with no repo is the ambiguous shape, so the choice IS sent — and it
-    // defaults to a code checkout paddock keeps its hands off.
-    expect(payload.managed).toBe(false);
-  });
-
-  it("offers the notes/checkout choice only for a path with no repo (issue #206)", async () => {
-    render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
-    const notes = /These are notes/i;
-    // Neither field: derived managed, nothing to ask.
-    expect(screen.queryByText(notes)).not.toBeInTheDocument();
-
-    await userEvent.type(screen.getByPlaceholderText("/home/ed/Code/foo"), "/home/ed/Code/foo");
-    expect(screen.getByText(notes)).toBeInTheDocument();
-
-    // Naming a repo settles it — that's code, so the question disappears again.
-    await userEvent.type(
-      screen.getByPlaceholderText(/github\.com\/owner\/repo/i),
-      "https://github.com/owner/repo.git",
-    );
-    expect(screen.queryByText(notes)).not.toBeInTheDocument();
-  });
-
-  it("sends managed:true when the user says the directory holds notes (issue #206)", async () => {
-    render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
-    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "My Notes");
-    await userEvent.type(screen.getByPlaceholderText("/home/ed/Code/foo"), "/home/ed/notes");
-    await userEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
-    await waitFor(() => expect(createProject).toHaveBeenCalled());
-    const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.managed).toBe(true);
-    expect(payload.path).toBe("/home/ed/notes");
-  });
-
-  it("omits `managed` when the shape already settles it, so one rule decides", async () => {
-    render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
-    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Cloned");
-    await userEvent.type(
-      screen.getByPlaceholderText(/github\.com\/owner\/repo/i),
-      "https://github.com/owner/repo.git",
-    );
-    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
-    await waitFor(() => expect(createProject).toHaveBeenCalled());
-    const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
     expect(payload.managed).toBeUndefined();
+    expect(payload.links).toBeUndefined();
+  });
+
+  it("stores a GitHub owner/name as a link, not a clone", async () => {
+    render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
+    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Widget");
+    await userEvent.type(screen.getByPlaceholderText("owner/name"), "  acme/widget-lib  ");
+    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
+    await waitFor(() => expect(createProject).toHaveBeenCalled());
+    const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.links).toEqual([{ label: "GitHub", url: "https://github.com/acme/widget-lib" }]);
+    expect(payload.repo).toBeUndefined();
+  });
+
+  it("accepts a pasted github.com URL and normalises it to owner/name", async () => {
+    render(<NewProjectModal open onClose={() => {}} onCreated={() => {}} />);
+    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Widget");
+    await userEvent.type(
+      screen.getByPlaceholderText("owner/name"),
+      "https://github.com/acme/widget-lib.git",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
+    await waitFor(() => expect(createProject).toHaveBeenCalled());
+    const payload = createProject.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.links).toEqual([{ label: "GitHub", url: "https://github.com/acme/widget-lib" }]);
+  });
+
+  it("rejects a malformed GitHub repo without calling the API, and stays open", async () => {
+    const onCreated = vi.fn();
+    render(<NewProjectModal open onClose={() => {}} onCreated={onCreated} />);
+    await userEvent.type(screen.getByPlaceholderText(/Garage Water Heater/i), "Widget");
+    await userEvent.type(screen.getByPlaceholderText("owner/name"), "not a repo");
+    fireEvent.click(screen.getByRole("button", { name: /create project/i }));
+    expect(await screen.findByText(/must look like owner\/name/i)).toBeInTheDocument();
+    expect(createProject).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
   });
 
   it("surfaces an API error and stays open", async () => {
@@ -174,4 +152,24 @@ describe("NewProjectModal", () => {
     // The typed name is retained so the user can fix + resubmit (not blanked).
     expect(screen.getByPlaceholderText(/Garage Water Heater/i)).toHaveValue("Bare");
   });
+});
+
+describe("parseGithubRepo (Managers M3)", () => {
+  it.each([
+    ["acme/widget", "acme/widget"],
+    ["  acme/widget  ", "acme/widget"],
+    ["https://github.com/acme/widget", "acme/widget"],
+    ["https://www.github.com/acme/widget.git", "acme/widget"],
+    ["github.com/acme/widget/", "acme/widget"],
+    ["acme/widget.js", "acme/widget.js"],
+  ])("%s → %s", (input, out) => {
+    expect(parseGithubRepo(input)).toBe(out);
+  });
+
+  it.each(["", "acme", "acme/", "/widget", "acme/widget/extra", "a b/c", "https://gitlab.com/a/b", "acme/..", "-acme/x"])(
+    "rejects %j",
+    (input) => {
+      expect(parseGithubRepo(input)).toBeNull();
+    },
+  );
 });

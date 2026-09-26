@@ -1,4 +1,3 @@
-import { useInstanceEmpty } from "../lib/useInstanceEmpty";
 import { ProjectView } from "./ProjectView";
 
 /**
@@ -27,6 +26,9 @@ import { ProjectView } from "./ProjectView";
  *
  * Discovery stays reachable at `/discover`, unchanged.
  *
+ * **Managers M3** goes one step further and drops the first-run Discovery
+ * section too (see `RootHome` below); the text that follows describes upstream.
+ *
  * The emptiness question is still asked HERE rather than inside `ProjectView`,
  * even though Home is what consumes the answer. `/chat` and `/projects/:slug`
  * mount the same `ProjectView`, and asking there would buy an answer they never
@@ -34,6 +36,9 @@ import { ProjectView } from "./ProjectView";
  * one route where it means anything, and this is `/`.
  */
 export function RootHome() {
-  const { empty, recheck } = useInstanceEmpty();
-  return <ProjectView root instanceEmpty={empty} onInstanceRecheck={recheck} />;
+  // Managers M3: no Discovery takeover on an empty instance. Managers projects
+  // are notebooks created with "+ New project", not adopted from terminal
+  // history, so the empty Home is the ordinary one (its "all caught up" panel
+  // carries New chat). `/discover` and its footer link remain.
+  return <ProjectView root instanceEmpty={false} />;
 }

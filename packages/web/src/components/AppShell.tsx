@@ -334,33 +334,10 @@ export function AppShell() {
             Projects
           </NavLink>
           <div className="flex items-center gap-0.5">
-            {/* Discover's SECOND entry point (#922). The footer link below stays
-                — two doors onto one route cost nothing, and removing one breaks
-                the muscle memory of anyone who found it. But down there it sits
-                between Config and the theme toggle, 671px from here, where it
-                reads as instance chrome; what it actually does is get projects
-                INTO the list, which is the `+`'s job too. So it also belongs
-                beside the `+`.
-
-                Deliberately NOT the footer link's `bg-surface-selected` active
-                treatment: both nav items match `/discover`, and two filled rows
-                at opposite ends of the sidebar read as a rendering bug. A tint
-                is enough on a 14px icon, and it leaves the footer row as the
-                single "you are here" marker. Unlike its neighbour this
-                navigates rather than opening a dialog — the distinct icon and
-                tooltip are what say so. */}
-            <NavLink
-              to="/discover"
-              aria-label="Discover projects"
-              title="Find directories with existing Claude Code history to import"
-              className={({ isActive }) =>
-                `btn-subtle px-1.5 py-1 hover:text-accent ${
-                  isActive ? "text-accent" : "text-fg-subtle"
-                }`
-              }
-            >
-              <SearchIcon width={14} height={14} />
-            </NavLink>
+            {/* Managers M3: upstream's second Discover entry point (#922) sat
+                here, beside the `+`. Managers projects are notebooks, so
+                importing existing Claude Code history is not how projects get
+                into the list; the route and the footer link stay. */}
             {/* Where the project COUNT used to sit (#599). The count answered a
                 question nobody asks — the list is right underneath — while the
                 one genuinely useful action here had no home at all: New Project
