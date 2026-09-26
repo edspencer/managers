@@ -57,10 +57,13 @@ import {
   isOperationAllowed,
   isProjectAllowed,
   isInternalPrincipal,
+  ManagementDeniedError,
   TRIGGER_OPERATIONS,
   WRITE_OPERATIONS,
   type ManagementPrincipal,
 } from "./management-policy.js";
+import type { TurnOrigin } from "./run-provenance.js";
+import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
 
 /**
  * Frame an agent-initiated FORK kickoff (issue #214 Phase 2). A fork inherits the
@@ -128,16 +131,36 @@ function toSelfMcpTrigger(dto: TriggerDto, info?: ScheduleRuntimeInfo): SelfMcpT
   };
 }
 
-/** The built ops. `write` is absent when the caller isn't granted write access. */
+/**
+ * The built ops. `read` (the chat-read block) is absent when the instance hasn't
+ * opted in (`selfMcpEnabled`); `write` when the caller isn't granted write access.
+ * `state` (Managers M5) is present whenever the app has a Managers state bundle —
+ * which is always in production: the state tools are on every keeper and
+ * trigger turn.
+ */
 export interface ManagementOps {
-  read: SelfMcpContext;
+  read?: SelfMcpContext;
   write?: SelfMcpWriteContext;
+  state?: ManagementStateOps;
 }
 
 export interface ManagementOpsParams {
   currentProjectSlug: string;
   currentSessionId: () => string | null;
   parentProvenance: RunProvenance;
+  /**
+   * Whether to build the chat-read block (list_projects/list_chats/read_chat).
+   * Managers M5: gated by `selfMcpEnabled` on its own, now that the server is
+   * injected on every turn for the state tools. Defaults to true.
+   */
+  includeRead?: boolean;
+  /**
+   * How the calling turn started (`external` for the /mcp transport). Gates
+   * `memory_op`, which only runs while Ed is present. Defaults to `external`.
+   */
+  origin?: TurnOrigin | "external";
+  /** The Managers run the calling turn belongs to (M6). Defaults to `() => null`. */
+  currentRunId?: () => string | null;
   includeWrite: boolean;
   includeTriggers: boolean;
   /**
@@ -178,6 +201,20 @@ export function buildManagementOps(
     spawnDepthCap,
   } = params;
   const { deps, hub, startAgentTurn, composePreloadedPrompt, fireTrigger } = ctx;
+
+  // Managers M5: the state block, always built when the app carries the state
+  // bundle. It resolves workspaces through the same ProjectStore as every op.
+  const state: ManagementStateOps | undefined = deps.managers
+    ? buildStateOps({
+        state: deps.managers,
+        resolveDir: async (slug) => (await deps.projects.get(slug)).dir,
+        currentProjectSlug,
+        currentSessionId,
+        currentRunId: params.currentRunId ?? (() => null),
+        origin: params.origin ?? "external",
+        botAuthor: deps.cfg.botGitAuthor,
+      })
+    : undefined;
 
   type WorkspaceRecord = Awaited<ReturnType<typeof deps.projects.get>>;
   /**
@@ -259,7 +296,8 @@ export function buildManagementOps(
     },
   };
 
-  if (!includeWrite) return { read };
+  const readBlock = params.includeRead === false ? undefined : read;
+  if (!includeWrite) return { read: readBlock, state };
 
   const driveModeFor = (p: Awaited<ReturnType<typeof deps.projects.get>>): DriveMode =>
     p.driveMode && isKnownDriveMode(p.driveMode) ? p.driveMode : deps.cfg.driveMode;
@@ -508,15 +546,67 @@ export function buildManagementOps(
     },
   };
 
-  return { read, write };
+  return { read: readBlock, write, state };
+}
+
+/**
+ * Police the state block. Applies to EVERY principal, the internal keeper
+ * included: the keeper is trusted with its own project's state, not with every
+ * project's — so a state WRITE must target `currentProjectSlug`. An external
+ * principal is scope-checked like any other op (op + project), on reads too.
+ */
+function enforceStatePolicy(
+  s: ManagementStateOps,
+  principal: ManagementPrincipal,
+): ManagementStateOps {
+  const internal = isInternalPrincipal(principal);
+  const readGuard = async <T>(op: string, project: string, run: () => Promise<T>): Promise<T> => {
+    if (!internal) {
+      assertOperation(principal, op);
+      assertProject(principal, op, project);
+    }
+    return run();
+  };
+  const writeGuard = async <T>(op: string, project: string, run: () => Promise<T>): Promise<T> => {
+    if (internal) {
+      if (project !== s.currentProjectSlug) {
+        throw new ManagementDeniedError({
+          code: "project_denied",
+          clientId: principal.clientId,
+          operation: op,
+          projectSlug: project,
+        });
+      }
+    } else {
+      assertOperation(principal, op);
+      assertProject(principal, op, project);
+    }
+    return run();
+  };
+  return {
+    currentProjectSlug: s.currentProjectSlug,
+    memoryAvailable: s.memoryAvailable,
+    listObjectives: (p) => readGuard("list_objectives", p, () => s.listObjectives(p)),
+    readObjective: (p, id, j) => readGuard("read_objective", p, () => s.readObjective(p, id, j)),
+    listTasks: (p, f) => readGuard("list_tasks", p, () => s.listTasks(p, f)),
+    readTask: (p, id) => readGuard("read_task", p, () => s.readTask(p, id)),
+    listMemory: (p) => readGuard("list_memory", p, () => s.listMemory(p)),
+    recordEpisode: (p, i) => writeGuard("record_episode", p, () => s.recordEpisode(p, i)),
+    upsertTask: (p, i) => writeGuard("upsert_task", p, () => s.upsertTask(p, i)),
+    updateObjective: (p, i) => writeGuard("update_objective", p, () => s.updateObjective(p, i)),
+    writeReport: (p, i) => writeGuard("write_report", p, () => s.writeReport(p, i)),
+    recordArtifact: (p, i) => writeGuard("record_artifact", p, () => s.recordArtifact(p, i)),
+    memoryOp: (p, i) => writeGuard("memory_op", p, () => s.memoryOp(p, i)),
+  };
 }
 
 /**
  * Wrap built ops so every call is checked against `principal`.
  *
- * Returns the ops UNCHANGED for the internal principal — the keeper path must be
- * byte-for-byte identical to its pre-#312 behaviour, and skipping the wrapper
- * entirely is the most honest way to guarantee that.
+ * Returns the chat ops UNCHANGED for the internal principal — the keeper path must
+ * be byte-for-byte identical to its pre-#312 behaviour, and skipping the wrapper
+ * entirely is the most honest way to guarantee that. The Managers STATE block is
+ * the exception: it is policed for every principal (see {@link enforceStatePolicy}).
  *
  * The write bag is dropped wholesale when the principal is granted no write
  * operation, so a read-only client's write tools are ABSENT rather than
@@ -526,32 +616,35 @@ export function enforceManagementPolicy(
   ops: ManagementOps,
   principal: ManagementPrincipal,
 ): ManagementOps {
-  if (isInternalPrincipal(principal)) return ops;
+  const state = ops.state ? enforceStatePolicy(ops.state, principal) : undefined;
+  // The chat ops pass through untouched (same objects); only `state` is wrapped.
+  if (isInternalPrincipal(principal)) return state ? { ...ops, state } : ops;
   const { scope } = principal;
 
-  const read: SelfMcpContext = {
+  const r = ops.read;
+  const read: SelfMcpContext | undefined = r && {
     listProjects: async () => {
       assertOperation(principal, "list_projects");
       // Enumeration filters rather than denies — see the module header.
-      return (await ops.read.listProjects()).filter((p) => isProjectAllowed(scope, p.slug));
+      return (await r.listProjects()).filter((p) => isProjectAllowed(scope, p.slug));
     },
     listChats: async (projectSlug) => {
       assertOperation(principal, "list_chats");
       if (projectSlug !== undefined) assertProject(principal, "list_chats", projectSlug);
-      return (await ops.read.listChats(projectSlug)).filter((c) =>
+      return (await r.listChats(projectSlug)).filter((c) =>
         isProjectAllowed(scope, c.project),
       );
     },
     readChat: async (projectSlug, sessionId) => {
       assertOperation(principal, "read_chat");
       assertProject(principal, "read_chat", projectSlug);
-      return ops.read.readChat(projectSlug, sessionId);
+      return r.readChat(projectSlug, sessionId);
     },
   };
 
   const grantsAnyWrite = WRITE_OPERATIONS.some((op) => isOperationAllowed(scope, op));
   const grantsAnyTrigger = TRIGGER_OPERATIONS.some((op) => isOperationAllowed(scope, op));
-  if (!ops.write || (!grantsAnyWrite && !grantsAnyTrigger)) return { read };
+  if (!ops.write || (!grantsAnyWrite && !grantsAnyTrigger)) return { read, state };
 
   const w = ops.write;
   // `async` so a denial surfaces as a REJECTED PROMISE, never a synchronous
@@ -611,7 +704,7 @@ export function enforceManagementPolicy(
       guard("run_trigger", projectSlug, () => w.runTrigger(projectSlug, name)),
   };
 
-  return { read, write };
+  return { read, write, state };
 }
 
 /**

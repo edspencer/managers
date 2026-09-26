@@ -14,7 +14,7 @@
 import type { InjectedMcpServerDef } from "@herdctl/core";
 import type { ChatHandlerContext } from "./ws-context.js";
 import { selfMcpServerDef } from "./self-mcp.js";
-import type { RunProvenance } from "./run-provenance.js";
+import type { RunProvenance, TurnOrigin } from "./run-provenance.js";
 import {
   buildManagementOps,
   enforceManagementPolicy,
@@ -34,7 +34,10 @@ export function selfMcpServerDefForOps(
   ops: ManagementOps,
   principal: ManagementPrincipal,
 ): InjectedMcpServerDef {
-  return selfMcpServerDef(ops.read, ops.write, { toolFilter: managementToolFilter(principal) });
+  return selfMcpServerDef(
+    { read: ops.read, write: ops.write, state: ops.state },
+    { toolFilter: managementToolFilter(principal) },
+  );
 }
 
 /**
@@ -42,8 +45,9 @@ export function selfMcpServerDefForOps(
  * context — the IN-PROCESS keeper path.
  *
  * Runs under {@link INTERNAL_PRINCIPAL}: a keeper is bounded by depth
- * (`maxSpawnDepth`, #278), not by auth+scope, so policy short-circuits to allow
- * and this path behaves exactly as it did before #312.
+ * (`maxSpawnDepth`, #278), not by auth+scope, so chat-op policy short-circuits
+ * to allow and this path behaves exactly as it did before #312. The Managers
+ * state block is still policed: the keeper may only WRITE its own project.
  *
  * `parentProvenance` is the provenance of the chat these tools run IN — so any
  * child they spawn is `childOf(parentProvenance)` (origin `spawned`, depth+1).
@@ -54,6 +58,13 @@ export function buildSelfMcpServerDef(
     currentProjectSlug: string;
     currentSessionId: () => string | null;
     parentProvenance: RunProvenance;
+    /**
+     * Managers M5: whether to include the chat-read block (`selfMcpEnabled`). The
+     * server itself — and its state block — is built on every turn regardless.
+     */
+    includeRead: boolean;
+    /** How this turn started; gates `memory_op` (only while Ed is present). */
+    origin: TurnOrigin;
     includeWrite: boolean;
     /**
      * Whether to additionally append the Epic T / T3 unified trigger-management

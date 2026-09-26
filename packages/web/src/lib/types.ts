@@ -2140,3 +2140,45 @@ export interface ReportTypeDetail {
   current: ReportDoc | null;
   dates: string[];
 }
+
+// --- Managers domain state writes (M5) ------------------------------------------
+
+/** Fields for `POST …/managers/tasks` and `PATCH …/managers/tasks/:id` (only given fields change). */
+export interface TaskWriteInput {
+  title?: string;
+  status?: TaskStatus;
+  objective?: string | null;
+  ask?: string | null;
+  options?: string[];
+  github?: string[];
+  due?: string | null;
+  shovel_ready?: boolean;
+  notes?: string;
+  source?: "ed" | "manager" | "harvested";
+  /** One line for the task's `## Log`. */
+  log?: string;
+}
+
+export interface TaskAnswerInput {
+  choice?: string;
+  text?: string;
+  /** Also fire the project's `wake` trigger (when it exists and is enabled). */
+  wake?: boolean;
+}
+
+export interface TaskAnswerResult {
+  task: TaskDetail;
+  episode: { id: string; file: string; importance: number; objective: string | null };
+  wake?: { fired: boolean; sessionId?: string; reason?: string };
+}
+
+/** Fields for `POST`/`PATCH …/managers/objectives` (only given fields change). */
+export interface ObjectiveWriteInput {
+  title?: string;
+  success?: string;
+  status?: ObjectiveStatus;
+  whereWeAre?: string;
+  strategy?: string;
+  lessons?: string;
+  triggers?: string[];
+}

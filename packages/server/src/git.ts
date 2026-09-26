@@ -413,11 +413,16 @@ export class GitService {
    * uncommitted (issue #258). Paths are validated to stay inside the subtree; an
    * all-invalid selection is an error rather than a silent commit-everything.
    * Omitting `paths` keeps the legacy commit-the-whole-subtree behavior.
+   *
+   * `opts.author` (Managers M5) overrides the configured identity for this one
+   * commit — autocommit uses it to commit agent writes as `managers-bot` and UI
+   * writes as the requesting user.
    */
   async commitProject(
     projectDir: string,
     message: string,
     paths?: string[],
+    opts: { author?: { name: string; email: string } } = {},
   ): Promise<{ committed: boolean; hash?: string; error?: string }> {
     if (!(await this.isRepoAt(projectDir))) return { committed: false, error: "not a repo" };
     const msg = message.trim() || "Update project";
@@ -435,7 +440,7 @@ export class GitService {
         await this.git(projectDir, ["diff", "--cached", "--name-only", "--", ...pathspec])
       ).trim();
       if (!staged) return { committed: false };
-      const { name, email } = this.identity();
+      const { name, email } = opts.author ?? this.identity();
       await this.git(projectDir, [
         "-c",
         `user.name=${name}`,

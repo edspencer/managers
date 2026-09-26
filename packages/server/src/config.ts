@@ -527,6 +527,18 @@ export interface PaddockConfig {
    */
   gitAuthor: { name: string; email: string };
   /**
+   * Managers M5 (plan §2.6): the identity agent state writes are auto-committed
+   * as. Driven by `MANAGERS_BOT_GIT_NAME` / `MANAGERS_BOT_GIT_EMAIL`; defaults
+   * `managers-bot` / `managers-bot@localhost`.
+   */
+  botGitAuthor: { name: string; email: string };
+  /**
+   * Managers M5: auto-commit of Managers-owned state paths. `enabled` is
+   * `MANAGERS_AUTOCOMMIT` (default on; `0`/`false` disables). `debounceMs` is
+   * `MANAGERS_AUTOCOMMIT_DEBOUNCE_MS` (default 10 000). It never pushes.
+   */
+  autocommit: { enabled: boolean; debounceMs: number };
+  /**
    * The GitHub OAuth/App client id for the git-backing-store device flow
    * (github-auth.ts). Driven by `MANAGERS_GITHUB_CLIENT_ID`; `undefined` when
    * unset, in which case the GitHub connect feature reports "not configured".
@@ -1100,7 +1112,24 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
       email: envOr("MANAGERS_GIT_AUTHOR_EMAIL", fileOr(file.gitAuthor?.email, "managers@localhost")),
     },
     githubClientId: envOpt("MANAGERS_GITHUB_CLIENT_ID") ?? fileOpt(file.githubClientId),
+    botGitAuthor: {
+      name: envOr("MANAGERS_BOT_GIT_NAME", "managers-bot"),
+      email: envOr("MANAGERS_BOT_GIT_EMAIL", "managers-bot@localhost"),
+    },
+    autocommit: loadAutocommitConfig(),
   });
+}
+
+/** `MANAGERS_AUTOCOMMIT` / `MANAGERS_AUTOCOMMIT_DEBOUNCE_MS` (Managers M5). */
+export function loadAutocommitConfig(): { enabled: boolean; debounceMs: number } {
+  const raw = (process.env.MANAGERS_AUTOCOMMIT ?? "").trim().toLowerCase();
+  const enabled = !(raw === "0" || raw === "false" || raw === "off" || raw === "no");
+  const n = Number(process.env.MANAGERS_AUTOCOMMIT_DEBOUNCE_MS);
+  const debounceMs =
+    process.env.MANAGERS_AUTOCOMMIT_DEBOUNCE_MS !== undefined && Number.isFinite(n) && n >= 0
+      ? Math.floor(n)
+      : 10_000;
+  return { enabled, debounceMs };
 }
 
 // CurationConfig + DEFAULT_CURATION now live in ./curation-config.ts (issue #384),

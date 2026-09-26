@@ -95,6 +95,8 @@ export interface InjectedMcpBuildContext {
     currentProjectSlug: string;
     currentSessionId: () => string | null;
     parentProvenance: { origin: TurnOrigin; depth: number };
+    includeRead: boolean;
+    origin: TurnOrigin;
     includeWrite: boolean;
     includeTriggers: boolean;
     includeProjects: boolean;
@@ -105,10 +107,15 @@ export interface InjectedMcpBuildContext {
  * Build the injected-MCP server set for one keeper turn — the SINGLE source of the
  * per-turn injection policy, shared by the live `startAgentTurn` path and the wake
  * rebuild so they can never drift. send_file is ALWAYS present (parity with the human
- * path); the self-management MCP is appended iff the depth-gated
- * {@link spawnedSelfMcpDecision} says so, and its T3 trigger tools iff writes are on
- * AND the project's reused hooks-MCP gate is enabled. Semantics are identical to the
- * previously-inline construction in `startAgentTurn`.
+ * path).
+ *
+ * Managers M5 (plan §2.3): the `managers` server is ALSO always present, because
+ * its state block (objectives, tasks, episodes, reports) is on every keeper and
+ * trigger turn. Its other blocks keep their gates: the chat-read block follows the
+ * depth-gated {@link spawnedSelfMcpDecision} exactly as the whole server used to
+ * (so a spawned chat past its depth bound still loses list_chats/read_chat), the
+ * spawn-write block its `includeWrite`, and the T3 trigger tools additionally the
+ * project's reused hooks-MCP gate.
  */
 export async function buildInjectedMcpServers(
   args: InjectedMcpBuildArgs,
@@ -138,25 +145,25 @@ export async function buildInjectedMcpServers(
     depth: injectionDepth,
     maxSpawnDepth,
   });
-  if (selfMcp.inject) {
-    // Trigger-management tools (T3) follow the TARGET project's reused hooks-MCP
-    // opt-in (override else instance default) — only meaningful with write tools.
-    let includeTriggers = false;
-    if (selfMcp.includeWrite) {
-      const override = await ctx.getProjectHooksMcp(projectSlug).catch(() => undefined);
-      includeTriggers = resolveHooksMcpEnabled(override, ctx.cfg.hooksMcpEnabled);
-    }
-    servers[SELF_MCP_SERVER_KEY] = ctx.buildSelfMcp({
-      currentProjectSlug: projectSlug,
-      currentSessionId,
-      parentProvenance: { origin, depth: injectionDepth },
-      includeWrite: selfMcp.includeWrite,
-      includeTriggers,
-      // The project tool (#467) is a purely instance-level gate — no per-project
-      // override — but still rides on the write block, so writes must be on.
-      includeProjects: selfMcp.includeWrite && ctx.cfg.selfMcpProjectsEnabled,
-    });
+  // Trigger-management tools (T3) follow the TARGET project's reused hooks-MCP
+  // opt-in (override else instance default) — only meaningful with write tools.
+  let includeTriggers = false;
+  if (selfMcp.includeWrite) {
+    const override = await ctx.getProjectHooksMcp(projectSlug).catch(() => undefined);
+    includeTriggers = resolveHooksMcpEnabled(override, ctx.cfg.hooksMcpEnabled);
   }
+  servers[SELF_MCP_SERVER_KEY] = ctx.buildSelfMcp({
+    currentProjectSlug: projectSlug,
+    currentSessionId,
+    parentProvenance: { origin, depth: injectionDepth },
+    includeRead: selfMcp.inject,
+    origin,
+    includeWrite: selfMcp.includeWrite,
+    includeTriggers,
+    // The project tool (#467) is a purely instance-level gate — no per-project
+    // override — but still rides on the write block, so writes must be on.
+    includeProjects: selfMcp.includeWrite && ctx.cfg.selfMcpProjectsEnabled,
+  });
   return servers;
 }
 

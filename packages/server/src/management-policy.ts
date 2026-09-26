@@ -96,11 +96,46 @@ export const TRIGGER_OPERATIONS = [
   "run_trigger",
 ] as const;
 
+/**
+ * Managers state READ operations (M5, plan §2.3). Start no turn and change
+ * nothing. `get_briefing` (M7) and `list_alerts` (M6) are catalogued now so a
+ * scope written today keeps meaning the same thing when their tools land.
+ */
+export const STATE_READ_OPERATIONS = [
+  "get_briefing",
+  "list_objectives",
+  "read_objective",
+  "list_tasks",
+  "read_task",
+  "list_alerts",
+  "list_memory",
+] as const;
+
+/**
+ * Managers state WRITE operations (M5). They change files in the data repo but
+ * start no turn, so they are not code execution and carry no depth gate. The
+ * in-process keeper may only write its OWN project (enforced in
+ * `enforceManagementPolicy`).
+ */
+export const STATE_WRITE_OPERATIONS = [
+  "record_episode",
+  "upsert_task",
+  "update_objective",
+  "write_report",
+  "record_artifact",
+] as const;
+
+/** Semantic-memory edits (M5 stub, M14): only while Ed is present, or in consolidation. */
+export const MEMORY_OPERATIONS = ["memory_op"] as const;
+
 /** Every operation the management surface knows about. */
 export const ALL_OPERATIONS: readonly string[] = [
   ...READ_OPERATIONS,
   ...WRITE_OPERATIONS,
   ...TRIGGER_OPERATIONS,
+  ...STATE_READ_OPERATIONS,
+  ...STATE_WRITE_OPERATIONS,
+  ...MEMORY_OPERATIONS,
 ];
 
 /**
@@ -139,13 +174,18 @@ export const TURN_SPAWNING_OPERATIONS: readonly string[] = [
 
 /**
  * The DEFAULT scope for a configured client that specifies none — read-only
- * across all projects. Matches the shape written on issue #312 verbatim
- * (`allow: ["list_*", "read_chat"]`), which covers the three read tools plus
- * `list_triggers` while excluding every mutating verb.
+ * across all projects: the three chat read tools plus `list_triggers`, excluding
+ * every mutating verb.
+ *
+ * Upstream Paddock spelled this `["list_*", "read_chat"]`. Managers lists the
+ * four verbs explicitly instead, because `list_*` would now also match the
+ * state reads (`list_tasks`, `list_memory`, …), and those must be granted to an
+ * external principal explicitly (plan §2.3). An operator who writes `list_*`
+ * themselves still gets them — that is their explicit grant.
  */
 export const DEFAULT_READ_ONLY_SCOPE: ManagementScope = Object.freeze({
   projects: ["*"],
-  allow: ["list_*", "read_chat"],
+  allow: ["list_projects", "list_chats", "read_chat", "list_triggers"],
   deny: [],
 }) as ManagementScope;
 
@@ -253,6 +293,9 @@ export const OAUTH_SCOPES_SUPPORTED: readonly string[] = [OAUTH_SCOPE_READ, OAUT
  */
 export function requiredOauthScope(operation: string): string {
   if (READ_OPERATIONS.includes(operation as (typeof READ_OPERATIONS)[number])) {
+    return OAUTH_SCOPE_READ;
+  }
+  if (STATE_READ_OPERATIONS.includes(operation as (typeof STATE_READ_OPERATIONS)[number])) {
     return OAUTH_SCOPE_READ;
   }
   return operation === "list_triggers" ? OAUTH_SCOPE_READ : OAUTH_SCOPE_WRITE;

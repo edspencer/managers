@@ -102,7 +102,41 @@ export type PaddockManage =
       prompt?: string;
     }
   | { tool: "send_message"; project: string; sessionId: string; prompt?: string }
-  | { tool: "fork_chat_batch"; count: number; source: string; forks: PmFork[] };
+  | { tool: "fork_chat_batch"; count: number; source: string; forks: PmFork[] }
+  // ── Managers state tools (M5) ──
+  | { tool: "record_episode"; project: string; id: string; file: string; importance: number; objective: string | null }
+  | {
+      tool: "upsert_task";
+      project: string;
+      id: string;
+      file: string;
+      status: string;
+      created: boolean;
+      movedFrom?: string;
+    }
+  | { tool: "update_objective"; project: string; id: string; file: string; status: string; created: boolean }
+  | { tool: "write_report"; project: string; type: string; date: string; file: string; currentFile: string }
+  | { tool: "record_artifact"; project: string; run: string; file: string; artifacts: number }
+  | { tool: "list_tasks"; project: string; count: number; tasks: PmTask[] }
+  | { tool: "list_objectives"; project: string; count: number; objectives: PmObjective[] }
+  | { tool: "read_task"; project: string; task: PmTask }
+  | { tool: "read_objective"; project: string; objective: PmObjective }
+  | { tool: "list_memory"; project: string; facts: number; playbooks: number };
+
+export interface PmTask {
+  id: string;
+  title: string;
+  status: string;
+  objective?: string | null;
+  ask?: string | null;
+  file?: string;
+}
+export interface PmObjective {
+  id: string;
+  title: string;
+  status: string;
+  file?: string;
+}
 
 const PM_PREFIX = "mcp__managers__";
 
@@ -215,6 +249,96 @@ export function parsePaddockManage(
       const forks = data.forks as PmFork[];
       return { tool, count: num(data.count, forks.length), source: String(data.source ?? ""), forks };
     }
+    // ── Managers state tools (M5) ──
+    case "record_episode": {
+      if (typeof data.id !== "string") return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        id: data.id,
+        file: String(data.file ?? ""),
+        importance: num(data.importance, 0),
+        objective: str(data.objective) ?? null,
+      };
+    }
+    case "upsert_task": {
+      if (typeof data.id !== "string" || typeof data.status !== "string") return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        id: data.id,
+        file: String(data.file ?? ""),
+        status: data.status,
+        created: data.created === true,
+        movedFrom: str(data.movedFrom),
+      };
+    }
+    case "update_objective": {
+      if (typeof data.id !== "string") return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        id: data.id,
+        file: String(data.file ?? ""),
+        status: String(data.status ?? ""),
+        created: data.created === true,
+      };
+    }
+    case "write_report": {
+      if (typeof data.type !== "string") return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        type: data.type,
+        date: String(data.date ?? ""),
+        file: String(data.file ?? ""),
+        currentFile: String(data.currentFile ?? ""),
+      };
+    }
+    case "record_artifact": {
+      if (typeof data.run !== "string") return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        run: data.run,
+        file: String(data.file ?? ""),
+        artifacts: num(data.artifacts, 0),
+      };
+    }
+    case "list_tasks": {
+      if (!Array.isArray(data.tasks)) return null;
+      const tasks = data.tasks as PmTask[];
+      return { tool, project: String(data.project ?? ""), count: num(data.count, tasks.length), tasks };
+    }
+    case "list_objectives": {
+      if (!Array.isArray(data.objectives)) return null;
+      const objectives = data.objectives as PmObjective[];
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        count: num(data.count, objectives.length),
+        objectives,
+      };
+    }
+    case "read_task": {
+      const t = data.task as PmTask | undefined;
+      if (!t || typeof t.id !== "string") return null;
+      return { tool, project: String(data.project ?? ""), task: t };
+    }
+    case "read_objective": {
+      const o = data.objective as PmObjective | undefined;
+      if (!o || typeof o.id !== "string") return null;
+      return { tool, project: String(data.project ?? ""), objective: o };
+    }
+    case "list_memory": {
+      if (!Array.isArray(data.facts)) return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        facts: data.facts.length,
+        playbooks: Array.isArray(data.playbooks) ? data.playbooks.length : 0,
+      };
+    }
     default:
       return null;
   }
@@ -241,5 +365,25 @@ export function paddockManageSummary(pm: PaddockManage): string {
       return pm.prompt ? firstLine(pm.prompt) : `message to ${pm.project}`;
     case "fork_chat_batch":
       return `fanned out ${pm.count} ${pm.count === 1 ? "chat" : "chats"}`;
+    case "record_episode":
+      return `Recorded episode ${pm.id} (imp ${pm.importance})`;
+    case "upsert_task":
+      return pm.created ? `Task ${pm.id} created → ${pm.status}` : `Task ${pm.id} → ${pm.status}`;
+    case "update_objective":
+      return pm.created ? `Objective ${pm.id} created` : `Objective ${pm.id} updated`;
+    case "write_report":
+      return `${pm.type} report for ${pm.date}`;
+    case "record_artifact":
+      return `Artifact recorded on ${pm.run}`;
+    case "list_tasks":
+      return `${pm.count} ${pm.count === 1 ? "task" : "tasks"}`;
+    case "list_objectives":
+      return `${pm.count} ${pm.count === 1 ? "objective" : "objectives"}`;
+    case "read_task":
+      return `${pm.task.id} · ${pm.task.status}`;
+    case "read_objective":
+      return `${pm.objective.id} · ${pm.objective.status}`;
+    case "list_memory":
+      return `${pm.facts} ${pm.facts === 1 ? "fact" : "facts"}, ${pm.playbooks} ${pm.playbooks === 1 ? "playbook" : "playbooks"}`;
   }
 }

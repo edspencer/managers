@@ -6,7 +6,8 @@
  * create/fork/message/archive chats (WRITE, Phase 2), and manage a project's
  * unified triggers (Epic T / T3). This module is the thin assembly layer — it
  * wires the extracted pieces into one {@link InjectedMcpServerDef}, conditionally
- * by capability tier, and owns the public name-map exports. The actual logic lives
+ * by capability tier, and owns the public name-map exports. Managers M5 adds the
+ * state tools (`self-mcp-state.ts`), which are on every keeper and trigger turn. The actual logic lives
  * in siblings, all re-exported here so existing importers keep one import path:
  *   - `self-mcp-types.ts`        — the DTOs + the two per-turn context bags
  *   - `self-mcp-util.ts`         — result envelopes, clamps, arg coercion + caps
@@ -66,6 +67,8 @@ import {
   promoteProjectHandler,
 } from "./self-mcp-write.js";
 import { PROJECT_STATUSES } from "./project-types.js";
+import { stateTools } from "./self-mcp-state.js";
+import type { ManagementStateOps } from "./managers/state-ops.js";
 import {
   listTriggersHandler,
   setTriggerHandler,
@@ -530,27 +533,39 @@ function triggerTools(write: SelfMcpWriteContext): ServerTools {
   ];
 }
 
+/** The blocks {@link selfMcpServerDef} assembles, each behind its own gate. */
+export interface SelfMcpBlocks {
+  /** The chat-read tools (list_projects/list_chats/read_chat): `selfMcpEnabled`. */
+  read?: SelfMcpContext;
+  /** The spawn-write tools (+ project and trigger tools on their own flags). */
+  write?: SelfMcpWriteContext;
+  /**
+   * Managers M5: the state tools (state-read, state-write and `memory_op`). The
+   * injection paths ALWAYS pass it; optional here only so the pure assembler can
+   * be unit-tested block by block.
+   */
+  state?: ManagementStateOps;
+}
+
 /**
- * Build the injected MCP server definition for the self-management tools, bound to
- * a per-turn context. The READ tools (list_projects/list_chats/read_chat) are
- * ALWAYS included. When a {@link SelfMcpWriteContext} is provided (the stricter
- * write flag is on), the WRITE tools (create_chat/fork_chat/send_message/
- * archive_chat/unarchive_chat/fork_chat_batch) are appended too; omit it for
- * unchanged read-only behavior. Two further blocks hang off independent gates ON
- * that write context: {@link SelfMcpWriteContext.projectsMcpEnabled} (issues #467,
- * #470) appends the project tools (create_project/promote_project), and
- * {@link SelfMcpWriteContext.triggersMcpEnabled} (the per-project trigger-MCP
- * opt-in, Epic T / T3) appends the unified trigger-management tools (list_triggers/
- * set_trigger/remove_trigger/run_trigger). Inject under
- * {@link SELF_MCP_SERVER_KEY}.
+ * Build the injected `managers` MCP server definition from its blocks, each
+ * gated by the caller (plan §2.3):
+ *   - `read`  — chat-read tools, when the instance opts in (`selfMcpEnabled`);
+ *   - `write` — the spawn-write tools (create/fork/send/archive/unarchive/
+ *     fork-batch), plus the project tools when {@link SelfMcpWriteContext.projectsMcpEnabled}
+ *     (#467, #470) and the trigger tools when {@link SelfMcpWriteContext.triggersMcpEnabled}
+ *     (Epic T / T3) — the depth-gated spawn capability, unchanged;
+ *   - `state` — the Managers state tools, on every keeper and trigger turn.
+ * Inject under {@link SELF_MCP_SERVER_KEY}.
  */
 export function selfMcpServerDef(
-  context: SelfMcpContext,
-  write?: SelfMcpWriteContext,
+  blocks: SelfMcpBlocks,
   opts?: SelfMcpServerDefOptions,
 ): InjectedMcpServerDef {
-  const tools: ServerTools = [...readTools(context)];
+  const tools: ServerTools = [];
+  if (blocks.read) tools.push(...readTools(blocks.read));
 
+  const write = blocks.write;
   if (write) {
     tools.push(...writeTools(write));
     if (write.projectsMcpEnabled) {
@@ -560,6 +575,8 @@ export function selfMcpServerDef(
       tools.push(...triggerTools(write));
     }
   }
+
+  if (blocks.state) tools.push(...stateTools(blocks.state));
 
   // Scope-driven visibility (#312 M1). Absent ⇒ every assembled tool is offered,
   // which is the in-process keeper path and every pre-#312 caller. An external
@@ -603,6 +620,21 @@ export const SELF_MCP_PROJECT_TOOL_NAMES = {
  * on). These collapse the former schedule (set/remove/list_schedule) + hook
  * (set/remove/list_hook) verbs.
  */
+/** The fully-qualified names of the Managers state tools (M5; on every keeper/trigger turn). */
+export const SELF_MCP_STATE_TOOL_NAMES = {
+  listObjectives: `mcp__${SERVER_NAME}__list_objectives`,
+  readObjective: `mcp__${SERVER_NAME}__read_objective`,
+  listTasks: `mcp__${SERVER_NAME}__list_tasks`,
+  readTask: `mcp__${SERVER_NAME}__read_task`,
+  listMemory: `mcp__${SERVER_NAME}__list_memory`,
+  recordEpisode: `mcp__${SERVER_NAME}__record_episode`,
+  upsertTask: `mcp__${SERVER_NAME}__upsert_task`,
+  updateObjective: `mcp__${SERVER_NAME}__update_objective`,
+  writeReport: `mcp__${SERVER_NAME}__write_report`,
+  recordArtifact: `mcp__${SERVER_NAME}__record_artifact`,
+  memoryOp: `mcp__${SERVER_NAME}__memory_op`,
+} as const;
+
 export const SELF_MCP_TRIGGER_TOOL_NAMES = {
   listTriggers: `mcp__${SERVER_NAME}__list_triggers`,
   setTrigger: `mcp__${SERVER_NAME}__set_trigger`,

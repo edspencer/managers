@@ -23,6 +23,7 @@ import type { MessageProvenanceStore, MessageSender } from "./message-provenance
 import type { PaddockEventBus } from "./event-bus.js";
 import type { TriggerService } from "./triggers.js";
 import type { TriggerSessionStore } from "./trigger-session.js";
+import type { ManagersState } from "./managers/state.js";
 
 /**
  * The store/service bag `makeChatHandler` is constructed with. Extracted to a
@@ -92,6 +93,18 @@ export interface ChatHandlerDeps {
    * optional so existing tests need not supply it.
    */
   triggerSessions?: TriggerSessionStore;
+  /**
+   * Managers M5: the app-wide domain-state bundle. When present, the `managers`
+   * MCP state tools are injected on EVERY keeper and trigger turn. Optional so
+   * tests that don't exercise Managers state need not supply it.
+   */
+  managers?: ManagersState;
+  /**
+   * Managers M5: called whenever a turn in `projectSlug` ends (any origin, any
+   * outcome), so the autocommitter can commit that workspace's pending state
+   * writes immediately instead of waiting out the debounce.
+   */
+  onManagersTurnEnd?: (projectSlug: string) => void;
 }
 
 /**

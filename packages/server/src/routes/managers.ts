@@ -19,6 +19,19 @@
  *   GET managers/reports/:type          current report + dated list
  *   GET managers/reports/:type/:date
  *
+ * Writes (M5) — through the same serialised writer the agents' MCP state tools
+ * use (`managers/state-writes.ts`), so validation and ordering are shared, and
+ * auto-committed as the requesting user:
+ *
+ *   POST  managers/tasks                 create a task
+ *   PATCH managers/tasks/:id             update fields / status (done|dropped move it)
+ *   POST  managers/tasks/:id/answer      Ed answers an awaiting-ed task {choice?, text?, wake?}
+ *   POST  managers/objectives            create {id, title, success, …}
+ *   PATCH managers/objectives/:id        update fields / sections
+ *
+ * Write errors: 400 `invalid` (validation), 404 `not_found`, 409 `conflict`
+ * (e.g. answering a task that is not awaiting-ed, creating an objective that exists).
+ *
  * Errors: 404 `not_found` for an unknown workspace or id, 400 `invalid` for a
  * malformed id or query value (validated here, so the body keeps the house
  * `{ error, code }` shape), and 422 `parse_error` when the addressed file exists
@@ -35,6 +48,14 @@ import { RUN_STATUSES, type TaskStatus } from "../managers/schemas.js";
 import { MAX_PAGE_MONTHS, type PageOpts } from "../managers/episodes-store.js";
 import { isTaskStatus } from "../managers/tasks-store.js";
 import { isParseFailure, type ParseError } from "../managers/store-util.js";
+import {
+  StateWriteError,
+  type UpdateObjectiveInput,
+  type UpsertTaskInput,
+  type WriteActor,
+  type WriteWorkspace,
+} from "../managers/state-writes.js";
+import type { ObjectiveStatus, TaskSource, TaskStatus as TStatus } from "../managers/schemas.js";
 
 const TAGS = ["Managers"];
 
@@ -97,9 +118,105 @@ function tidy<T extends { parseErrors?: unknown[] }>(body: T): T {
   return body;
 }
 
+/** A write failure → its REST status, keeping the house `{ error, code }` body. */
+function writeError(reply: FastifyReply, err: StateWriteError) {
+  const status = err.code === "not_found" ? 404 : err.code === "conflict" ? 409 : 400;
+  return reply.code(status).send({ error: err.message, code: err.code });
+}
+
+type Body = Record<string, unknown>;
+
+const bodySchema = (description: string) => ({
+  type: "object",
+  additionalProperties: true,
+  description,
+});
+
+/** A string list from a JSON body: an array of strings, or absent. */
+function listField(b: Body, key: string): string[] | undefined {
+  const v = b[key];
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) throw new Invalid(`${key} must be an array of strings`);
+  return v as string[];
+}
+function strField(b: Body, key: string): string | undefined {
+  const v = b[key];
+  if (v === undefined) return undefined;
+  if (typeof v !== "string") throw new Invalid(`${key} must be a string`);
+  return v;
+}
+function strOrNullField(b: Body, key: string): string | null | undefined {
+  if (b[key] === null) return null;
+  return strField(b, key);
+}
+
+function taskInput(b: Body): UpsertTaskInput {
+  const shovel = b.shovel_ready;
+  if (shovel !== undefined && typeof shovel !== "boolean") throw new Invalid("shovel_ready must be a boolean");
+  return {
+    title: strField(b, "title"),
+    status: strField(b, "status") as TStatus | undefined,
+    objective: strOrNullField(b, "objective"),
+    ask: strOrNullField(b, "ask"),
+    options: listField(b, "options"),
+    github: listField(b, "github"),
+    due: strOrNullField(b, "due"),
+    shovel_ready: shovel as boolean | undefined,
+    notes: strField(b, "notes"),
+    source: strField(b, "source") as TaskSource | undefined,
+    log: strField(b, "log"),
+  };
+}
+
+function objectiveInput(id: string, b: Body): UpdateObjectiveInput {
+  return {
+    id,
+    title: strField(b, "title"),
+    success: strField(b, "success"),
+    status: strField(b, "status") as ObjectiveStatus | undefined,
+    whereWeAre: strField(b, "whereWeAre") ?? strField(b, "where_we_are"),
+    strategy: strField(b, "strategy"),
+    lessons: strField(b, "lessons"),
+    triggers: listField(b, "triggers"),
+  };
+}
+
 export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx): void {
   const { projects } = ctx;
   const state = ctx.managers ?? new ManagersState(ctx.cfg.projectsRoot);
+
+  /**
+   * The browser user as a write actor: commits carry their name when auth knows
+   * it, else the configured `MANAGERS_GIT_AUTHOR_*` (plan §2.6).
+   */
+  function actorFor(req: FastifyRequest): WriteActor {
+    const u = req.user;
+    if (u && !u.anonymous && u.username) {
+      return {
+        kind: "ed",
+        name: u.username,
+        author: { name: u.username, email: u.email ?? `${u.username}@users.managers.invalid` },
+      };
+    }
+    return { kind: "ed", name: "ed", author: ctx.cfg.gitAuthor };
+  }
+
+  /** Like {@link withWorkspace}, for writes: also maps {@link StateWriteError}. */
+  async function withWrite(
+    req: FastifyRequest<{ Params: { slug: string } }>,
+    reply: FastifyReply,
+    fn: (w: { ws: WriteWorkspace; actor: WriteActor; layout: WorkspaceLayout }) => Promise<unknown>,
+  ) {
+    try {
+      const project = await projects.get(req.params.slug);
+      const layout = state.layout(project.dir);
+      return await fn({ ws: { key: req.params.slug, layout }, actor: actorFor(req), layout });
+    } catch (err) {
+      if (err instanceof Invalid) return invalid(reply, err.message);
+      if (err instanceof StateWriteError) return writeError(reply, err);
+      return sendProjectError(reply, err);
+    }
+  }
 
   /**
    * Resolve the workspace, then run `fn` with its layout. Unknown workspace →
@@ -441,6 +558,174 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const report = await state.reports.read(layout, type, date);
         if (!report) return notFound(reply, `No ${type} report for ${date}`);
         return { report };
+      }),
+  );
+
+  // --- writes (M5) -----------------------------------------------------------------------
+
+  const bodyOf = (req: FastifyRequest): Body => {
+    const b = req.body;
+    if (b === undefined || b === null) return {};
+    if (typeof b !== "object" || Array.isArray(b)) throw new Invalid("body must be a JSON object");
+    return b as Body;
+  };
+
+  app.post<{ Params: { slug: string } }>(
+    "/managers/tasks",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Create a task",
+        description:
+          "Creates `tasks/open/<id>.md` (or `done/<month>/` for a done/dropped status) with a fresh " +
+          "`t-YYMMDD-xxxx` id, validated strictly: `title` is required, `awaiting-ed` requires `ask`, GitHub " +
+          "refs must be `owner/repo#N`. Body fields: title, status, objective, ask, options[], github[], due, " +
+          "shovel_ready, notes, source (ed|manager|harvested; default ed), log. Returns 201 `{ task }` (the " +
+          "re-read task). Auto-committed as the requesting user.",
+        params: paramsSchema(),
+        body: bodySchema("The task fields."),
+        response: { 201: { description: "`{ task }`.", type: "object", additionalProperties: true } },
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async ({ ws, actor, layout }) => {
+        const r = await state.writer.upsertTask(ws, { ...taskInput(bodyOf(req)), id: undefined }, actor);
+        return reply.code(201).send({ task: await state.tasks.get(layout, r.id) });
+      }),
+  );
+
+  app.patch<{ Params: { slug: string; id: string } }>(
+    "/managers/tasks/:id",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Update a task",
+        description:
+          "Changes only the fields given (same fields as create), appends a line to the task's `## Log`, and " +
+          "moves the file to `tasks/done/<month>/` when the status becomes done or dropped (back to `open/` when " +
+          "it reopens). 400 for invalid fields, 404 for an unknown task, 409 when the file on disk does not parse.",
+        params: paramsSchema({ id: { description: "Task id, t-YYMMDD-xxxx." } }),
+        body: bodySchema("The fields to change."),
+        response: ok200("`{ task }`."),
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async ({ ws, actor, layout }) => {
+        const { id } = req.params;
+        if (!isTaskId(id)) throw new Invalid(`Invalid task id: ${id}`);
+        const r = await state.writer.upsertTask(ws, { ...taskInput(bodyOf(req)), id }, actor);
+        return { task: await state.tasks.get(layout, r.id) };
+      }),
+  );
+
+  app.post<{ Params: { slug: string; id: string } }>(
+    "/managers/tasks/:id/answer",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Answer an awaiting-ed task",
+        description:
+          "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` " +
+          "must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, " +
+          "and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With " +
+          "`wake: true` it also fires the project's `wake` trigger when that trigger exists and is enabled. " +
+          "409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
+        params: paramsSchema({ id: { description: "Task id, t-YYMMDD-xxxx." } }),
+        body: bodySchema("`{ choice?, text?, wake? }`."),
+        response: ok200("`{ task, episode, wake? }`."),
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async ({ ws, actor, layout }) => {
+        const { id } = req.params;
+        if (!isTaskId(id)) throw new Invalid(`Invalid task id: ${id}`);
+        const b = bodyOf(req);
+        const wakeArg = b.wake;
+        if (wakeArg !== undefined && typeof wakeArg !== "boolean") throw new Invalid("wake must be a boolean");
+        const r = await state.writer.answerTask(
+          ws,
+          id,
+          { choice: strField(b, "choice"), text: strField(b, "text") },
+          actor,
+        );
+        let wake: { fired: boolean; sessionId?: string; reason?: string } | undefined;
+        if (wakeArg === true) {
+          const project = await projects.get(req.params.slug);
+          const rec = project.triggers?.wake;
+          if (!rec) wake = { fired: false, reason: "this project has no wake trigger" };
+          else if (rec.enabled !== true) wake = { fired: false, reason: "the wake trigger is disabled" };
+          else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
+          else {
+            try {
+              const sessionId = await ctx.fireTrigger(req.params.slug, "wake");
+              wake = sessionId ? { fired: true, sessionId } : { fired: false, reason: "the wake trigger did not start" };
+            } catch (err) {
+              wake = { fired: false, reason: (err as Error).message };
+            }
+          }
+        }
+        return {
+          task: await state.tasks.get(layout, id),
+          episode: r.episode,
+          ...(wake ? { wake } : {}),
+        };
+      }),
+  );
+
+  app.post<{ Params: { slug: string } }>(
+    "/managers/objectives",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Create an objective",
+        description:
+          "Creates `objectives/<id>/objective.md`. Body: `id` (kebab-case), `title` and `success` (required), " +
+          "`status`, `whereWeAre`, `strategy`, `lessons`, `triggers[]`. Section text must not contain `## ` " +
+          "headings. 409 when the objective already exists. Returns 201 `{ objective }`.",
+        params: paramsSchema(),
+        body: bodySchema("The objective."),
+        response: { 201: { description: "`{ objective }`.", type: "object", additionalProperties: true } },
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async ({ ws, actor, layout }) => {
+        const b = bodyOf(req);
+        const id = strField(b, "id") ?? "";
+        if (!isName(id)) throw new Invalid(`id must be a kebab-case objective id, got ${JSON.stringify(b.id)}`);
+        if ((await state.objectives.get(layout, id, { months: 1 })) !== null) {
+          throw new StateWriteError("conflict", `Objective ${id} already exists`);
+        }
+        const input = objectiveInput(id, b);
+        if (!input.title?.trim() || !input.success?.trim()) throw new Invalid("title and success are required");
+        await state.writer.updateObjective(ws, input, actor);
+        return reply.code(201).send({ objective: await state.objectives.get(layout, id, { months: 1 }) });
+      }),
+  );
+
+  app.patch<{ Params: { slug: string; id: string } }>(
+    "/managers/objectives/:id",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Update an objective",
+        description:
+          "Changes only the fields given (`title`, `success`, `status`, `whereWeAre`, `strategy`, `lessons`, " +
+          "`triggers[]`); a section is replaced in place and Ed's other sections are kept. 404 for an unknown " +
+          "objective, 409 when its file does not parse. Returns `{ objective }`.",
+        params: paramsSchema({ id: { description: "Objective id (kebab-case)." } }),
+        body: bodySchema("The fields to change."),
+        response: ok200("`{ objective }`."),
+      },
+    },
+    (req, reply) =>
+      withWrite(req, reply, async ({ ws, actor, layout }) => {
+        const { id } = req.params;
+        if (!isName(id)) throw new Invalid(`Invalid objective id: ${id}`);
+        if ((await state.objectives.get(layout, id, { months: 1 })) === null) {
+          return notFound(reply, `No such objective: ${id}`);
+        }
+        await state.writer.updateObjective(ws, objectiveInput(id, bodyOf(req)), actor);
+        return { objective: await state.objectives.get(layout, id, { months: 1 }) };
       }),
   );
 }

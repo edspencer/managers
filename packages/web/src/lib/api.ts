@@ -60,6 +60,10 @@ import {
   type ReportTypeDetail,
   type ReportDoc,
   type ManagersParseError,
+  type TaskWriteInput,
+  type TaskAnswerInput,
+  type TaskAnswerResult,
+  type ObjectiveWriteInput,
 } from "./types";
 import { apiBase } from "../routes/ProjectView/urls";
 
@@ -1186,5 +1190,51 @@ export const api = {
       `${mgr(slug)}/reports/${encodeURIComponent(type)}/${encodeURIComponent(date)}`,
     );
     return report;
+  },
+
+  // --- Managers domain state writes (M5) --------------------------------------
+  //
+  // Validated and serialised server-side by the same writer the agents' MCP state
+  // tools use, and auto-committed as the requesting user. Errors are `ApiError`s:
+  // 400 `invalid`, 404 `not_found`, 409 `conflict`.
+
+  async managersCreateTask(slug: string, input: TaskWriteInput): Promise<TaskDetail> {
+    const { task } = await req<{ task: TaskDetail }>(`${mgr(slug)}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return task;
+  },
+
+  async managersUpdateTask(slug: string, id: string, patch: TaskWriteInput): Promise<TaskDetail> {
+    const { task } = await req<{ task: TaskDetail }>(`${mgr(slug)}/tasks/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+    return task;
+  },
+
+  /** Ed answers an awaiting-ed task; `wake: true` also fires the project's enabled `wake` trigger. */
+  async managersAnswerTask(slug: string, id: string, answer: TaskAnswerInput): Promise<TaskAnswerResult> {
+    return req<TaskAnswerResult>(`${mgr(slug)}/tasks/${encodeURIComponent(id)}/answer`, {
+      method: "POST",
+      body: JSON.stringify(answer),
+    });
+  },
+
+  async managersCreateObjective(slug: string, input: ObjectiveWriteInput & { id: string }): Promise<ObjectiveDetail> {
+    const { objective } = await req<{ objective: ObjectiveDetail }>(`${mgr(slug)}/objectives`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return objective;
+  },
+
+  async managersUpdateObjective(slug: string, id: string, patch: ObjectiveWriteInput): Promise<ObjectiveDetail> {
+    const { objective } = await req<{ objective: ObjectiveDetail }>(
+      `${mgr(slug)}/objectives/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+    return objective;
   },
 };

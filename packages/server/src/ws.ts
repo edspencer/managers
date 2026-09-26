@@ -997,25 +997,27 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
           [SEND_FILE_SERVER_KEY]: sendFile,
         };
 
-        // Self-management MCP (issue #214): only on keeper turns, and only when
-        // the instance opts in via MANAGERS_SELF_MCP. A HUMAN turn is
-        // the ROOT of any spawn tree (origin human, depth 0), so its children are
-        // depth 1 — the same builder the spawned path uses, just seeded with
-        // HUMAN_ROOT. Write tools follow the instance write opt-in (B1 #262: the
-        // shared builder is extracted so both paths agree). Depth-0 human gating is
-        // unchanged from before B1 — the depth bound governs the spawned path only.
-        if (deps.cfg.selfMcpEnabled) {
-          injectedMcpServers[SELF_MCP_SERVER_KEY] = buildSelfMcpServerDef(selfMcpCtx, {
-            currentProjectSlug: slug,
-            currentSessionId: () => resolvedSession ?? sessionId ?? null,
-            parentProvenance: HUMAN_ROOT,
-            includeWrite: deps.cfg.selfMcpWriteEnabled,
-            includeTriggers,
-            // Project provisioning (#467) rides on the write block behind its own
-            // instance flag — no per-project override, so nothing to resolve here.
-            includeProjects: deps.cfg.selfMcpWriteEnabled && deps.cfg.selfMcpProjectsEnabled,
-          });
-        }
+        // The `managers` MCP (issue #214; Managers M5). Always injected on a keeper
+        // turn: its state block (objectives, tasks, episodes, reports) is on every
+        // turn. The chat-read block follows the instance opt-in (MANAGERS_SELF_MCP)
+        // and the write tools the write opt-in, exactly as the whole server used
+        // to. A HUMAN turn is the ROOT of any spawn tree (origin human, depth 0), so
+        // its children are depth 1 — the same builder the spawned path uses, just
+        // seeded with HUMAN_ROOT. `origin: "human"` is what makes memory_op
+        // available: Ed is present.
+        injectedMcpServers[SELF_MCP_SERVER_KEY] = buildSelfMcpServerDef(selfMcpCtx, {
+          currentProjectSlug: slug,
+          currentSessionId: () => resolvedSession ?? sessionId ?? null,
+          parentProvenance: HUMAN_ROOT,
+          includeRead: deps.cfg.selfMcpEnabled,
+          origin: "human",
+          includeWrite: deps.cfg.selfMcpEnabled && deps.cfg.selfMcpWriteEnabled,
+          includeTriggers: deps.cfg.selfMcpEnabled && includeTriggers,
+          // Project provisioning (#467) rides on the write block behind its own
+          // instance flag — no per-project override, so nothing to resolve here.
+          includeProjects:
+            deps.cfg.selfMcpEnabled && deps.cfg.selfMcpWriteEnabled && deps.cfg.selfMcpProjectsEnabled,
+        });
 
         // Session mode drives a persistent, herdctl-managed openChatSession so
         // cross-turn autonomy (ScheduleWakeup / `/loop`) survives the turn
@@ -1486,6 +1488,12 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
   // a wake or a background stretch was stranded until some later `chat:send`
   // flushed it — out of order, behind a message the user typed afterwards.
   hub.onTurnEnd = ({ sessionId, projectSlug, origin, cancel }) => {
+    // Managers M5: a turn ending commits its workspace's pending state writes now.
+    try {
+      deps.onManagersTurnEnd?.(projectSlug);
+    } catch {
+      /* never let commit scheduling disturb the queue handling below */
+    }
     // A destructive op stopped this turn so it can delete/revert/promote the
     // chat (#731). Its transcript is about to be rewritten or removed, so a
     // drained follow-up would either race that or resurrect the chat (#730) —

@@ -1,6 +1,18 @@
 import { type ToolCall } from "../../lib/ws";
 import { api } from "../../lib/api";
-import { BranchIcon, ChatIcon, FolderIcon, PlusIcon, SendIcon } from "../icons";
+import {
+  BranchIcon,
+  ChatIcon,
+  CheckIcon,
+  ClockIcon,
+  FileIcon,
+  FolderIcon,
+  ListIcon,
+  PencilIcon,
+  PlusIcon,
+  SendIcon,
+  SparkIcon,
+} from "../icons";
 import type { ReadInfo, SearchInfo, SentFile, SentFileEnvelope } from "../../lib/types";
 
 /** Tool names that launch a sub-agent: `Task` (classic Claude Code), `Agent` (SDK). */
@@ -71,6 +83,23 @@ export function paddockMcpIcon(tool: string) {
       return BranchIcon;
     case "send_message":
       return SendIcon;
+    // Managers state tools (M5).
+    case "record_episode":
+      return ClockIcon;
+    case "upsert_task":
+      return CheckIcon;
+    case "update_objective":
+      return PencilIcon;
+    case "write_report":
+    case "read_objective":
+    case "read_task":
+      return FileIcon;
+    case "list_tasks":
+    case "list_objectives":
+      return ListIcon;
+    case "list_memory":
+    case "memory_op":
+      return SparkIcon;
     default:
       // list_chats, read_chat, and any future paddock tool.
       return ChatIcon;

@@ -32,6 +32,7 @@ import type { PaddockEventBus } from "./event-bus.js";
 import type { ChatHandlerContext } from "./ws-context.js";
 import type { TriggerService } from "./triggers.js";
 import { type ChatUsage, toChatUsage } from "./chat-dto.js";
+import type { Autocommitter } from "./managers/autocommit.js";
 import type { ManagersState } from "./managers/state.js";
 
 /**
@@ -134,6 +135,11 @@ export interface RouteDeps {
    * can omit it; the managers routes then build their own over `cfg.projectsRoot`.
    */
   managers?: ManagersState;
+  /**
+   * Managers M5: the autocommitter. The write routes only reach it indirectly
+   * (through `managers.writer.onWrite`); carried for completeness and tests.
+   */
+  autocommit?: Autocommitter;
   cfg: PaddockConfig;
 }
 

@@ -2,8 +2,9 @@
  * store-util — the pieces every Managers read store shares.
  *
  * {@link FileCache} is the mtime-keyed parse cache. There are no file watchers:
- * each read `stat`s the file and re-parses only when its mtime, ctime or size
- * moved, so an edit made by git, a human or another process is picked up on the
+ * each read `stat`s the file and re-parses only when its inode, mtime, ctime or
+ * size moved (the inode catches an atomic temp-file-and-rename rewrite), so an
+ * edit made by git, a human or another process is picked up on the
  * very next request without a restart.
  */
 import { promises as fs } from "node:fs";
@@ -21,6 +22,7 @@ export interface ParseError {
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
 
 interface Entry<T> {
+  ino: number;
   mtimeMs: number;
   ctimeMs: number;
   size: number;
@@ -49,7 +51,7 @@ export class FileCache<T> {
     }
     if (!st.isFile()) return null;
     const hit = this.entries.get(file);
-    if (hit && hit.mtimeMs === st.mtimeMs && hit.ctimeMs === st.ctimeMs && hit.size === st.size) {
+    if (hit && hit.ino === st.ino && hit.mtimeMs === st.mtimeMs && hit.ctimeMs === st.ctimeMs && hit.size === st.size) {
       return hit.value;
     }
     let value: Parsed<T>;
@@ -62,7 +64,7 @@ export class FileCache<T> {
       }
       value = { ok: false, error: (err as Error).message };
     }
-    this.entries.set(file, { mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, size: st.size, value });
+    this.entries.set(file, { ino: st.ino, mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, size: st.size, value });
     return value;
   }
 

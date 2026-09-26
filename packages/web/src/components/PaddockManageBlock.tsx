@@ -88,6 +88,20 @@ function ChatRow({ chat }: { chat: PmChat }) {
   );
 }
 
+/** One `label value` row for the compact Managers state-tool bodies (M5). */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-0.5 text-2xs">
+      <span className={`w-20 shrink-0 ${rowKey}`}>{label}</span>
+      <span className="min-w-0 break-all text-fg">{children}</span>
+    </div>
+  );
+}
+
+const Mono = ({ children }: { children: React.ReactNode }) => (
+  <span className="font-mono text-fg">{children}</span>
+);
+
 /** The expanded body for a parsed managers result. */
 export function PaddockManageBody({ data }: { data: PaddockManage }) {
   // Fallback project for links whose payload omits one (fork_chat_batch forks).
@@ -184,6 +198,110 @@ export function PaddockManageBody({ data }: { data: PaddockManage }) {
             <ChatLink project={data.project} sessionId={data.sessionId} label="open chat" />
           </div>
           {data.prompt && <PromptBlock label="Message" text={data.prompt} />}
+        </div>
+      );
+
+    // ── Managers state tools (M5): compact id + file rows ──
+    case "record_episode":
+      return (
+        <div className={wrap}>
+          <Row label="episode"><Mono>{data.id}</Mono></Row>
+          <Row label="importance">{data.importance}</Row>
+          {data.objective && <Row label="objective"><Mono>{data.objective}</Mono></Row>}
+          <Row label="file"><Mono>{data.file}</Mono></Row>
+        </div>
+      );
+
+    case "upsert_task":
+      return (
+        <div className={wrap}>
+          <Row label="task"><Mono>{data.id}</Mono></Row>
+          <Row label="status"><Chip>{data.status}</Chip>{data.created && <span className={`ml-2 ${rowKey}`}>created</span>}</Row>
+          <Row label="file"><Mono>{data.file}</Mono></Row>
+          {data.movedFrom && <Row label="moved from"><Mono>{data.movedFrom}</Mono></Row>}
+        </div>
+      );
+
+    case "update_objective":
+      return (
+        <div className={wrap}>
+          <Row label="objective"><Mono>{data.id}</Mono></Row>
+          <Row label="status"><Chip>{data.status}</Chip>{data.created && <span className={`ml-2 ${rowKey}`}>created</span>}</Row>
+          <Row label="file"><Mono>{data.file}</Mono></Row>
+        </div>
+      );
+
+    case "write_report":
+      return (
+        <div className={wrap}>
+          <Row label="report">{data.type} · {data.date}</Row>
+          <Row label="file"><Mono>{data.file}</Mono></Row>
+          <Row label="current"><Mono>{data.currentFile}</Mono></Row>
+        </div>
+      );
+
+    case "record_artifact":
+      return (
+        <div className={wrap}>
+          <Row label="run"><Mono>{data.run}</Mono></Row>
+          <Row label="artifacts">{data.artifacts}</Row>
+          <Row label="file"><Mono>{data.file}</Mono></Row>
+        </div>
+      );
+
+    case "list_tasks":
+      return (
+        <div className={wrap}>
+          <ul className="max-h-72 divide-y divide-edge-subtle overflow-auto text-2xs">
+            {data.tasks.map((t) => (
+              <li key={t.id} className="flex items-center gap-2 py-1">
+                <span className="shrink-0 font-mono text-fg-muted">{t.id}</span>
+                <span className="min-w-0 flex-1 truncate text-fg">{t.title}</span>
+                <Chip>{t.status}</Chip>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+
+    case "list_objectives":
+      return (
+        <div className={wrap}>
+          <ul className="max-h-72 divide-y divide-edge-subtle overflow-auto text-2xs">
+            {data.objectives.map((o) => (
+              <li key={o.id} className="flex items-center gap-2 py-1">
+                <span className="min-w-0 flex-1 truncate text-fg">{o.title}</span>
+                <Chip>{o.status}</Chip>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+
+    case "read_task":
+      return (
+        <div className={wrap}>
+          <Row label="task"><Mono>{data.task.id}</Mono></Row>
+          <Row label="title">{data.task.title}</Row>
+          <Row label="status"><Chip>{data.task.status}</Chip></Row>
+          {data.task.ask && <Row label="ask">{data.task.ask}</Row>}
+        </div>
+      );
+
+    case "read_objective":
+      return (
+        <div className={wrap}>
+          <Row label="objective"><Mono>{data.objective.id}</Mono></Row>
+          <Row label="title">{data.objective.title}</Row>
+          <Row label="status"><Chip>{data.objective.status}</Chip></Row>
+        </div>
+      );
+
+    case "list_memory":
+      return (
+        <div className={wrap}>
+          <Row label="facts">{data.facts}</Row>
+          <Row label="playbooks">{data.playbooks}</Row>
         </div>
       );
 

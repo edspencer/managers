@@ -1,0 +1,723 @@
+/**
+ * state-writes — the ONE place Managers domain state is written (M5, plan §2.6).
+ *
+ * Agents (through the `managers` MCP state tools) and the UI (through the write
+ * REST routes) both land here, so the validation rules and the serialisation are
+ * shared rather than re-implemented per transport:
+ *
+ *   • every write runs inside the per-workspace {@link WriteQueue};
+ *   • ids are minted under that lock and checked against what is on disk;
+ *   • every record is validated through the STRICT `*WriteSchema` before it
+ *     touches the disk. An update never echoes the lenient read DTO back: it
+ *     re-reads the file's RAW frontmatter, fills only the absent keys with their
+ *     defaults, applies the change and validates the result. Keys a human added
+ *     by hand that the schema does not know are preserved verbatim after the
+ *     validated ones — a write must never silently delete Ed's data.
+ *   • after a successful write, {@link StateWriter.onWrite} fires so the
+ *     autocommitter can schedule a commit.
+ *
+ * Errors are {@link StateWriteError}s carrying a REST-shaped `code`
+ * (`invalid` → 400, `not_found` → 404, `conflict` → 409); the MCP layer turns the
+ * message into an error tool result.
+ */
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import YAML from "yaml";
+import { z } from "zod";
+import { WriteQueue, appendText, writeFileAtomic } from "./write-queue.js";
+import { isName, isRunId, isTaskId, monthOfId, MONTH_RE, type WorkspaceLayout } from "./layout.js";
+import { newEpisodeId, newTaskId, mintUnique } from "./ids.js";
+import { parseFrontmatter, stringifyFrontmatter } from "./frontmatter.js";
+import {
+  CLOSED_TASK_STATUSES,
+  EPISODE_MAX_TEXT,
+  OBJECTIVE_STATUSES,
+  TASK_SOURCES,
+  TASK_STATUSES,
+  describeZodError,
+  episodeWriteSchema,
+  objectiveWriteSchema,
+  runWriteSchema,
+  taskWriteSchema,
+  type EpisodeWrite,
+  type ObjectiveStatus,
+  type TaskSource,
+  type TaskStatus,
+} from "./schemas.js";
+import { formatEpisode, type EpisodesStore } from "./episodes-store.js";
+import { listDirsDesc, splitSections } from "./store-util.js";
+import type { GitAuthor } from "./autocommit.js";
+
+// --- errors, actors, workspaces ----------------------------------------------
+
+export type StateWriteErrorCode = "invalid" | "not_found" | "conflict";
+
+export class StateWriteError extends Error {
+  constructor(
+    readonly code: StateWriteErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "StateWriteError";
+  }
+}
+
+const invalid = (msg: string) => new StateWriteError("invalid", msg);
+
+/** Who is writing. Drives the log-line attribution, `source`, and the commit author. */
+export interface WriteActor {
+  kind: "agent" | "ed";
+  /** Shown in task log lines and `answer.by`: `manager`, or Ed's username. */
+  name: string;
+  /** Commit identity for the autocommit this write schedules. */
+  author: GitAuthor;
+  /** The Managers run this write belongs to (trigger fires; null until M6). */
+  runId?: string | null;
+  /** The chat session writing, when there is one. */
+  sessionId?: string | null;
+}
+
+/** One workspace: its key (`""` is the root, Home) and its layout. */
+export interface WriteWorkspace {
+  key: string;
+  layout: WorkspaceLayout;
+}
+
+export const workspaceLabel = (key: string): string => (key === "" ? "Home" : key);
+
+// --- inputs --------------------------------------------------------------------
+
+export interface RecordEpisodeInput {
+  text: string;
+  importance: number;
+  tags?: string[];
+  refs?: string[];
+  /** File under this objective's journal instead of the project log. */
+  objective?: string | null;
+}
+
+export interface UpsertTaskInput {
+  /** Absent → create. */
+  id?: string;
+  title?: string;
+  status?: TaskStatus;
+  objective?: string | null;
+  ask?: string | null;
+  options?: string[];
+  github?: string[];
+  due?: string | null;
+  shovel_ready?: boolean;
+  /** Replaces the task's notes (the body above `## Log`). */
+  notes?: string;
+  source?: TaskSource;
+  /** One line for the task's `## Log`; a summary is generated when absent. */
+  log?: string;
+}
+
+export interface AnswerTaskInput {
+  choice?: string;
+  text?: string;
+}
+
+export interface UpdateObjectiveInput {
+  id: string;
+  title?: string;
+  status?: ObjectiveStatus;
+  success?: string;
+  whereWeAre?: string;
+  strategy?: string;
+  lessons?: string;
+  triggers?: string[];
+}
+
+export interface WriteReportInput {
+  type: string;
+  body: string;
+}
+
+export interface RecordArtifactInput {
+  kind: string;
+  ref: string;
+  note?: string;
+}
+
+// --- results -------------------------------------------------------------------
+
+export interface WriteResult {
+  id: string;
+  /** Workspace-relative path of the file written. */
+  file: string;
+}
+
+export interface EpisodeResult extends WriteResult {
+  importance: number;
+  objective: string | null;
+}
+export interface TaskResult extends WriteResult {
+  status: TaskStatus;
+  created: boolean;
+  /** Set when the file moved between `open/` and `done/<month>/`. */
+  movedFrom?: string;
+}
+export interface ObjectiveResult extends WriteResult {
+  status: ObjectiveStatus;
+  created: boolean;
+}
+export interface ReportResult {
+  type: string;
+  date: string;
+  file: string;
+  currentFile: string;
+}
+export interface ArtifactResult {
+  run: string;
+  file: string;
+  artifacts: number;
+}
+
+// --- limits and small helpers -------------------------------------------------
+
+export const SECTION_MAX = 8000;
+export const TASK_NOTES_MAX = 8000;
+export const REPORT_MAX = 50_000;
+export const LOG_LINE_MAX = 300;
+
+/** Minute-precision UTC timestamp, `2026-09-26T07:05:00Z`. */
+function isoMinute(d: Date): string {
+  return `${d.toISOString().slice(0, 16)}:00Z`;
+}
+/** Second-precision UTC timestamp, `2026-09-26T07:05:13Z`. */
+function isoSecond(d: Date): string {
+  return `${d.toISOString().slice(0, 19)}Z`;
+}
+const monthOf = (d: Date) => d.toISOString().slice(0, 7);
+const dateOf = (d: Date) => d.toISOString().slice(0, 10);
+
+function oneLine(s: string, max: number): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+/**
+ * Free text that will be embedded in a Markdown file whose structure is `## `
+ * headings (episode blocks, objective and task sections). A `## ` line inside it
+ * would be read back as a new block/section, so it is refused, not escaped.
+ */
+function assertNoH2(text: string, what: string): void {
+  if (/^## /m.test(text)) {
+    throw invalid(`${what} must not contain a line starting with "## " (use "###" for sub-headings)`);
+  }
+}
+
+function zodFail(what: string, err: z.ZodError): StateWriteError {
+  return invalid(`${what}: ${describeZodError(err)}`);
+}
+
+async function exists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rawDoc(text: string, what: string): { data: Record<string, unknown>; body: string } {
+  try {
+    const doc = parseFrontmatter(text);
+    if (!doc.hasFrontmatter) throw new Error("no frontmatter");
+    return { data: doc.data, body: doc.body };
+  } catch (err) {
+    throw new StateWriteError(
+      "conflict",
+      `${what} does not parse (${(err as Error).message}); fix the file by hand before writing to it`,
+    );
+  }
+}
+
+/** The frontmatter keys each strict write schema owns; anything else is a hand-added extra. */
+export const TASK_KEYS = [
+  "id", "title", "status", "objective", "source", "ask", "options", "answer",
+  "github", "dispatched", "shovel_ready", "due", "created", "updated",
+] as const;
+const OBJECTIVE_KEYS = Object.keys(objectiveWriteSchema.shape);
+const RUN_KEYS = Object.keys(runWriteSchema.shape);
+
+/** Split raw frontmatter into the schema's keys and the hand-added extras. */
+function splitKnown(
+  data: Record<string, unknown>,
+  keys: readonly string[],
+): { known: Record<string, unknown>; extra: Record<string, unknown> } {
+  const known: Record<string, unknown> = {};
+  const extra: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) (keys.includes(k) ? known : extra)[k] = v;
+  return { known, extra };
+}
+
+/** Absent/null → fallback; a lone scalar → a one-item list (the lenient read's lift). */
+function listOr(v: unknown): unknown {
+  if (v === undefined || v === null) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+/** YAML may hand back `answer.choice: null`; the strict schema wants the key absent. */
+function dropNulls(v: unknown): unknown {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return v;
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== null));
+}
+
+// --- the writer ------------------------------------------------------------------
+
+export type WriteListener = (dir: string, label: string, author: GitAuthor, reason: string) => void;
+
+export class StateWriter {
+  readonly queue = new WriteQueue();
+  /** Called after every successful write (autocommit hooks in here). */
+  onWrite: WriteListener | null = null;
+  /**
+   * Awaited INSIDE the workspace lock before every write — autocommit uses it to
+   * commit another author's pending writes first.
+   */
+  beforeWrite: ((dir: string, author: GitAuthor) => Promise<void>) | null = null;
+
+  /** Run `fn` under the workspace's lock, after the {@link beforeWrite} hook. */
+  private locked<T>(ws: WriteWorkspace, actor: WriteActor, fn: () => Promise<T>): Promise<T> {
+    const dir = path.resolve(ws.layout.dir);
+    return this.queue.run(dir, async () => {
+      if (this.beforeWrite) await this.beforeWrite(dir, actor.author).catch(() => undefined);
+      return fn();
+    });
+  }
+
+  constructor(
+    private readonly episodes: EpisodesStore,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  private notify(ws: WriteWorkspace, actor: WriteActor, reason: string): void {
+    try {
+      this.onWrite?.(ws.layout.dir, workspaceLabel(ws.key), actor.author, reason);
+    } catch {
+      /* a commit-scheduling failure must never fail the write */
+    }
+  }
+
+  private async assertObjective(ws: WriteWorkspace, objective: string): Promise<void> {
+    if (!isName(objective)) throw invalid(`objective must be a kebab-case objective id, got ${JSON.stringify(objective)}`);
+    if (!(await exists(ws.layout.objectiveFile(objective)))) {
+      throw new StateWriteError("not_found", `No such objective: ${objective}`);
+    }
+  }
+
+  // --- episodes -----------------------------------------------------------------
+
+  async recordEpisode(ws: WriteWorkspace, input: RecordEpisodeInput, actor: WriteActor): Promise<EpisodeResult> {
+    const text = typeof input.text === "string" ? input.text.trim() : "";
+    if (!text) throw invalid("text is required");
+    if (text.length > EPISODE_MAX_TEXT) {
+      throw invalid(`text is ${text.length} characters; the limit is ${EPISODE_MAX_TEXT}`);
+    }
+    assertNoH2(text, "text");
+    if (/(^|\n)refs:/i.test(text.split("\n").slice(-1)[0] ?? "")) {
+      throw invalid('text must not end with a "refs:" line; pass refs separately');
+    }
+    const objective = input.objective ?? null;
+    if (objective !== null) await this.assertObjective(ws, objective);
+    const tags = (input.tags ?? []).map((t) => String(t).trim().replace(/^#/, "")).filter(Boolean);
+    const refs = (input.refs ?? []).map((r) => String(r).trim()).filter(Boolean);
+
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const idx = await this.episodes.index(ws.layout);
+      const id = await mintUnique(() => newEpisodeId(now), (x) => idx.has(x));
+      const draft: EpisodeWrite = {
+        id,
+        at: isoMinute(now),
+        importance: input.importance,
+        ...(actor.runId ? { run: actor.runId } : {}),
+        ...(actor.sessionId ? { chat: actor.sessionId } : {}),
+        ...(actor.kind === "ed" ? { source: "ed" as const } : {}),
+        tags: [...new Set(tags)],
+        text,
+        refs: [...new Set(refs)],
+      };
+      const r = episodeWriteSchema.safeParse(draft);
+      if (!r.success) throw zodFail("episode", r.error);
+      const file = objective === null ? ws.layout.logFile(monthOf(now)) : ws.layout.journalFile(objective, monthOf(now));
+      await appendText(file, formatEpisode(r.data));
+      this.notify(ws, actor, "record_episode");
+      return { id, file: ws.layout.rel(file), importance: r.data.importance, objective };
+    });
+  }
+
+  // --- tasks ------------------------------------------------------------------------
+
+  /** Where a task's file is now: `open/`, or the first done month holding it. */
+  private async locateTask(ws: WriteWorkspace, id: string): Promise<{ abs: string; month: string | null } | null> {
+    const open = path.join(ws.layout.tasksOpenDir, `${id}.md`);
+    if (await exists(open)) return { abs: open, month: null };
+    const months = await listDirsDesc(ws.layout.tasksDoneDir, MONTH_RE);
+    const home = monthOfId(id);
+    for (const m of [...months.filter((x) => x === home), ...months.filter((x) => x !== home)]) {
+      const abs = path.join(ws.layout.tasksDoneMonthDir(m), `${id}.md`);
+      if (await exists(abs)) return { abs, month: m };
+    }
+    return null;
+  }
+
+  async upsertTask(ws: WriteWorkspace, input: UpsertTaskInput, actor: WriteActor): Promise<TaskResult> {
+    if (input.id !== undefined && !isTaskId(input.id)) throw invalid(`Invalid task id: ${input.id}`);
+    if (input.status !== undefined && !(TASK_STATUSES as readonly string[]).includes(input.status)) {
+      throw invalid(`status must be one of ${TASK_STATUSES.join(", ")}`);
+    }
+    if (input.source !== undefined && !(TASK_SOURCES as readonly string[]).includes(input.source)) {
+      throw invalid(`source must be one of ${TASK_SOURCES.join(", ")}`);
+    }
+    if (input.source === "ed" && actor.kind !== "ed") throw invalid('source "ed" is reserved for tasks Ed creates');
+    if (input.notes !== undefined) {
+      if (input.notes.length > TASK_NOTES_MAX) throw invalid(`notes exceed ${TASK_NOTES_MAX} characters`);
+      assertNoH2(input.notes, "notes");
+    }
+    if (input.objective) await this.assertObjective(ws, input.objective);
+
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const stamp = isoSecond(now);
+      let id = input.id;
+      let prior: { abs: string; month: string | null; data: Record<string, unknown>; body: string } | null = null;
+      if (id !== undefined) {
+        const loc = await this.locateTask(ws, id);
+        if (!loc) throw new StateWriteError("not_found", `No such task: ${id}`);
+        const { data, body } = rawDoc(await fs.readFile(loc.abs, "utf8"), ws.layout.rel(loc.abs));
+        prior = { ...loc, data, body };
+      } else {
+        if (!input.title || !input.title.trim()) throw invalid("title is required to create a task");
+        id = await mintUnique(
+          () => newTaskId(now),
+          async (x) => (await this.locateTask(ws, x)) !== null,
+        );
+      }
+
+      const { known, extra } = splitKnown(prior?.data ?? {}, TASK_KEYS);
+      const base: Record<string, unknown> = {
+        id,
+        title: known.title,
+        status: known.status ?? "open",
+        objective: known.objective ?? null,
+        source: known.source ?? (actor.kind === "ed" ? "ed" : "manager"),
+        ask: known.ask ?? null,
+        options: listOr(known.options),
+        answer: known.answer ? dropNulls(known.answer) : null,
+        github: listOr(known.github),
+        dispatched: listOr(known.dispatched),
+        shovel_ready: known.shovel_ready ?? false,
+        due: known.due ?? null,
+        created: known.created ?? stamp,
+        updated: stamp,
+      };
+      const oldStatus = prior ? String(base.status) : null;
+      const changed: string[] = [];
+      const set = (k: string, v: unknown) => {
+        if (v === undefined) return;
+        if (JSON.stringify(base[k]) !== JSON.stringify(v)) changed.push(k);
+        base[k] = v;
+      };
+      set("title", input.title?.trim());
+      set("status", input.status);
+      set("objective", input.objective);
+      set("ask", input.ask === undefined ? undefined : input.ask === null ? null : input.ask.trim() || null);
+      set("options", input.options);
+      set("github", input.github);
+      set("due", input.due);
+      set("shovel_ready", input.shovel_ready);
+      if (!prior) set("source", input.source ?? (actor.kind === "ed" ? "ed" : "manager"));
+      // A fresh question supersedes the previous answer.
+      if (prior && base.status === "awaiting-ed" && input.ask) base.answer = null;
+
+      const r = taskWriteSchema.safeParse(base);
+      if (!r.success) throw zodFail("task", r.error);
+      const task = r.data;
+
+      // Body: notes (everything but `## Log`) + the log, with one new line.
+      const { notes: oldNotes, log } = splitTaskBody(prior?.body ?? "");
+      const notes = input.notes !== undefined ? input.notes.trim() : oldNotes;
+      const who = actor.kind === "ed" ? actor.name || "ed" : "manager";
+      const where = actor.runId ? ` (run ${actor.runId})` : "";
+      const summary = input.log
+        ? oneLine(input.log, LOG_LINE_MAX)
+        : !prior
+          ? `created, ${task.status}`
+          : oldStatus !== task.status
+            ? `${oldStatus} → ${task.status}`
+            : `updated ${changed.filter((k) => k !== "updated").join(", ") || "notes"}`;
+      log.push(`${isoMinute(now).replace(":00Z", "Z")} ${who}${where}: ${summary}`);
+      const body = `${notes ? `${notes}\n\n` : ""}## Log\n${log.map((l) => `- ${l}`).join("\n")}\n`;
+
+      const closed = CLOSED_TASK_STATUSES.includes(task.status);
+      const target = closed
+        ? path.join(ws.layout.tasksDoneMonthDir(prior?.month ?? monthOf(now)), `${id}.md`)
+        : path.join(ws.layout.tasksOpenDir, `${id}.md`);
+      await writeFileAtomic(target, stringifyFrontmatter({ ...task, ...extra }, body));
+      let movedFrom: string | undefined;
+      if (prior && prior.abs !== target) {
+        await fs.rm(prior.abs, { force: true });
+        movedFrom = ws.layout.rel(prior.abs);
+      }
+      this.notify(ws, actor, prior ? "upsert_task (update)" : "upsert_task (create)");
+      return {
+        id: id!,
+        file: ws.layout.rel(target),
+        status: task.status,
+        created: !prior,
+        ...(movedFrom ? { movedFrom } : {}),
+      };
+    });
+  }
+
+  /**
+   * Ed answers an `awaiting-ed` task: records `answer`, reopens it, and journals
+   * an `#answer` episode (`source: ed`) so the next wake's briefing sees it.
+   */
+  async answerTask(
+    ws: WriteWorkspace,
+    id: string,
+    input: AnswerTaskInput,
+    actor: WriteActor,
+  ): Promise<{ task: TaskResult; episode: EpisodeResult }> {
+    if (!isTaskId(id)) throw invalid(`Invalid task id: ${id}`);
+    const choice = typeof input.choice === "string" ? input.choice.trim() : "";
+    const text = typeof input.text === "string" ? input.text.trim() : "";
+    if (!choice && !text) throw invalid("an answer needs a choice or some text");
+    if (text.length > 4000) throw invalid("answer text exceeds 4000 characters");
+
+    let title = "";
+    let objective: string | null = null;
+    const task = await this.locked(ws, actor, async () => {
+      const loc = await this.locateTask(ws, id);
+      if (!loc) throw new StateWriteError("not_found", `No such task: ${id}`);
+      const { data, body } = rawDoc(await fs.readFile(loc.abs, "utf8"), ws.layout.rel(loc.abs));
+      if (data.status !== "awaiting-ed") {
+        throw new StateWriteError("conflict", `Task ${id} is ${String(data.status)}, not awaiting-ed`);
+      }
+      const options = listOr(data.options) as unknown[];
+      if (choice && options.length > 0 && !options.map(String).includes(choice)) {
+        throw invalid(`choice must be one of: ${options.map(String).join(", ")}`);
+      }
+      title = typeof data.title === "string" ? data.title : "";
+      objective = typeof data.objective === "string" && isName(data.objective) ? data.objective : null;
+      const now = this.now();
+      const stamp = isoSecond(now);
+      const { known, extra } = splitKnown(data, TASK_KEYS);
+      const next = {
+        id,
+        title: known.title,
+        status: "open",
+        objective: known.objective ?? null,
+        source: known.source ?? "manager",
+        ask: known.ask ?? null,
+        options: listOr(known.options),
+        answer: {
+          by: actor.name || "ed",
+          at: stamp,
+          ...(choice ? { choice } : {}),
+          ...(text ? { text } : {}),
+        },
+        github: listOr(known.github),
+        dispatched: listOr(known.dispatched),
+        shovel_ready: known.shovel_ready ?? false,
+        due: known.due ?? null,
+        created: known.created ?? stamp,
+        updated: stamp,
+      };
+      const r = taskWriteSchema.safeParse(next);
+      if (!r.success) throw zodFail("task", r.error);
+      const { notes, log } = splitTaskBody(body);
+      log.push(
+        `${isoMinute(now).replace(":00Z", "Z")} ${actor.name || "ed"}: answered${choice ? ` "${oneLine(choice, 80)}"` : ""}, awaiting-ed → open`,
+      );
+      const target = path.join(ws.layout.tasksOpenDir, `${id}.md`);
+      await writeFileAtomic(
+        target,
+        stringifyFrontmatter({ ...r.data, ...extra }, `${notes ? `${notes}\n\n` : ""}## Log\n${log.map((l) => `- ${l}`).join("\n")}\n`),
+      );
+      if (loc.abs !== target) await fs.rm(loc.abs, { force: true });
+      this.notify(ws, actor, "answer task");
+      return { id, file: ws.layout.rel(target), status: "open" as const, created: false };
+    });
+
+    const said = [choice && `"${oneLine(choice, 80)}"`, text && oneLine(text, 600)].filter(Boolean).join(" — ");
+    let epText = `Ed answered ${id}${title ? ` (${oneLine(title, 120)})` : ""}: ${said}`;
+    if (epText.length > EPISODE_MAX_TEXT) epText = `${epText.slice(0, EPISODE_MAX_TEXT - 1)}…`;
+    epText = epText.replace(/^## /gm, "\\## ");
+    const episode = await this.recordEpisode(
+      ws,
+      { text: epText, importance: 6, tags: ["answer"], refs: [id], objective },
+      { ...actor, kind: "ed" },
+    );
+    return { task, episode };
+  }
+
+  // --- objectives ------------------------------------------------------------------
+
+  async updateObjective(ws: WriteWorkspace, input: UpdateObjectiveInput, actor: WriteActor): Promise<ObjectiveResult> {
+    const id = input.id;
+    if (typeof id !== "string" || !isName(id)) throw invalid(`id must be a kebab-case objective id, got ${JSON.stringify(id)}`);
+    if (input.status !== undefined && !(OBJECTIVE_STATUSES as readonly string[]).includes(input.status)) {
+      throw invalid(`status must be one of ${OBJECTIVE_STATUSES.join(", ")}`);
+    }
+    const sections: [keyof UpdateObjectiveInput, string][] = [
+      ["whereWeAre", "Where we are"],
+      ["strategy", "Strategy"],
+      ["lessons", "Lessons"],
+    ];
+    for (const [k, heading] of sections) {
+      const v = input[k];
+      if (v === undefined) continue;
+      if (typeof v !== "string") throw invalid(`${heading} must be text`);
+      if (v.length > SECTION_MAX) throw invalid(`${heading} exceeds ${SECTION_MAX} characters`);
+      assertNoH2(v, heading);
+    }
+
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const stamp = isoSecond(now);
+      const file = ws.layout.objectiveFile(id);
+      const existing = await exists(file);
+      if (!existing && (!input.title?.trim() || !input.success?.trim())) {
+        throw new StateWriteError(
+          "not_found",
+          `No such objective: ${id}. To create it, pass both title and success.`,
+        );
+      }
+      const prior = existing ? rawDoc(await fs.readFile(file, "utf8"), ws.layout.rel(file)) : null;
+      const { known, extra } = splitKnown(prior?.data ?? {}, OBJECTIVE_KEYS);
+      const fm: Record<string, unknown> = {
+        title: input.title?.trim() ?? known.title,
+        status: input.status ?? known.status ?? "active",
+        success: input.success?.trim() ?? known.success,
+        ...(input.triggers !== undefined
+          ? { triggers: input.triggers }
+          : known.triggers !== undefined && known.triggers !== null
+            ? { triggers: listOr(known.triggers) }
+            : {}),
+        created: known.created ?? stamp,
+        updated: stamp,
+      };
+      const r = objectiveWriteSchema.safeParse(fm);
+      if (!r.success) throw zodFail("objective", r.error);
+
+      // Replace the named sections in place; keep everything else (preamble,
+      // Ed's own sections, their order). Missing known sections are appended in
+      // the canonical order.
+      const { preamble, sections: have } = splitSections(prior?.body ?? "");
+      const byHeading = new Map(sections.map(([k, h]) => [h.toLowerCase(), k]));
+      const used = new Set<string>();
+      const out: { heading: string; body: string }[] = have.map((s) => {
+        const k = byHeading.get(s.heading.trim().toLowerCase());
+        if (k && !used.has(k) && input[k] !== undefined) {
+          used.add(k);
+          return { heading: s.heading, body: String(input[k]).trim() };
+        }
+        if (k) used.add(k);
+        return s;
+      });
+      for (const [k, heading] of sections) {
+        if (!used.has(k) && input[k] !== undefined) out.push({ heading, body: String(input[k]).trim() });
+      }
+      const parts = [preamble, ...out.map((s) => `## ${s.heading}\n${s.body}`)].filter((p) => p.length > 0);
+      await writeFileAtomic(file, stringifyFrontmatter({ ...r.data, ...extra }, `${parts.join("\n\n")}\n`));
+      this.notify(ws, actor, existing ? "update_objective" : "update_objective (create)");
+      return { id, file: ws.layout.rel(file), status: r.data.status, created: !existing };
+    });
+  }
+
+  // --- reports (stub until M10) -------------------------------------------------------
+
+  async writeReport(ws: WriteWorkspace, input: WriteReportInput, actor: WriteActor): Promise<ReportResult> {
+    const type = typeof input.type === "string" ? input.type.trim() : "";
+    if (!isName(type)) throw invalid(`type must be a kebab-case report type, got ${JSON.stringify(input.type)}`);
+    const body = typeof input.body === "string" ? input.body.trim() : "";
+    if (!body) throw invalid("body is required");
+    if (body.length > REPORT_MAX) throw invalid(`body exceeds ${REPORT_MAX} characters`);
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const date = dateOf(now);
+      const fm = { type, updated: isoSecond(now), ...(actor.runId ? { run: actor.runId } : {}) };
+      const text = stringifyFrontmatter(fm, `${body}\n`);
+      const dated = ws.layout.reportDatedFile(type, date);
+      const current = ws.layout.reportCurrentFile(type);
+      await writeFileAtomic(dated, text);
+      await writeFileAtomic(current, text);
+      this.notify(ws, actor, `write_report (${type})`);
+      return { type, date, file: ws.layout.rel(dated), currentFile: ws.layout.rel(current) };
+    });
+  }
+
+  // --- artifacts -------------------------------------------------------------------------
+
+  async recordArtifact(ws: WriteWorkspace, input: RecordArtifactInput, actor: WriteActor): Promise<ArtifactResult> {
+    const runId = actor.runId ?? null;
+    if (!runId) {
+      throw new StateWriteError(
+        "conflict",
+        "record_artifact only works inside a trigger run, and this turn has no run",
+      );
+    }
+    if (!isRunId(runId)) throw invalid(`Invalid run id: ${runId}`);
+    const kind = typeof input.kind === "string" ? input.kind.trim() : "";
+    const ref = typeof input.ref === "string" ? input.ref.trim() : "";
+    if (!isName(kind)) throw invalid(`kind must be kebab-case (e.g. "commit", "pull-request"), got ${JSON.stringify(input.kind)}`);
+    if (!ref || ref.length > 300 || /\s/.test(ref)) throw invalid("ref must be a single token of at most 300 characters");
+    const note = input.note === undefined ? undefined : oneLine(String(input.note), 500);
+
+    return this.locked(ws, actor, async () => {
+      const month = monthOfId(runId);
+      const candidates = month ? [ws.layout.runFile(month, runId)] : [];
+      for (const m of await listDirsDesc(ws.layout.runsDir, MONTH_RE)) {
+        const f = ws.layout.runFile(m, runId);
+        if (!candidates.includes(f)) candidates.push(f);
+      }
+      let file: string | null = null;
+      for (const f of candidates) if (await exists(f)) { file = f; break; }
+      if (!file) throw new StateWriteError("not_found", `No such run: ${runId}`);
+      let data: Record<string, unknown>;
+      try {
+        const parsed = YAML.parse(await fs.readFile(file, "utf8"), { schema: "core" }) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not a mapping");
+        data = parsed as Record<string, unknown>;
+      } catch (err) {
+        throw new StateWriteError("conflict", `${ws.layout.rel(file)} does not parse (${(err as Error).message})`);
+      }
+      const { known, extra } = splitKnown(data, RUN_KEYS);
+      const artifacts = [
+        ...(listOr(known.artifacts) as unknown[]).map(dropNulls),
+        { kind, ref, ...(note ? { note } : {}), at: isoSecond(this.now()) },
+      ];
+      const r = runWriteSchema.safeParse({ ...known, id: known.id ?? runId, artifacts });
+      if (!r.success) throw zodFail("run record", r.error);
+      await writeFileAtomic(file, YAML.stringify({ ...r.data, ...extra }, { lineWidth: 0 }));
+      this.notify(ws, actor, "record_artifact");
+      return { run: runId, file: ws.layout.rel(file), artifacts: r.data.artifacts.length };
+    });
+  }
+}
+
+/** A task body → its notes (everything but `## Log`) and its log lines. */
+export function splitTaskBody(body: string): { notes: string; log: string[] } {
+  const { preamble, sections } = splitSections(body);
+  const notes = [preamble];
+  let log: string[] = [];
+  let seenLog = false;
+  for (const s of sections) {
+    if (!seenLog && s.heading.trim().toLowerCase() === "log") {
+      seenLog = true;
+      log = s.body
+        .split("\n")
+        .filter((l) => /^\s*[-*] /.test(l))
+        .map((l) => l.replace(/^\s*[-*] /, "").trimEnd());
+    } else {
+      notes.push(`## ${s.heading}\n${s.body}`);
+    }
+  }
+  return { notes: notes.filter(Boolean).join("\n\n"), log };
+}

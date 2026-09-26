@@ -57,6 +57,7 @@ import { TriggerService } from "./triggers.js";
 import { buildSwaggerOptions, buildSwaggerUiOptions, type SwaggerImage } from "./openapi.js";
 import { ensureDataRepo, dataGitInitEnabled } from "./managers/data-repo.js";
 import { ManagersState } from "./managers/state.js";
+import { Autocommitter } from "./managers/autocommit.js";
 
 // Resolve the package version at runtime (dist/app.js → ../package.json) so the
 // generated OpenAPI document's info.version tracks the release without a build step.
@@ -92,6 +93,10 @@ export interface BuiltApp {
   events: PaddockEventBus;
   /** Unified trigger registry (Epic T / T1) — the sole trigger CRUD surface. */
   triggers: TriggerService;
+  /** Managers M4/M5: the domain stores and the state writer. */
+  managers: ManagersState;
+  /** Managers M5: the state autocommitter (tests flush it instead of waiting). */
+  autocommit: Autocommitter;
   /**
    * The WS layer's session hub — every in-flight turn, and the fan-out to the
    * sockets watching it. Exposed for callers that need to observe or annotate a
@@ -222,6 +227,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     hostPlugins.source,
   );
   const git = new GitService(cfg.projectsRoot, cfg.gitAuthor);
+  // Managers M5 (plan §2.6): every state write schedules a commit of the owned
+  // state paths; a turn ending flushes its workspace's pending commit at once.
+  const autocommit = new Autocommitter({
+    git,
+    enabled: cfg.autocommit.enabled,
+    debounceMs: cfg.autocommit.debounceMs,
+    log: app.log,
+    lock: (dir, fn) => managers.writer.queue.run(dir, fn),
+  });
+  managers.writer.onWrite = (dir, label, author, reason) => autocommit.schedule(dir, label, author, reason);
+  managers.writer.beforeWrite = (dir, author) => autocommit.beforeWrite(dir, author);
   const githubAuth = new GithubAuth(path.join(cfg.dataDir, "github-auth.json"), cfg.githubClientId);
   const archive = new ArchiveStore(cfg.dataDir);
   // Per-chat starred/pinned-flag sidecar (#373). Orthogonal to `archive`; the
@@ -417,7 +433,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     app.log.info("OpenAPI reference off (set MANAGERS_OPENAPI_ENABLED=1 to mount /open-api)");
   }
 
-  const chatHandler = makeChatHandler({ herdctl, projects, sweep, attachments, queuedMessage, runProvenance, messageProvenance, archive, scheduleSessions, events, triggers, triggerSessions, cfg });
+  const onManagersTurnEnd = (slug: string) => {
+    void projects
+      .get(slug)
+      .then((p) => autocommit.flush(p.dir))
+      .catch(() => undefined);
+  };
+  const chatHandler = makeChatHandler({ herdctl, projects, sweep, attachments, queuedMessage, runProvenance, messageProvenance, archive, scheduleSessions, events, triggers, triggerSessions, managers, onManagersTurnEnd, cfg });
 
   // --- external Management API (#312 M1) ---------------------------------
   // Surface how the `managementApi` block resolved. A malformed client is an
@@ -440,7 +462,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     );
   }
 
-  await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, managers, cfg });
+  await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, managers, autocommit, cfg });
 
   await app.register(async (scoped) => {
     // `hide: true` keeps the WS upgrade out of the OpenAPI doc — it's not a REST
@@ -527,6 +549,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
 
   const close = async () => {
     sweep.stop();
+    await autocommit.close().catch(() => undefined);
     await herdctl.stop().catch(() => undefined);
     await app.close().catch(() => undefined);
   };
@@ -534,5 +557,5 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // `hub` rides along like every other built piece: it is the WS layer's turn
   // bookkeeping, and the only place a caller can observe or annotate a turn
   // without a live socket (see SessionHub.noteCancel).
-  return { app, cfg, projects, herdctl, git, githubAuth, sweep, archive, star, readState, unread, parentDetach, runProvenance, queuedMessage, transcriber, events, triggers, hub: chatHandler.managementOpsContext.hub, close };
+  return { app, cfg, projects, herdctl, git, githubAuth, sweep, archive, star, readState, unread, parentDetach, runProvenance, queuedMessage, transcriber, events, triggers, managers, autocommit, hub: chatHandler.managementOpsContext.hub, close };
 }

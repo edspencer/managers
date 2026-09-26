@@ -2,7 +2,8 @@
  * ManagersState — the one app-wide bundle of Managers domain stores.
  *
  * Built once in `app.ts` and shared by the REST routes (M4) and the state ops
- * (M5), so every reader goes through the same mtime caches. The caches key on
+ * (M5), so every reader goes through the same mtime caches, and every writer
+ * through the same per-workspace write queue. The caches key on
  * absolute paths, so one instance serves every workspace.
  */
 import { EpisodesStore } from "./episodes-store.js";
@@ -11,6 +12,7 @@ import { TasksStore } from "./tasks-store.js";
 import { MemoryStore } from "./memory-store.js";
 import { RunsStore } from "./runs-store.js";
 import { ReportsStore } from "./reports-store.js";
+import { StateWriter } from "./state-writes.js";
 import { sharedMemoryLayout, workspaceLayout, type WorkspaceLayout } from "./layout.js";
 
 export class ManagersState {
@@ -20,6 +22,8 @@ export class ManagersState {
   readonly memory = new MemoryStore();
   readonly runs = new RunsStore();
   readonly reports = new ReportsStore();
+  /** Every write (MCP state tools and write REST) goes through this (M5). */
+  readonly writer = new StateWriter(this.episodes);
 
   constructor(readonly projectsRoot: string) {}
 
