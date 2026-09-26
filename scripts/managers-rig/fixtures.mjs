@@ -257,6 +257,18 @@ export const ROOT_WORKSPACE = {
   startedDaysAgo: 60,
   summary: "The Managers home: cross-project coordination and anything not yet a project.",
   state: homeDomain,
+  // M8: Home DEFINES behaviours for every project. Its own `enabled` would apply to
+  // Home only, so none is set: every project starts with this OFF.
+  yaml: {
+    behaviours: {
+      "triage-external-prs": {
+        description: "Triage PRs from outside contributors by dispatching templated work to Paddock.",
+        triggers: ["triage-prs"],
+        tools: ["mcp__paddock__create_chat"],
+        instructions: "Name the PR by number only; never paste PR content into a prompt.",
+      },
+    },
+  },
   files: {
     "OVERVIEW.md": [
       "# Home",
@@ -384,6 +396,29 @@ export const PROJECTS = [
     startedDaysAgo: 120,
     summary: "A fictional open-source UI widget library with a growing issue queue.",
     state: widgetDomain,
+    // M8: a project-defined behaviour (off), beside the one inherited from Home.
+    yaml: {
+      behaviours: {
+        "draft-release-notes": {
+          description: "Draft the monthly release notes as a task for Ed to review.",
+          instructions: "Draft only; never publish.",
+        },
+      },
+    },
+    // M8: an ENABLED trigger bound to Home's triage-external-prs, which is OFF here —
+    // so it is not armed and "Run now" is refused until Ed switches it on. The cron
+    // (03:00 on 1 January) never fires during QA.
+    triggers: {
+      "triage-prs": {
+        trigger: { type: "schedule", cron: "0 3 1 1 *" },
+        run: {
+          prompt: "Triage external PRs. [[TOOL]]",
+          session: "new",
+          behaviour: "triage-external-prs",
+        },
+        enabled: true,
+      },
+    },
     files: {
       "OVERVIEW.md": [
         "# Widget Lib — Overview",

@@ -115,6 +115,30 @@ What changed from Paddock, and what did not:
   `get_briefing` tool, `GET …/managers/briefing` preview, `briefingText` on the
   run detail. The environment prompt (SDK runtime only) just points at the
   protocol. Any new `run.*` key must go into `runSchema`.
+- **Behaviours and binary autonomy (M8, `managers/behaviours.ts`).** `project.yaml`
+  `behaviours:` maps a kebab-case name to `{enabled, description, triggers, tools,
+  instructions}`. Definitions merge field by field (built-in < Home/root < project);
+  `enabled` counts ONLY when literally `true` in the workspace's own file (the root's
+  flag applies to Home alone) — **everything defaults to off, and off means it does
+  not happen at all, not even as a proposal** (protocol rule 5 says so). An off
+  behaviour's triggers (its `triggers:` list, or a trigger's `run.behaviour`; an
+  undefined name fails closed) are not armed (`triggersToHerdctlSchedules` gate) and
+  `fireTriggerForProject` throws `BehaviourOffError` before any run record — Run now
+  is a 409 `behaviour_off`, `run_trigger` a tool error, cron/event fires silent; its
+  tools join `denied_tools` on the keeper AND trigger agents, restated with the
+  fleet defaults and `BEHAVIOUR_TAMPER_DENIED_TOOLS` (Edit/Write of `project.yaml`
+  and `.managers/**`). The briefing's Behaviours section lists ON ones with
+  instructions, then "Not permitted". The ONLY switch is `PATCH
+  …/managers/behaviours/:name {enabled}` (Settings → Behaviours): it writes
+  `project.yaml`, calls `ensureProjectAgent`, logs an `#autonomy` episode and
+  commits `project.yaml` with the log at once (`Autocommitter.schedule`'s
+  `extraPaths`). The generic project PATCH cannot touch `behaviours`, and
+  `set_trigger` refuses to change `run.behaviour`. `managers/behaviour-state.ts`
+  keeps a fingerprint in `.managers/state/behaviours.json` (gitignored; adopted at
+  boot); any other change raises the info alert `behaviours-changed-outside-ui`
+  (cleared by a switch or `POST …/behaviours/acknowledge`). HerdctlService caches
+  Home's definitions for the sync config builders (`setRootProvider`); the fire path
+  always re-reads, so a stale arming can only be refused, never widened.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

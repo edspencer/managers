@@ -180,10 +180,11 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
     const b = BUILTIN_BEHAVIOURS[name];
     const h = home[name];
     const o = own[name];
-    const origin: BehaviourOrigin = b ? "builtin" : h ? "home" : "project";
+    // At Home, Home's own definitions are "home" and not inherited.
+    const origin: BehaviourOrigin = b ? "builtin" : h || isHome ? "home" : "project";
     const pick = <K extends (typeof DEFINITION_KEYS)[number]>(k: K): BehaviourConfig[K] =>
       o?.[k] !== undefined ? o[k] : h?.[k] !== undefined ? h[k] : b?.[k];
-    const inherited = origin !== "project";
+    const inherited = origin === "builtin" || (origin === "home" && !isHome);
     const overridden = inherited && !!o && DEFINITION_KEYS.some((k) => o[k] !== undefined);
     return {
       name,

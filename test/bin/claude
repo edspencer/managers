@@ -344,7 +344,7 @@ function parseArgs(argv) {
     else if (a === "--fork-session") flags.fork = true;
     else if (a === "--permission-mode") flags.permissionMode = argv[++i];
     else if (a === "--allowedTools") flags.allowedTools = argv[++i];
-    else if (a === "--disallowedTools") argv[++i];
+    else if (a === "--disallowedTools") flags.disallowedTools = argv[++i];
     else if (a === "--mcp-config") flags.mcpConfig = argv[++i];
     else if (a === "--setting-sources") flags.settingSources = argv[++i];
     else if (a === "--tools") argv[++i];
@@ -558,6 +558,10 @@ function recordInvocation(flags, prompt) {
         model: flags.model ?? null,
         resume: flags.resume ?? null,
         allowedTools: flags.allowedTools ?? null,
+        // Managers M8: the `--disallowedTools` value herdctl built (null when none),
+        // so a test can prove an off behaviour's tools and the anti-tamper rules
+        // reach the spawned process's argv.
+        disallowedTools: flags.disallowedTools ?? null,
         // The `--mcp-config` JSON verbatim, INCLUDING each server's env. Recorded
         // so a test can observe what herdctl actually puts on the command line
         // rather than infer it from core's source (#691 step 6).

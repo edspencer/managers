@@ -190,5 +190,19 @@ any workspace's briefing at `GET /api/projects/<slug>/managers/briefing`
 (`?objective=`, `?trigger=`, `?kind=chat`); `empty-project` shows `(no objectives)` and
 `(no open tasks)`.
 
+### Behaviours fixture (M8)
+
+Home's `project.yaml` **defines** `triage-external-prs` (gating the trigger
+`triage-prs` and the tool `mcp__paddock__create_chat`) with no `enabled`, so it is
+OFF in every project. `widget-lib` has an **enabled** `triage-prs` schedule trigger
+(`cron: 0 3 1 1 *`, body `Triage external PRs. [[TOOL]]`, `run.behaviour:
+triage-external-prs`): on a fresh boot it is not armed and Run now is a 409 naming the
+behaviour. `widget-lib` also defines its own `draft-release-notes` (off). Switch
+behaviours at `/projects/widget-lib/settings` → Behaviours (or `PATCH
+…/managers/behaviours/<name> {enabled}`). Every project also lists the built-in
+`consolidate-memory` (off). `empty-project` defines none of its own, so its card shows
+"No behaviours defined in this project" above the inherited rows. A hand edit of a
+`project.yaml` flag raises `behaviours-changed-outside-ui` in that workspace's alerts.
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.
