@@ -132,6 +132,25 @@
  *                     to ~292k, then a terminal `result` whose usage is the
  *                     CUMULATIVE per-turn total (~828k). The live context meter must
  *                     track the 292k snapshot, NOT the 828k cumulative result (#398).
+ *   • [[MCP <server>.<tool> <json-args>]]
+ *                   → Managers M2. ACTUALLY CALL an MCP tool. Repeatable; the calls
+ *                     run in prompt order, before the reply. `<server>` is a key of
+ *                     the `--mcp-config` JSON herdctl passed (batch drive-mode exposes
+ *                     every INJECTED server — `managers`, `managers_files` — as a
+ *                     localhost HTTP bridge there; a declared `http`/`sse` server with
+ *                     `headers`, or a `stdio` one, works the same way). `<json-args>`
+ *                     is an optional JSON object (default `{}`), e.g.
+ *                       [[MCP managers.list_projects {}]]
+ *                       [[MCP managers.read_chat {"project":"acme-site","sessionId":"…"}]]
+ *                     The call uses @modelcontextprotocol/sdk's Client, resolved from
+ *                     the repo's node_modules via createRequire. Each call emits a
+ *                     `tool_use` (named `mcp__<server>__<tool>`, as real Claude Code
+ *                     names it) + a paired `tool_result` whose content is the tool's
+ *                     text output, so the UI shows the call. An unknown server, a
+ *                     connect/call failure, a timeout (MANAGERS_FAKE_MCP_TIMEOUT_MS,
+ *                     default 15000), a tool reporting `isError`, or malformed args all
+ *                     produce a `tool_result` with `is_error: true` — and the turn
+ *                     CONTINUES to its normal reply and a success result.
  * Sweeper coverage: when the prompt looks like the paddock sweeper's curation
  * prompt (contains the literal "<<<OVERVIEW>>>" marker request), the fake emits a
  * marker-shaped reply (<<<OVERVIEW>>> … <<<CHANGELOG>>> … <<<END>>>) so
@@ -143,6 +162,166 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
+import { createRequire } from "node:module";
+
+// ── [[MCP …]] directive (Managers M2) ───────────────────────────────────────
+/**
+ * Find every `[[MCP <server>.<tool> <json-args>]]` in the prompt, in order. The
+ * args are scanned as a balanced JSON value (string-aware), so a `]]` inside the
+ * JSON — `{"ids":[[1]]}` — does not end the directive early. A directive whose
+ * args don't parse is still returned, carrying `argsError`, so the caller can
+ * report it as an errored tool call instead of silently skipping it.
+ */
+function parseMcpDirectives(prompt) {
+  const out = [];
+  const text = prompt || "";
+  const head = /\[\[MCP\s+([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)/g;
+  let m;
+  while ((m = head.exec(text)) !== null) {
+    const [, server, tool] = m;
+    let i = head.lastIndex;
+    while (i < text.length && /\s/.test(text[i])) i++;
+    let args = {};
+    let argsError = null;
+    if (text[i] === "{" || text[i] === "[") {
+      const start = i;
+      let depth = 0;
+      let inStr = false;
+      for (; i < text.length; i++) {
+        const ch = text[i];
+        if (inStr) {
+          if (ch === "\\") i++;
+          else if (ch === '"') inStr = false;
+          continue;
+        }
+        if (ch === '"') inStr = true;
+        else if (ch === "{" || ch === "[") depth++;
+        else if (ch === "}" || ch === "]") {
+          depth--;
+          if (depth === 0) {
+            i++;
+            break;
+          }
+        }
+      }
+      const raw = text.slice(start, i);
+      try {
+        args = JSON.parse(raw);
+        if (!args || typeof args !== "object" || Array.isArray(args)) {
+          argsError = "arguments must be a JSON object";
+          args = {};
+        }
+      } catch (e) {
+        argsError = `invalid JSON arguments: ${e instanceof Error ? e.message : String(e)}`;
+        args = {};
+      }
+      while (i < text.length && /\s/.test(text[i])) i++;
+    }
+    const close = text.indexOf("]]", i);
+    if (close === -1) break; // unterminated directive: not a directive
+    if (close !== i && !argsError) {
+      argsError = `unexpected text before "]]": ${JSON.stringify(text.slice(i, close).slice(0, 80))}`;
+    }
+    head.lastIndex = close + 2;
+    out.push({ server, tool, args, argsError });
+  }
+  return out;
+}
+
+/** `--mcp-config` is inline JSON from herdctl; the real CLI also accepts a path. */
+function parseMcpConfig(raw) {
+  if (!raw) return {};
+  try {
+    const json = raw.trim().startsWith("{") ? raw : fs.readFileSync(raw, "utf8");
+    const parsed = JSON.parse(json);
+    return (parsed && parsed.mcpServers) || {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Call one tool on one configured server. Resolves `{ text, isError }` and never
+ * rejects: every failure becomes an error result so the turn can continue.
+ */
+async function callMcpTool(servers, { server, tool, args, argsError }) {
+  if (argsError) return { text: argsError, isError: true };
+  const def = servers[server];
+  if (!def) {
+    const known = Object.keys(servers);
+    return {
+      text: `MCP server "${server}" is not configured for this turn (configured: ${known.length ? known.join(", ") : "none"})`,
+      isError: true,
+    };
+  }
+  const timeoutMs = Number(process.env.MANAGERS_FAKE_MCP_TIMEOUT_MS || "15000");
+  let client;
+  let timer;
+  try {
+    // The fake lives at <repo>/test/bin, so this resolves the repo's own copy.
+    const req = createRequire(import.meta.url);
+    const { Client } = req("@modelcontextprotocol/sdk/client/index.js");
+    let transport;
+    const type = def.type || (def.url ? "http" : "stdio");
+    if (type === "http") {
+      const { StreamableHTTPClientTransport } = req("@modelcontextprotocol/sdk/client/streamableHttp.js");
+      transport = new StreamableHTTPClientTransport(new URL(def.url), {
+        requestInit: { headers: def.headers || {} },
+      });
+    } else if (type === "sse") {
+      const { SSEClientTransport } = req("@modelcontextprotocol/sdk/client/sse.js");
+      transport = new SSEClientTransport(new URL(def.url), {
+        requestInit: { headers: def.headers || {} },
+      });
+    } else if (type === "stdio") {
+      const { StdioClientTransport } = req("@modelcontextprotocol/sdk/client/stdio.js");
+      transport = new StdioClientTransport({
+        command: def.command,
+        args: def.args || [],
+        env: { ...process.env, ...(def.env || {}) },
+        stderr: "ignore",
+      });
+    } else {
+      return { text: `MCP server "${server}" has unsupported transport type "${type}"`, isError: true };
+    }
+    client = new Client({ name: "fake-claude", version: "0.0.0" });
+    client.onerror = () => {
+      /* transport noise (e.g. an optional SSE GET the bridge 404s) is not a call failure */
+    };
+    const work = (async () => {
+      await client.connect(transport);
+      return client.callTool({ name: tool, arguments: args });
+    })();
+    // If the timeout wins, `work` may still reject later; never let that surface
+    // as an unhandled rejection (which would kill the process mid-turn).
+    work.catch(() => {});
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    const result = await Promise.race([work, timeout]);
+    const parts = Array.isArray(result && result.content) ? result.content : [];
+    let text = parts
+      .map((c) => (c && c.type === "text" ? c.text : JSON.stringify(c)))
+      .join("\n")
+      .trim();
+    if (!text && result && result.structuredContent) text = JSON.stringify(result.structuredContent);
+    // An empty tool_result is DROPPED by the renderer (the card spins forever), so
+    // never write one.
+    return { text: text || "(empty result)", isError: !!(result && result.isError) };
+  } catch (e) {
+    return {
+      text: `MCP call ${server}.${tool} failed: ${e instanceof Error ? e.message : String(e)}`,
+      isError: true,
+    };
+  } finally {
+    clearTimeout(timer);
+    try {
+      await client?.close();
+    } catch {
+      /* best-effort */
+    }
+  }
+}
 
 // ── arg parsing ─────────────────────────────────────────────────────────────
 function parseArgs(argv) {
@@ -390,7 +569,7 @@ function recordInvocation(flags, prompt) {
   }
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const flags = parseArgs(argv);
   const prompt = readStdin();
@@ -502,6 +681,49 @@ function main() {
     cwd,
     sessionId,
   });
+
+  // [[MCP <server>.<tool> <json-args>]] (Managers M2): really call each tool, in
+  // prompt order, and record a tool_use + tool_result pair per call BEFORE the
+  // reply. Failures become `is_error: true` results; the turn always carries on.
+  const mcpDirectives = parseMcpDirectives(prompt);
+  if (mcpDirectives.length > 0) {
+    const servers = parseMcpConfig(flags.mcpConfig);
+    for (const d of mcpDirectives) {
+      const toolUseId = `toolu_${crypto.randomBytes(8).toString("hex")}`;
+      append({
+        parentUuid: null,
+        isSidechain: false,
+        type: "assistant",
+        message: {
+          id: `msg_${crypto.randomBytes(8).toString("hex")}`,
+          role: "assistant",
+          model,
+          stop_reason: "tool_use",
+          content: [{ type: "tool_use", id: toolUseId, name: `mcp__${d.server}__${d.tool}`, input: d.args }],
+          usage,
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: nowIso(),
+        cwd,
+        sessionId,
+      });
+      const { text, isError } = await callMcpTool(servers, d);
+      append({
+        parentUuid: null,
+        isSidechain: false,
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: toolUseId, content: text, is_error: isError }],
+        },
+        uuid: crypto.randomUUID(),
+        timestamp: nowIso(),
+        cwd,
+        sessionId,
+      });
+      sleep(30);
+    }
+  }
 
   // [[BIGCONTEXT]] (test-only, #398): a long, tool-heavy turn whose assistant
   // context snapshot grows monotonically to ~292k (each round re-reads a larger
@@ -1380,4 +1602,7 @@ function main() {
   process.exit(0);
 }
 
-main();
+main().catch((e) => {
+  process.stderr.write(`fake-claude: ${e instanceof Error ? e.stack : String(e)}\n`);
+  process.exit(1);
+});
