@@ -263,7 +263,7 @@ test("a running chat shows under Running, moves to Unread when the turn lands, a
   const sessionId = await sendFirstTurn(page, marker);
 
   // Now a turn that stays in flight for an observable window (the fake holds a
-  // Task tool_use open for PADDOCK_FAKE_SLOWTOOL_MS — see playwright.config.ts).
+  // Task tool_use open for MANAGERS_FAKE_SLOWTOOL_MS — see playwright.config.ts).
   await page.getByPlaceholder(/Message Claude/i).fill("hold the line [[SLOWTOOL]]");
   await page.getByRole("button", { name: /^Send$/ }).click();
   await expect(page.getByRole("button", { name: /Stop/ })).toBeVisible({ timeout: 15_000 });

@@ -580,7 +580,7 @@ export async function ensureClaudeHome(
         message:
           `Claude instructions: this instance's own only (\`claude.instructions: own\`). Your ` +
           `~/.claude ${present.join(", ")} ${present.length === 1 ? "is" : "are"} NOT loaded — ` +
-          `set \`claude.instructions: host\` (or PADDOCK_CLAUDE_INSTRUCTIONS=host) to share ` +
+          `set \`claude.instructions: host\` (or MANAGERS_CLAUDE_INSTRUCTIONS=host) to share ` +
           `them. Each project's own CLAUDE.md is unaffected either way.`,
       });
     }

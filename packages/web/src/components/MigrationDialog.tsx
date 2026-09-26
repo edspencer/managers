@@ -920,7 +920,7 @@ function RefusalPanel({
 
       {code === "env_shadowed" && (
         <p className="text-xs text-fg-muted">
-          <Mono>PADDOCK_CLAUDE_TRANSCRIPTS</Mono> is set in this server's environment, and an
+          <Mono>MANAGERS_CLAUDE_TRANSCRIPTS</Mono> is set in this server's environment, and an
           environment variable beats the config file. Writing{" "}
           <Mono>claude.transcripts: host</Mono> would have no effect, so the chats would have been
           moved for nothing. Unset it, restart Paddock, and the offer will come back.

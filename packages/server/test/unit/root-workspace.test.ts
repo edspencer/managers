@@ -82,7 +82,7 @@ describe("root workspace (#531) — resolution", () => {
   it('defaults the root\'s name to "Home", NOT the projects-root basename (#921)', async () => {
     // The old default was `basename(projectsRoot)`, which put a filesystem
     // detail in the title bar: lowercase `projects` by default, and whatever
-    // PADDOCK_PROJECTS_DIR happened to be called otherwise. The tmp root here is
+    // MANAGERS_PROJECTS_DIR happened to be called otherwise. The tmp root here is
     // named `paddock-root-XXXX`, so the assertion is also a control — it proves
     // the fix isn't special-casing the literal word "projects".
     expect((await store.get(ROOT_KEY)).name).toBe(ROOT_DEFAULT_NAME);

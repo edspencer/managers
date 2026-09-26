@@ -365,13 +365,13 @@ describe("refusals", () => {
 
   it("400 env_shadowed offers no retry, because a retry cannot fix it", async () => {
     await refuseWith(
-      new ApiError("PADDOCK_CLAUDE_TRANSCRIPTS is set.", 400, "env_shadowed", {
+      new ApiError("MANAGERS_CLAUDE_TRANSCRIPTS is set.", 400, "env_shadowed", {
         code: "env_shadowed",
       }),
     );
     // Named both in the server's own message and in the explanation of what to
     // do about it.
-    expect(screen.getAllByText(/PADDOCK_CLAUDE_TRANSCRIPTS/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/MANAGERS_CLAUDE_TRANSCRIPTS/).length).toBeGreaterThan(0);
     // A retry can only produce the same error: the env var has to be unset and
     // the server restarted.
     expect(screen.queryByRole("button", { name: /Try again/ })).not.toBeInTheDocument();

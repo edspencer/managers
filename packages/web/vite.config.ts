@@ -52,12 +52,12 @@ function swCacheVersion(): Plugin {
 // configurable via env so you can run the frontend on a non-default port or
 // point it at a backend that isn't on :7233 (e.g. a second instance).
 //
-//   PADDOCK_DEV_PORT     Vite dev-server port                (default 5173)
-//   PADDOCK_PROXY_TARGET http(s) origin of the paddock-server (default http://localhost:7233)
+//   MANAGERS_DEV_PORT     Vite dev-server port                (default 5173)
+//   MANAGERS_PROXY_TARGET http(s) origin of the paddock-server (default http://localhost:7233)
 //
-// The WebSocket proxy target is derived from PADDOCK_PROXY_TARGET (http -> ws).
-const devPort = Number(process.env.PADDOCK_DEV_PORT) || 5173;
-const proxyTarget = process.env.PADDOCK_PROXY_TARGET || "http://localhost:7233";
+// The WebSocket proxy target is derived from MANAGERS_PROXY_TARGET (http -> ws).
+const devPort = Number(process.env.MANAGERS_DEV_PORT) || 5173;
+const proxyTarget = process.env.MANAGERS_PROXY_TARGET || "http://localhost:7233";
 const wsTarget = proxyTarget.replace(/^http/, "ws");
 
 export default defineConfig({

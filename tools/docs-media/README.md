@@ -12,7 +12,7 @@ overhaul makes every screenshot stale at once, and re-shooting has to be
 
 - A **Paddock instance holding demo data** — fictional project names, fictional
   chat titles, no real transcripts. Point at it with `--base` or
-  `$PADDOCK_RIG_BASE`. Never shoot production.
+  `$MANAGERS_RIG_BASE`. Never shoot production.
 - `playwright` and `ws` resolvable from this directory (`npm ci` at the repo
   root, or an `npm i playwright ws` in a scratch dir you run from), and a
   Chromium install — `npx playwright install chromium`, or set
@@ -25,7 +25,7 @@ Only the box-specific values are yours to supply.
 ## Running
 
 ```bash
-export PADDOCK_RIG_BASE=http://127.0.0.1:4000
+export MANAGERS_RIG_BASE=http://127.0.0.1:4000
 
 node stage-attachments.mjs --slug <project>   # only needed for the attachments shot
 node capture.mjs --out ../../website/src/assets/staging
@@ -47,11 +47,11 @@ first, so a leaking `<span>` is masked without taking its parent pane with it.
 - **`strings shot.png` is not a leak check.** Rendered text is pixel data — a
   screenshot showing a live token greps clean. Scan the DOM, then *look at the
   committed image*. Both, every time.
-- **Put anything that names your machine in `$PADDOCK_LEAK_EXTRA`**, as regex
+- **Put anything that names your machine in `$MANAGERS_LEAK_EXTRA`**, as regex
   alternatives:
 
   ```bash
-  export PADDOCK_LEAK_EXTRA='corp\.example|buildbox-\d+'
+  export MANAGERS_LEAK_EXTRA='corp\.example|buildbox-\d+'
   ```
 
   It is not hard-coded in `capture.mjs` because this file is public: writing a
@@ -105,7 +105,7 @@ into `<code>` elements, so the path is the subject of the shot:
   realpath renders regardless.
 
 So the frame is won or lost when the rig **launches**, not when it is captured.
-Set `PADDOCK_RIG_USER_HOME` to a presentable fictional home (e.g. `/home/demo`)
+Set `MANAGERS_RIG_USER_HOME` to a presentable fictional home (e.g. `/home/demo`)
 before starting a rig you intend to shoot Discover on.
 
 **A staged transcript with no `cwd` is silently excluded.** Discovery works out
@@ -125,7 +125,7 @@ scratch directory cannot produce a publishable Discover frame at all — and non
 of the usual escapes apply: cropping fails because the path is the *subject*,
 masking fails because `capture.mjs` would blank the element being photographed,
 and a symlink fails because paddock canonicalises the path for display. Set
-`PADDOCK_RIG_USER_HOME` to a presentable fictional home before shooting it.
+`MANAGERS_RIG_USER_HOME` to a presentable fictional home before shooting it.
 
 **2. A staged transcript with no `cwd` is silently excluded.** Discovery keys on
 the recorded working directory, so a hand-written `.jsonl` that omits `cwd`
@@ -159,11 +159,11 @@ an error, and no committed frame is wrong because of it.
 environment, so neither carries a machine's paths:
 
 ```bash
-export PADDOCK_RIG_HOME=/srv/scratch/docs-media      # home/, data/, projects/
-export PADDOCK_RIG_CLONE=/srv/checkouts/paddock      # a BUILT checkout
-export PADDOCK_RIG_PROJECTS=/home/demo/projects      # optional; on camera
-export PADDOCK_RIG_FIXTURES=$PWD/fixtures.json       # optional; authored replies
-export PADDOCK_RIG_USER_HOME=/home/demo              # optional; REQUIRED for Discover
+export MANAGERS_RIG_HOME=/srv/scratch/docs-media      # home/, data/, projects/
+export MANAGERS_RIG_CLONE=/srv/checkouts/paddock      # a BUILT checkout
+export MANAGERS_RIG_PROJECTS=/home/demo/projects      # optional; on camera
+export MANAGERS_RIG_FIXTURES=$PWD/fixtures.json       # optional; authored replies
+export MANAGERS_RIG_USER_HOME=/home/demo              # optional; REQUIRED for Discover
 PORT=4000 ./serve.sh
 ```
 
@@ -173,8 +173,8 @@ The contract a rig must satisfy — all of it, not most of it:
    `session`**, which uses the SDK runtime, ignores `PATH` entirely, and calls
    the real API. It does not look like a failure: turns complete fast with
    plausible replies, and you are billed.
-2. An isolated `PADDOCK_DATA_DIR` **and** `HOME` **and** `CLAUDE_CONFIG_DIR`.
-   `PADDOCK_DATA_DIR` isolates the data dir only; anything resolving the Claude
+2. An isolated `MANAGERS_DATA_DIR` **and** `HOME` **and** `CLAUDE_CONFIG_DIR`.
+   `MANAGERS_DATA_DIR` isolates the data dir only; anything resolving the Claude
    home via `os.homedir()` lands on the operator's real `~/.claude`.
 3. `AUTH_MODE=none` — so bind loopback. Capture runs on the same host.
 4. A projects root holding only synthetic projects, **on persistent storage**.

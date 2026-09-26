@@ -59,7 +59,7 @@ function sampleConfig(overrides: Partial<InstanceConfig> = {}): InstanceConfig {
             editable: true,
             sensitive: false,
             envOverridden: true,
-            envVar: "PADDOCK_CURATION_CHANGELOG_MAX_TOKENS",
+            envVar: "MANAGERS_CURATION_CHANGELOG_MAX_TOKENS",
             fromProfile: false,
           },
         ],
@@ -184,7 +184,7 @@ function profiledConfig(profile = "yolo"): InstanceConfig {
             value: "own",
             pendingValue: "own",
             envOverridden: true,
-            envVar: "PADDOCK_CLAUDE_INSTRUCTIONS",
+            envVar: "MANAGERS_CLAUDE_INSTRUCTIONS",
           }),
         ],
       },
@@ -229,9 +229,9 @@ describe("InstanceConfigPage (#385)", () => {
     // on a containerized instance most fields are env-shadowed.
     expect(screen.getByText(/overridden by an environment variable/i)).toBeInTheDocument();
     // The field itself carries an `env` chip and names the variable.
-    expect(screen.getByText("PADDOCK_CURATION_CHANGELOG_MAX_TOKENS")).toBeInTheDocument();
+    expect(screen.getByText("MANAGERS_CURATION_CHANGELOG_MAX_TOKENS")).toBeInTheDocument();
     expect(
-      screen.getByTitle(/Overridden by environment variable PADDOCK_CURATION_CHANGELOG_MAX_TOKENS/i),
+      screen.getByTitle(/Overridden by environment variable MANAGERS_CURATION_CHANGELOG_MAX_TOKENS/i),
     ).toBeInTheDocument();
   });
 
@@ -247,8 +247,8 @@ describe("InstanceConfigPage (#385)", () => {
     expect(screen.queryByText("Port")).not.toBeInTheDocument();
     expect(screen.getByText("1 of 3")).toBeInTheDocument();
 
-    // An operator who thinks in PADDOCK_* names finds the field by typing one.
-    fireEvent.change(search, { target: { value: "PADDOCK_CURATION_CHANGELOG" } });
+    // An operator who thinks in MANAGERS_* names finds the field by typing one.
+    fireEvent.change(search, { target: { value: "MANAGERS_CURATION_CHANGELOG" } });
     expect(screen.getByText("CHANGELOG.md max tokens")).toBeInTheDocument();
     expect(screen.queryByText("OVERVIEW.md max tokens")).not.toBeInTheDocument();
 
@@ -449,7 +449,7 @@ describe("InstanceConfigPage (#385)", () => {
 
     /**
      * The failure this feature could most easily introduce: `yolo` prescribes
-     * `instructions: host`, but PADDOCK_CLAUDE_INSTRUCTIONS said `own` and won.
+     * `instructions: host`, but MANAGERS_CLAUDE_INSTRUCTIONS said `own` and won.
      * Crediting the profile there would tell an operator the opposite of the
      * truth about what their instance is sharing.
      */
@@ -458,8 +458,8 @@ describe("InstanceConfigPage (#385)", () => {
       await screen.findByText("Posture profile");
 
       // The env-shadowed row: `env` chip, no `profile` chip.
-      expect(screen.getByTitle(/PADDOCK_CLAUDE_INSTRUCTIONS/)).toBeInTheDocument();
-      expect(screen.getByText("PADDOCK_CLAUDE_INSTRUCTIONS")).toBeInTheDocument();
+      expect(screen.getByTitle(/MANAGERS_CLAUDE_INSTRUCTIONS/)).toBeInTheDocument();
+      expect(screen.getByText("MANAGERS_CLAUDE_INSTRUCTIONS")).toBeInTheDocument();
       // The file-set row agrees with yolo and still gets no chip — so the two
       // chips found above are the other two rows, not these.
       expect(screen.queryAllByTitle(/Set by the "yolo" posture profile/)).toHaveLength(2);

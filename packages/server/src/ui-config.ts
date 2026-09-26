@@ -24,7 +24,7 @@ export interface UiConfig {
    *
    * **`0` means unlimited** (render everything, the pre-#914 behaviour), so this
    * is a NON-NEGATIVE integer knob — unlike the attachment counts, `1` is not the
-   * floor. Default 500. Env `PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT`.
+   * floor. Default 500. Env `MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT`.
    *
    * This is a *render* cap, not a retention policy: nothing is deleted, and the
    * full transcript is always one uncapped fetch away (#915).

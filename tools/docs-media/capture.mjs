@@ -8,7 +8,7 @@
  * guaranteed to go stale. Re-shooting must be `node capture.mjs`, not a human
  * re-deriving twelve navigation paths from memory.
  *
- * Run:  node capture.mjs [--base URL] [--out DIR]   (or $PADDOCK_RIG_BASE)
+ * Run:  node capture.mjs [--base URL] [--out DIR]   (or $MANAGERS_RIG_BASE)
  *       node capture.mjs --only adopt-modal
  */
 import { chromium } from "playwright";
@@ -19,8 +19,8 @@ const arg = (n, d) => {
   const i = process.argv.indexOf(n);
   return i > -1 ? process.argv[i + 1] : d;
 };
-const BASE = arg("--base", process.env.PADDOCK_RIG_BASE || "http://127.0.0.1:4000");
-const OUT = arg("--out", process.env.PADDOCK_SHOTS_OUT || "./shots");
+const BASE = arg("--base", process.env.MANAGERS_RIG_BASE || "http://127.0.0.1:4000");
+const OUT = arg("--out", process.env.MANAGERS_SHOTS_OUT || "./shots");
 const ONLY = arg("--only", null);
 
 /**
@@ -32,8 +32,8 @@ const ONLY = arg("--only", null);
  * accent, no tint. That is what a reader sees on first boot, which is the whole
  * job of a documentation screenshot. Override for the theme quartet only.
  */
-const SHOT_THEME = process.env.PADDOCK_SHOT_THEME || "foundation";
-const SHOT_DARK = (process.env.PADDOCK_SHOT_MODE || "dark") === "dark";
+const SHOT_THEME = process.env.MANAGERS_SHOT_THEME || "foundation";
+const SHOT_DARK = (process.env.MANAGERS_SHOT_MODE || "dark") === "dark";
 
 mkdirSync(OUT, { recursive: true });
 
@@ -43,8 +43,8 @@ mkdirSync(OUT, { recursive: true });
  * a superset of what the scan checks is the only safe direction.
  *
  * The generic half is here; anything that names YOUR machine (a private domain,
- * an internal hostname, a container id) goes in `$PADDOCK_LEAK_EXTRA` as regex
- * alternatives, e.g. `PADDOCK_LEAK_EXTRA='corp\.example|buildbox-\d+'`. That
+ * an internal hostname, a container id) goes in `$MANAGERS_LEAK_EXTRA` as regex
+ * alternatives, e.g. `MANAGERS_LEAK_EXTRA='corp\.example|buildbox-\d+'`. That
  * split is deliberate: this file is public, so hard-coding a private domain here
  * to *detect* it would publish the very string it is guarding.
  */
@@ -61,7 +61,7 @@ const LEAK = new RegExp(
     String.raw`192\.168\.`,
     String.raw`172\.(1[6-9]|2\d|3[01])\.`,
     String.raw`@[\w-]+\.(net|com|org)`,
-    ...(process.env.PADDOCK_LEAK_EXTRA ? [process.env.PADDOCK_LEAK_EXTRA] : []),
+    ...(process.env.MANAGERS_LEAK_EXTRA ? [process.env.MANAGERS_LEAK_EXTRA] : []),
   ].join("|"),
 );
 
@@ -325,7 +325,7 @@ shot(
 );
 
 // 9 · The theme quartet for the 0.67 entry. The SAME route in all four themes,
-//     driven by $PADDOCK_SHOT_THEME — four separate runs, four files. This is
+//     driven by $MANAGERS_SHOT_THEME — four separate runs, four files. This is
 //     the ONE shot that must not be Foundation-only, because the subject is the
 //     choice itself.
 //

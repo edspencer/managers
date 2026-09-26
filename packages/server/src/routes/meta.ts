@@ -272,12 +272,12 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
 
   // Selectable models + the keeper/sweeper defaults (CONTRACT-v3 §3). The offered
   // models are the instance ALLOW-LIST (issue #457 Step 2): the built-in catalog
-  // filtered to `cfg.models` (env `PADDOCK_MODELS` / YAML `models:`), so an
+  // filtered to `cfg.models` (env `MANAGERS_MODELS` / YAML `models:`), so an
   // operator can narrow the picker without touching the catalog's metadata. Unset
   // ⇒ the full catalog (unchanged behaviour). `defaultModel` is the EFFECTIVE
   // default for that list (DEFAULT_MODEL if still offered, else the first
   // offered model). `driveModeDefault` is the box-wide
-  // `PADDOCK_DRIVE_MODE` (per instance, not static): the Settings tab shows
+  // `MANAGERS_DRIVE_MODE` (per instance, not static): the Settings tab shows
   // it as the effective value a project inherits when its own `driveMode` is left
   // on "Global default".
   app.get(
@@ -287,7 +287,7 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
         tags: ["System"],
         summary: "Selectable models and instance defaults",
         description:
-          "Returns the models this instance offers (the built-in catalog filtered to the `PADDOCK_MODELS` / YAML `models:` allow-list; unset ⇒ the whole catalog) plus the default model and the box-wide defaults (drive mode, max spawn depth, recovery, attachments, curation) that projects fall back to when their own overrides are unset. `defaultModel` is the effective default for the offered list. Returns a JSON object with `models`, `defaultModel`, `driveModeDefault`, `maxSpawnDepthDefault`, `recoveryDefault`, `attachmentsDefault`, `curationDefault`, and `uiDefault`.",
+          "Returns the models this instance offers (the built-in catalog filtered to the `MANAGERS_MODELS` / YAML `models:` allow-list; unset ⇒ the whole catalog) plus the default model and the box-wide defaults (drive mode, max spawn depth, recovery, attachments, curation) that projects fall back to when their own overrides are unset. `defaultModel` is the effective default for the offered list. Returns a JSON object with `models`, `defaultModel`, `driveModeDefault`, `maxSpawnDepthDefault`, `recoveryDefault`, `attachmentsDefault`, `curationDefault`, and `uiDefault`.",
         response: {
           200: {
             description: "Model list and inherited defaults.",
@@ -303,21 +303,21 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
       models,
       defaultModel: resolveDefaultModel(models),
       driveModeDefault: cfg.driveMode,
-      // Box-wide max spawn depth (PADDOCK_MAX_SPAWN_DEPTH) a project inherits when
+      // Box-wide max spawn depth (MANAGERS_MAX_SPAWN_DEPTH) a project inherits when
       // its own `maxSpawnDepth` is unset; shown as the effective value in Settings
       // and used to label "Instance default" (issue #262).
       maxSpawnDepthDefault: cfg.maxSpawnDepth,
-      // Box-wide keeper-chat recovery defaults (PADDOCK_RECOVERY_*) a project
+      // Box-wide keeper-chat recovery defaults (MANAGERS_RECOVERY_*) a project
       // inherits when its own `recovery` override fields are unset (issue #301).
       // The web resolves the effective value (project.recovery[field] ?? this) to
       // gate the killed-task Continue affordance.
       recoveryDefault: cfg.recovery,
-      // Box-wide inbound-attachment defaults (PADDOCK_ATTACHMENTS_*) a project
+      // Box-wide inbound-attachment defaults (MANAGERS_ATTACHMENTS_*) a project
       // inherits when its own `attachments` override fields are unset (issue #328).
       // The composer resolves the effective value (project.attachments[field] ??
       // this) to gate the picker + build the client-side accept/size guards.
       attachmentsDefault: cfg.attachments,
-      // Box-wide sweeper-curation budgets (PADDOCK_CURATION_*) a project inherits
+      // Box-wide sweeper-curation budgets (MANAGERS_CURATION_*) a project inherits
       // when its own `curation` override fields are unset (issue #384). Settings
       // shows these as the "Instance default" for each per-file token budget.
       curationDefault: cfg.curation,

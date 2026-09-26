@@ -11,7 +11,7 @@
  * count cap, and an allow-list of file types.
  *
  * ── Config discipline (the `recovery`/`driveMode` pattern) ───────────────────
- * Every field is an instance default (`PADDOCK_ATTACHMENTS_*` env, YAML instance
+ * Every field is an instance default (`MANAGERS_ATTACHMENTS_*` env, YAML instance
  * file beneath it) with an optional PER-PROJECT override (`project.yaml` →
  * {@link import("./projects.js").ProjectYaml.attachments}). An absent/invalid
  * override field inherits the instance default, resolved at request time by
@@ -43,24 +43,24 @@ export interface AttachmentsConfig {
   /**
    * Master switch for inbound composer uploads. Default ON. When off, the upload
    * endpoint 403s and the composer hides its picker/drop/paste affordances. Env
-   * `PADDOCK_ATTACHMENTS_ENABLED`.
+   * `MANAGERS_ATTACHMENTS_ENABLED`.
    */
   enabled: boolean;
   /**
    * Per-file size cap in megabytes (1 MB = 1024*1024 bytes). A larger file is
    * rejected before it's written. Default 25. Env
-   * `PADDOCK_ATTACHMENTS_MAX_FILE_SIZE_MB`.
+   * `MANAGERS_ATTACHMENTS_MAX_FILE_SIZE_MB`.
    */
   maxFileSizeMb: number;
   /**
    * How many files a single message may carry. Enforced client-side (tray cap)
    * and server-side (per upload request + at send). Default 10. Env
-   * `PADDOCK_ATTACHMENTS_MAX_FILES_PER_MESSAGE`.
+   * `MANAGERS_ATTACHMENTS_MAX_FILES_PER_MESSAGE`.
    */
   maxFilesPerMessage: number;
   /**
    * Allow-list of MIME patterns / extensions (see the module doc). Default
-   * `["*"]` (allow everything). Env `PADDOCK_ATTACHMENTS_ALLOWED_TYPES`
+   * `["*"]` (allow everything). Env `MANAGERS_ATTACHMENTS_ALLOWED_TYPES`
    * (comma-separated); YAML/project take a real array.
    */
   allowedTypes: string[];

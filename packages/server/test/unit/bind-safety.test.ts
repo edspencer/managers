@@ -52,7 +52,7 @@ describe("evaluateBindSafety", () => {
     expect(d.action).toBe("refuse");
     if (d.action === "refuse") {
       expect(d.message).toMatch(/refusing to start/);
-      expect(d.message).toMatch(/PADDOCK_DANGEROUSLY_ALLOW_OPEN/);
+      expect(d.message).toMatch(/MANAGERS_DANGEROUSLY_ALLOW_OPEN/);
     }
   });
 
@@ -95,7 +95,7 @@ describe("buildApp bind-safety wiring (#435)", () => {
   /** A resolved config pointed at a throwaway data dir, with overrides applied. */
   async function makeConfig(over: Partial<PaddockConfig>): Promise<PaddockConfig> {
     dataDir = await makeTmpDir("paddock-bind-");
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
     const base = loadPaddockConfig();
     return { ...base, ...over } as PaddockConfig;
   }

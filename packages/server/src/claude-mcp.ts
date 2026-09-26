@@ -41,7 +41,7 @@
  *    `transformMcpServers(agent.mcp_servers)` — i.e. from the AGENT CONFIG.
  * 2. Paddock already sets `mcp_servers`: the headless-Chromium server from
  *    `browserMcpServers` (#269) is an external stdio MCP server passed exactly
- *    this way, on every keeper and every trigger, whenever `PADDOCK_BROWSER_MCP`
+ *    this way, on every keeper and every trigger, whenever `MANAGERS_BROWSER_MCP`
  *    is on.
  *
  * `agent.mcp_servers` is also the seam that covers BOTH runtimes for free: the

@@ -105,8 +105,8 @@ describe("profiles: resolveProfileName", () => {
     expect(resolveProfileName("  PARANOID  ", {})).toBe("paranoid");
   });
 
-  it("PADDOCK_PROFILE overrides the file value", () => {
-    expect(resolveProfileName("paranoid", { PADDOCK_PROFILE: "yolo" })).toBe("yolo");
+  it("MANAGERS_PROFILE overrides the file value", () => {
+    expect(resolveProfileName("paranoid", { MANAGERS_PROFILE: "yolo" })).toBe("yolo");
   });
 
   it("an unknown name falls back to the default rather than failing the boot", () => {
@@ -114,7 +114,7 @@ describe("profiles: resolveProfileName", () => {
     // a typo can only ever land on the same posture a config-less instance
     // already has, never on `yolo`.
     expect(resolveProfileName("balanaced", {})).toBe("balanced");
-    expect(resolveProfileName("", { PADDOCK_PROFILE: "YOLO!" })).toBe("balanced");
+    expect(resolveProfileName("", { MANAGERS_PROFILE: "YOLO!" })).toBe("balanced");
     expect(isKnownProfile("strict")).toBe(false);
   });
 });
@@ -122,28 +122,28 @@ describe("profiles: resolveProfileName", () => {
 describe("profiles: resolution through loadPaddockConfig (#878)", () => {
   // Every var that can reach an assertion below — including the bind/auth ones,
   // which are NOT posture keys but which the "yolo leaves them alone" test reads.
-  // A dev box that exports `HOST` or `PADDOCK_AUTH_MODE` for its own server (this
+  // A dev box that exports `HOST` or `MANAGERS_AUTH_MODE` for its own server (this
   // one does) otherwise fails that test for a reason unrelated to the diff.
   const ENV_KEYS = [
-    "PADDOCK_DATA_DIR",
-    "PADDOCK_CONFIG",
-    "PADDOCK_PROFILE",
+    "MANAGERS_DATA_DIR",
+    "MANAGERS_CONFIG",
+    "MANAGERS_PROFILE",
     "HOST",
-    "PADDOCK_HOST",
-    "PADDOCK_AUTH_MODE",
-    "PADDOCK_DANGEROUSLY_ALLOW_OPEN",
-    "PADDOCK_CLAUDE_TRANSCRIPTS",
-    "PADDOCK_CLAUDE_CREDENTIALS",
-    "PADDOCK_CLAUDE_INSTRUCTIONS",
-    "PADDOCK_CLAUDE_HOOKS",
-    "PADDOCK_CLAUDE_MCP_SERVERS",
-    "PADDOCK_MAX_SPAWN_DEPTH",
-    "PADDOCK_SELF_MCP",
-    "PADDOCK_SELF_MCP_WRITE",
-    "PADDOCK_SELF_MCP_PROJECTS",
-    "PADDOCK_SCHEDULE_MUTATION",
-    "PADDOCK_HOOKS_MCP",
-    "PADDOCK_BROWSER_MCP",
+    "MANAGERS_HOST",
+    "MANAGERS_AUTH_MODE",
+    "MANAGERS_DANGEROUSLY_ALLOW_OPEN",
+    "MANAGERS_CLAUDE_TRANSCRIPTS",
+    "MANAGERS_CLAUDE_CREDENTIALS",
+    "MANAGERS_CLAUDE_INSTRUCTIONS",
+    "MANAGERS_CLAUDE_HOOKS",
+    "MANAGERS_CLAUDE_MCP_SERVERS",
+    "MANAGERS_MAX_SPAWN_DEPTH",
+    "MANAGERS_SELF_MCP",
+    "MANAGERS_SELF_MCP_WRITE",
+    "MANAGERS_SELF_MCP_PROJECTS",
+    "MANAGERS_SCHEDULE_MUTATION",
+    "MANAGERS_HOOKS_MCP",
+    "MANAGERS_BROWSER_MCP",
   ];
 
   let dataDir: string;
@@ -162,7 +162,7 @@ describe("profiles: resolution through loadPaddockConfig (#878)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of ENV_KEYS) {
@@ -225,19 +225,19 @@ describe("profiles: resolution through loadPaddockConfig (#878)", () => {
     expect(cfg.dangerouslyAllowOpen).toBe(false);
   });
 
-  it("PADDOCK_PROFILE overrides the file's profile key", () => {
+  it("MANAGERS_PROFILE overrides the file's profile key", () => {
     writeConfig("profile: paranoid\n");
-    process.env.PADDOCK_PROFILE = "yolo";
+    process.env.MANAGERS_PROFILE = "yolo";
     expect(loadPaddockConfig().profile).toBe("yolo");
   });
 
-  it("an individual FILE key beats PADDOCK_PROFILE — specific beats general", () => {
+  it("an individual FILE key beats MANAGERS_PROFILE — specific beats general", () => {
     // The deliberate inversion of this codebase's env-beats-file rule, and the
     // case most likely to surprise: a container sets the profile in env, a
     // mounted file names one lever. The named lever wins; everything the file is
     // silent about still comes from the env profile.
     writeConfig("claude:\n  hooks: host\n");
-    process.env.PADDOCK_PROFILE = "paranoid";
+    process.env.MANAGERS_PROFILE = "paranoid";
     const cfg = loadPaddockConfig();
     expect(cfg.profile).toBe("paranoid");
     expect(cfg.claude.hooks).toBe("host");
@@ -249,7 +249,7 @@ describe("profiles: resolution through loadPaddockConfig (#878)", () => {
   it("an individual ENV var still beats the same key in the file", () => {
     // Env-beats-file is untouched for the SAME key — only profile-vs-key inverts.
     writeConfig("profile: yolo\nclaude:\n  hooks: host\n");
-    process.env.PADDOCK_CLAUDE_HOOKS = "own";
+    process.env.MANAGERS_CLAUDE_HOOKS = "own";
     expect(loadPaddockConfig().claude.hooks).toBe("own");
   });
 
@@ -293,13 +293,13 @@ describe("profiles: resolution through loadPaddockConfig (#878)", () => {
     expect(field("nativeSystemPrompt").default).toBe(true);
   });
 
-  it("PADDOCK_BROWSER_MCP keeps its literal-'1' semantics over a profile", () => {
+  it("MANAGERS_BROWSER_MCP keeps its literal-'1' semantics over a profile", () => {
     // The one lever whose env var does not use the 1/true/yes convention: any
     // other set value disables. `true` must still mean OFF, even under yolo.
     writeConfig("profile: yolo\n");
-    process.env.PADDOCK_BROWSER_MCP = "true";
+    process.env.MANAGERS_BROWSER_MCP = "true";
     expect(loadPaddockConfig().browserMcp).toBe(false);
-    process.env.PADDOCK_BROWSER_MCP = "1";
+    process.env.MANAGERS_BROWSER_MCP = "1";
     expect(loadPaddockConfig().browserMcp).toBe(true);
   });
 });

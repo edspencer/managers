@@ -130,8 +130,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // Shape the engine's own logging before anything can start a job (#684). Two
   // of the three sources of the credential-failure stack-trace wall are inside
   // `@herdctl/core`, and `setLogHandler` is the supported way to reach them from
-  // out here. `PADDOCK_QUIET` is set by `cli/paddock.ts` unless `--verbose`.
-  installHerdctlLogBridge({ quiet: (process.env.PADDOCK_QUIET ?? "") !== "" });
+  // out here. `MANAGERS_QUIET` is set by `cli/paddock.ts` unless `--verbose`.
+  installHerdctlLogBridge({ quiet: (process.env.MANAGERS_QUIET ?? "") !== "" });
 
   const app = Fastify({
     logger: { level: cfg.logLevel },
@@ -384,7 +384,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     app.get(`${cfg.openapi.path}.json`, { schema: { hide: true } }, () => app.swagger());
     app.log.info({ path: cfg.openapi.path }, "OpenAPI reference mounted");
   } else {
-    app.log.info("OpenAPI reference off (set PADDOCK_OPENAPI_ENABLED=1 to mount /open-api)");
+    app.log.info("OpenAPI reference off (set MANAGERS_OPENAPI_ENABLED=1 to mount /open-api)");
   }
 
   const chatHandler = makeChatHandler({ herdctl, projects, sweep, attachments, queuedMessage, runProvenance, messageProvenance, archive, scheduleSessions, events, triggers, triggerSessions, cfg });
@@ -402,7 +402,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
         clients: cfg.managementApi.clients.map((c) => c.clientId),
         instanceId: cfg.managementApi.instanceId,
       },
-      "management API: /mcp enabled (self-authenticated — independent of PADDOCK_AUTH_MODE and of any proxy)",
+      "management API: /mcp enabled (self-authenticated — independent of MANAGERS_AUTH_MODE and of any proxy)",
     );
   } else {
     app.log.info(

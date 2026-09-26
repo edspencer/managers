@@ -303,14 +303,14 @@ export function toJson(report: ResolvedConfigReport, showSensitive: boolean): st
  *   file changes *nothing observable today* and changes the instance's behaviour
  *   on the day that variable stops being set — a deferred, silent transfer of a
  *   decision from the environment into a file, with no record that it ever was
- *   an environment decision. It is also how a stray `PADDOCK_*` left over on a
+ *   an environment decision. It is also how a stray `MANAGERS_*` left over on a
  *   build box gets baked into a committed config permanently. There is a
  *   precedent for treating this as an error rather than a courtesy: the Settings
  *   PUT path (`validatePatch`) already refuses to write a key an env var
  *   shadows, for the same reason. So eject names each one it skipped and which
  *   variable owns it; `--include-env` writes them anyway, which is the correct
  *   behaviour for the one case that genuinely wants it — deliberately migrating
- *   an instance off a wall of `PADDOCK_*` vars and into a file.
+ *   an instance off a wall of `MANAGERS_*` vars and into a file.
  *
  * - **A key whose effective value is `null` is skipped** — an optional nothing
  *   set, like `sweepMinIntervalMs`. `writeInstanceConfig` reads `null` as
@@ -618,7 +618,7 @@ function notWrittenSection(plan: EjectPlan): string[] {
 
 /**
  * Run a `config` action against the data dir the caller has already resolved
- * into `PADDOCK_DATA_DIR`.
+ * into `MANAGERS_DATA_DIR`.
  *
  * The two imports are dynamic for the same reason `paddock.ts` defers
  * `start.js`: config resolution reads the environment, so nothing that resolves
@@ -641,7 +641,7 @@ export async function runConfig(action: ConfigAction, opts: CliOptions): Promise
   try {
     cfg = loadPaddockConfig({ createDataDir: false });
   } catch (err) {
-    // An unparseable file, a `PADDOCK_CONFIG` pointing at nothing, a file from a
+    // An unparseable file, a `MANAGERS_CONFIG` pointing at nothing, a file from a
     // newer schema, a Claude home that resolves somewhere refused — the loader
     // rejects all of these, and rejecting them here is the RIGHT answer: the
     // honest reply to "what is my config?" when it will not load is "your

@@ -79,7 +79,7 @@ function xmlEscape(s: string): string {
  * category of value that would be tempting to put here — a credential — is
  * precisely what the agent shape exists to avoid needing.
  *
- * No `PADDOCK_DATA_DIR`: see `buildSpec`. One `~/.paddock` instance, reachable
+ * No `MANAGERS_DATA_DIR`: see `buildSpec`. One `~/.paddock` instance, reachable
  * from the service and from a terminal.
  */
 export function renderPlist(spec: ServiceSpec): string {

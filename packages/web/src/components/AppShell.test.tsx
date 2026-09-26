@@ -222,8 +222,8 @@ describe("AppShell: sidebar shell", () => {
   });
 
   it("renders a configured brand name + logo from the injected global (issue #34)", () => {
-    type WithConfig = { __PADDOCK_CONFIG__?: unknown };
-    (globalThis as WithConfig).__PADDOCK_CONFIG__ = {
+    type WithConfig = { __MANAGERS_CONFIG__?: unknown };
+    (globalThis as WithConfig).__MANAGERS_CONFIG__ = {
       brand: { name: "Homelab", logo: "🏠", accent: "#3366cc" },
     };
     try {
@@ -233,7 +233,7 @@ describe("AppShell: sidebar shell", () => {
       expect(screen.queryByText("Paddock")).not.toBeInTheDocument();
       expect(document.title).toBe("Homelab");
     } finally {
-      delete (globalThis as WithConfig).__PADDOCK_CONFIG__;
+      delete (globalThis as WithConfig).__MANAGERS_CONFIG__;
     }
   });
 

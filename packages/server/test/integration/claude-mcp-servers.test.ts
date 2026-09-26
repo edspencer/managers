@@ -70,7 +70,7 @@ describe("integration: claude.mcpServers decides what the runtime is handed (#69
   it("own reads nothing, even with a .claude.json sitting right there", async () => {
     t = await startTestApp({
       hostClaudeJson: HOST_CLAUDE_JSON,
-      env: { PADDOCK_CLAUDE_MCP_SERVERS: "own" },
+      env: { MANAGERS_CLAUDE_MCP_SERVERS: "own" },
     });
     expect(t.cfg.claude.mcpServers).toBe("own");
     // The guarantee `own` exists to make sayable — "nothing outside the data dir
@@ -88,7 +88,7 @@ describe("integration: claude.mcpServers decides what the runtime is handed (#69
   it("host reads BESIDE the Claude home and puts the servers on the keeper", async () => {
     t = await startTestApp({
       hostClaudeJson: HOST_CLAUDE_JSON,
-      env: { PADDOCK_CLAUDE_MCP_SERVERS: "host" },
+      env: { MANAGERS_CLAUDE_MCP_SERVERS: "host" },
     });
     expect(t.cfg.claude.mcpServers).toBe("host");
     const keeper = keeperConfigFor(t, "/nonexistent/plain-project");
@@ -110,7 +110,7 @@ describe("integration: claude.mcpServers decides what the runtime is handed (#69
     // user` writes here, keyed by the literal absolute path.
     t = await startTestApp({
       hostClaudeJson: HOST_CLAUDE_JSON,
-      env: { PADDOCK_CLAUDE_MCP_SERVERS: "host" },
+      env: { MANAGERS_CLAUDE_MCP_SERVERS: "host" },
     });
     const scoped = keeperConfigFor(t, "/nonexistent/scoped-project");
     const other = keeperConfigFor(t, "/nonexistent/plain-project");
@@ -136,7 +136,7 @@ describe("integration: claude.mcpServers decides what the runtime is handed (#69
   it("keeps `headers` and `type: sse` through AgentConfigSchema (herdctl 5.32.0)", async () => {
     t = await startTestApp({
       hostClaudeJson: HOST_CLAUDE_JSON,
-      env: { PADDOCK_CLAUDE_MCP_SERVERS: "host" },
+      env: { MANAGERS_CLAUDE_MCP_SERVERS: "host" },
       gitRepo: true,
     });
     await t.app.inject({
@@ -174,9 +174,9 @@ describe("integration: claude.mcpServers decides what the runtime is handed (#69
     t = await startTestApp({
       hostClaudeJson: HOST_CLAUDE_JSON,
       env: {
-        PADDOCK_PROFILE: "paranoid",
-        PADDOCK_CLAUDE_MCP_SERVERS: "host",
-        PADDOCK_CLAUDE_CREDENTIALS: "own",
+        MANAGERS_PROFILE: "paranoid",
+        MANAGERS_CLAUDE_MCP_SERVERS: "host",
+        MANAGERS_CLAUDE_CREDENTIALS: "own",
       },
     });
     expect(t.cfg.claude.mcpServers).toBe("host");

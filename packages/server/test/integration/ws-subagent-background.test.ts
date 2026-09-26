@@ -63,7 +63,7 @@ describe("integration: [[BGSUBAGENT]] produces a sub-agent that outlives its par
   beforeAll(async () => {
     t = await startTestApp({
       script: {},
-      env: { PADDOCK_FAKE_BGSUBAGENT_MS: String(WINDOW_MS) },
+      env: { MANAGERS_FAKE_BGSUBAGENT_MS: String(WINDOW_MS) },
     });
     await t.app.inject({
       method: "POST",

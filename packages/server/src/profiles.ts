@@ -3,11 +3,11 @@
  *
  * Paddock has a dozen independent security/capability levers, each with its own
  * code default. A profile is the single place to express *posture* — "locked
- * down" / "full capability" — instead of hand-setting twelve `PADDOCK_*` vars.
+ * down" / "full capability" — instead of hand-setting twelve `MANAGERS_*` vars.
  *
  * ## Why this is a resolved key, not something an installer writes
  *
- * Config resolves as code default < YAML file < `PADDOCK_*` env. A profile
+ * Config resolves as code default < YAML file < `MANAGERS_*` env. A profile
  * implemented as "the installer materialises concrete values into
  * `paddock.config.yaml`" only ever touches the FILE layer — so it only works on
  * the one distribution that runs an installer. Docker and bare `node dist` would
@@ -25,15 +25,15 @@
  *
  * The consequence worth stating out loud, because it inverts this codebase's
  * otherwise universal env-beats-file rule: **an individual key in the YAML file
- * beats `PADDOCK_PROFILE` in the env.** `PADDOCK_PROFILE=paranoid` with
+ * beats `MANAGERS_PROFILE` in the env.** `MANAGERS_PROFILE=paranoid` with
  * `claude: {hooks: host}` in a mounted file resolves hooks to `host`.
  *
- * That is deliberate — specific beats general. `PADDOCK_PROFILE` is a statement
+ * That is deliberate — specific beats general. `MANAGERS_PROFILE` is a statement
  * about the dozen levers you did NOT mention; a key you wrote by hand is a
  * statement about the one you did. The alternative makes the env var a blunt
  * instrument that silently discards deliberate per-key config, which is a worse
  * failure than the surprise of a file winning. (Env still beats file for the same
- * key, exactly as everywhere else: `PADDOCK_CLAUDE_HOOKS` beats
+ * key, exactly as everywhere else: `MANAGERS_CLAUDE_HOOKS` beats
  * `claude.hooks`.)
  *
  * ## Posture keys only
@@ -258,7 +258,7 @@ export function resolveProfileName(
   fileVal: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): ProfileName {
-  const raw = env.PADDOCK_PROFILE?.trim() || (fileVal === undefined || fileVal === null ? "" : String(fileVal).trim());
+  const raw = env.MANAGERS_PROFILE?.trim() || (fileVal === undefined || fileVal === null ? "" : String(fileVal).trim());
   const name = raw.toLowerCase();
   return name && isKnownProfile(name) ? name : DEFAULT_PROFILE;
 }

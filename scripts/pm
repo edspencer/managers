@@ -89,7 +89,7 @@ const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 // --- dev-server environment isolation --------------------------------------
 // A dev/preview server MUST NOT inherit production data pointers. paddock.service
-// exports PADDOCK_DATA_DIR=/var/lib/paddock (and friends); those flow keeper ->
+// exports MANAGERS_DATA_DIR=/var/lib/paddock (and friends); those flow keeper ->
 // pm -> dev server via the inherited env, so an un-overridden dev instance would
 // attach to PROD data (Paddock's OWN default is a safe `./data`, so the leak is
 // purely inheritance). We STRIP those state pointers from the child env and
@@ -98,7 +98,7 @@ const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const SCRATCH_ROOT = cfg("PM_SCRATCH_ROOT", "/var/lib/paddock-servers");
 const SCRUB_VARS = cfg(
   "PM_SCRUB_VARS",
-  "PADDOCK_DATA_DIR,PADDOCK_PROJECTS_DIR,PADDOCK_STATE_DIR,PADDOCK_HERDCTL_CONFIG"
+  "MANAGERS_DATA_DIR,MANAGERS_PROJECTS_DIR,MANAGERS_STATE_DIR,MANAGERS_HERDCTL_CONFIG"
 ).split(",").map((s) => s.trim()).filter(Boolean);
 // Known production data roots a dev server must never be pointed at. Matched at
 // a path boundary so the scratch root (/var/lib/paddock-servers) is NOT flagged.
@@ -291,7 +291,7 @@ function referencesProdData(s) {
  * (SCRUB_VARS) so nothing inherits prod data, and injects an isolated,
  * persistent, per-server scratch data dir under SCRATCH_ROOT (outside any prod
  * tree, so it also survives a reboot). Paddock derives projects/state/config/
- * scratch from PADDOCK_DATA_DIR, so setting that one is enough. A `-- env VAR=…`
+ * scratch from MANAGERS_DATA_DIR, so setting that one is enough. A `-- env VAR=…`
  * prefix in the caller's command can still override these (e.g. an explicit
  * scratch of its own) — the prod-path guard in cmdStart backstops that.
  */
@@ -308,7 +308,7 @@ function buildDevEnv(project, port) {
   env.HOST = "0.0.0.0";
   env.HOSTNAME = "0.0.0.0";
   if (!env.NODE_ENV) env.NODE_ENV = "development";
-  env.PADDOCK_DATA_DIR = scratch;
+  env.MANAGERS_DATA_DIR = scratch;
   return env;
 }
 
@@ -318,7 +318,7 @@ function buildDevEnv(project, port) {
  * Guard: a dev/preview server must NEVER be pointed at a PRODUCTION Paddock data
  * dir. Refuse if `cmdStr` references one at a path boundary. The remedy text
  * points at the ACTUAL offending token (`prodRef`) and explains the one
- * exemption (`--cwd`), so an agent doesn't go chasing a `PADDOCK_DATA_DIR`
+ * exemption (`--cwd`), so an agent doesn't go chasing a `MANAGERS_DATA_DIR`
  * override that isn't the problem.
  */
 function assertNoProdData(project, cmdStr, verb) {
@@ -328,7 +328,7 @@ function assertNoProdData(project, cmdStr, verb) {
     `refusing to ${verb} '${project}': its command references a PRODUCTION data path (${prodRef}).\n` +
       `  Dev servers get an isolated scratch data dir automatically (${path.join(SCRATCH_ROOT, project, "data")}).\n` +
       `  Only --cwd is exempt from this scan: move any launcher/wrapper script under ${path.join(SCRATCH_ROOT, project)}/\n` +
-      `  and reach your clone via --cwd, or point PADDOCK_DATA_DIR somewhere under ${SCRATCH_ROOT}.`
+      `  and reach your clone via --cwd, or point MANAGERS_DATA_DIR somewhere under ${SCRATCH_ROOT}.`
   );
 }
 
@@ -338,7 +338,7 @@ function assertNoProdData(project, cmdStr, verb) {
  * PM2 process deterministically. BOTH `pm start` and `pm restart` go through here
  * so a restart can never re-inherit the box's PRODUCTION env — a bare
  * `pm2 restart --update-env` would silently drop PORT and re-point the server at
- * PADDOCK_DATA_DIR=/var/lib/paddock with NODE_ENV=production. `entry` must carry
+ * MANAGERS_DATA_DIR=/var/lib/paddock with NODE_ENV=production. `entry` must carry
  * {port, cmd, cwd, host}.
  */
 function launch(project, entry, verb) {
@@ -418,7 +418,7 @@ function cmdRestart(argv) {
   // Restart THROUGH the shared launch path so the server always comes back with
   // the same scrubbed, port-injected env as a fresh start. A bare
   // `pm2 restart --update-env` re-inherits the box's PRODUCTION env (no PORT,
-  // PADDOCK_DATA_DIR=/var/lib/paddock, NODE_ENV=production).
+  // MANAGERS_DATA_DIR=/var/lib/paddock, NODE_ENV=production).
   launch(project, entry, "restart");
 }
 

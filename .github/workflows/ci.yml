@@ -99,15 +99,15 @@ jobs:
         run: npm run build
       # Drives the built SPA against the real server + fake-claude binary across
       # a standard + a git-enabled Playwright server (no Anthropic calls).
-      # PADDOCK_E2E_TMP/_GIT_TMP pin the run's temp dirs (#774). Left unset the
+      # MANAGERS_E2E_TMP/_GIT_TMP pin the run's temp dirs (#774). Left unset the
       # config mkdtemps under os.tmpdir(), so the HTML report + traces landed at
       # a path nothing downstream could name — and the upload step below pointed
       # at test/e2e/playwright-report/, which nothing has ever written.
       - name: Browser E2E journeys
         id: e2e
         env:
-          PADDOCK_E2E_TMP: ${{ runner.temp }}/paddock-e2e
-          PADDOCK_E2E_GIT_TMP: ${{ runner.temp }}/paddock-e2e-git
+          MANAGERS_E2E_TMP: ${{ runner.temp }}/paddock-e2e
+          MANAGERS_E2E_GIT_TMP: ${{ runner.temp }}/paddock-e2e-git
         run: npm run test:e2e
       # Only when the E2E step itself failed: an earlier step failing (npm ci,
       # build) would leave nothing to upload, and `if-no-files-found: error` is

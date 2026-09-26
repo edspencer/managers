@@ -334,7 +334,7 @@ Usage
 Options
   -p, --port <port>       HTTP/WS port (default 7233, or $PORT)
       --host <host>       Bind address (default 127.0.0.1)
-  -d, --data-dir <path>   Projects + state (default ~/.paddock, or $PADDOCK_DATA_DIR)
+  -d, --data-dir <path>   Projects + state (default ~/.paddock, or $MANAGERS_DATA_DIR)
   -o, --open              Open the app in your browser once it is listening
       --verbose           Show the server's own logs (quiet by default)
   -v, --version           Print the Paddock version and exit
@@ -366,7 +366,7 @@ Credentials
 Posture profiles
   One key picks how much Paddock shares and how much its agents may do:
 
-    profile: balanced     # paranoid | balanced | yolo   (PADDOCK_PROFILE)
+    profile: balanced     # paranoid | balanced | yolo   (MANAGERS_PROFILE)
 
   paranoid shares nothing but the login and turns every capability off — the
   behaviour Paddock had before profiles existed. balanced (the default)
@@ -377,7 +377,7 @@ Posture profiles
   browser.
 
   A profile only sets defaults — any single key still overrides it, and an
-  individual key in the config file beats PADDOCK_PROFILE in the environment.
+  individual key in the config file beats MANAGERS_PROFILE in the environment.
   Profiles never touch your port, bind address, auth or model list: yolo does
   NOT open the bind or relax auth, which stay a separate, explicit decision.
 
@@ -434,7 +434,7 @@ Your data
 
 Notes
   Binds loopback with authentication disabled, which is safe for a laptop. To
-  expose it on a network, set PADDOCK_AUTH_MODE first — Paddock refuses to bind
+  expose it on a network, set MANAGERS_AUTH_MODE first — Paddock refuses to bind
   a routable interface wide open. See AUTH.md.
 
 Docs: https://github.com/edspencer/paddock`;
@@ -454,10 +454,10 @@ Options (install only — recorded in the generated unit)
       --host <host>       Bind address (default 127.0.0.1)
   -d, --data-dir <path>   Only if you want an instance SEPARATE from your
                           terminal one. Left out of the unit when you omit it
-                          AND \`PADDOCK_DATA_DIR\` is unset in this shell, so
+                          AND \`MANAGERS_DATA_DIR\` is unset in this shell, so
                           \`paddock service\` and a bare \`paddock\` are the same
                           ~/.paddock instance reached two ways. If
-                          \`PADDOCK_DATA_DIR\` IS set here, that path is recorded
+                          \`MANAGERS_DATA_DIR\` IS set here, that path is recorded
                           in the unit — the service would otherwise point
                           somewhere your terminal does not.
       --verbose           Record the server's own logs, not just warnings
@@ -495,7 +495,7 @@ A note on access
   A service is up for as long as you are logged in rather than as long as a
   terminal tab, so that window is longer — but it is not wider: any local
   process that could reach the port could already read the same Claude login as
-  you. Set PADDOCK_AUTH_MODE if you want a credential on it anyway.
+  you. Set MANAGERS_AUTH_MODE if you want a credential on it anyway.
 
 Docs: https://github.com/edspencer/paddock`;
 
@@ -516,7 +516,7 @@ Usage
 
 Options
   -d, --data-dir <path>   Which instance to inspect (default ~/.paddock, or
-                          $PADDOCK_DATA_DIR) — the same rule \`paddock start\`
+                          $MANAGERS_DATA_DIR) — the same rule \`paddock start\`
                           uses, so the two always read the same instance
       --resolved          show: every field, not just the ones someone set
       --json              show: the whole report as JSON (implies --resolved's
@@ -541,8 +541,8 @@ Where a value can come from
                        same key.
 
   One wrinkle worth knowing, and the command shows it plainly: an individual key
-  in the FILE beats PADDOCK_PROFILE in the environment. Specific beats general —
-  PADDOCK_PROFILE speaks for the levers you did not mention.
+  in the FILE beats MANAGERS_PROFILE in the environment. Specific beats general —
+  MANAGERS_PROFILE speaks for the levers you did not mention.
 
 Why show, and not just write it all into the file
   \`show\` is computed by the loader the server boots with, so it cannot drift

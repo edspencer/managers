@@ -379,8 +379,8 @@ describe("integration: WS transport edge cases (real app, fake claude)", () => {
   // → re-dispatch), which the fix's gate is the entry point to.
 
   it("flushes a mid-turn queued message after the turn completes ([[SLOWTOOL]] [[REPLYERROR]], #404 flow)", async () => {
-    const prevSlow = process.env.PADDOCK_FAKE_SLOWTOOL_MS;
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "1500";
+    const prevSlow = process.env.MANAGERS_FAKE_SLOWTOOL_MS;
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "1500";
     try {
       // 1) Establish a session id to queue against.
       const m0 = ws.mark();
@@ -433,8 +433,8 @@ describe("integration: WS transport edge cases (real app, fake claude)", () => {
       );
       expect(followUp.payload?.success).toBe(true);
     } finally {
-      if (prevSlow === undefined) delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
-      else process.env.PADDOCK_FAKE_SLOWTOOL_MS = prevSlow;
+      if (prevSlow === undefined) delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
+      else process.env.MANAGERS_FAKE_SLOWTOOL_MS = prevSlow;
     }
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Per-instance branding read from the server-injected `window.__PADDOCK_CONFIG__`
+ * Per-instance branding read from the server-injected `window.__MANAGERS_CONFIG__`
  * global (issue #34). The server writes this into index.html at serve time so
  * there's no flash; the accent color is applied via CSS `--accent*` variables
  * (see index.css + the injected <style>), so only the wordmark + logo need to be
@@ -27,7 +27,7 @@ export interface OpenApiInfo {
 /**
  * Default when the server injects nothing (dev via Vite, or tests): the
  * reference is treated as unavailable so the nav link stays hidden. A real
- * server injects `{ enabled, path }` per its `PADDOCK_OPENAPI_*` config.
+ * server injects `{ enabled, path }` per its `MANAGERS_OPENAPI_*` config.
  */
 export const DEFAULT_OPENAPI: OpenApiInfo = { enabled: false, path: "/open-api" };
 
@@ -38,13 +38,13 @@ interface InjectedConfig {
 
 /** The resolved branding for this instance (injected global merged over defaults). */
 export function getBrand(): Brand {
-  const injected = (globalThis as { __PADDOCK_CONFIG__?: InjectedConfig }).__PADDOCK_CONFIG__;
+  const injected = (globalThis as { __MANAGERS_CONFIG__?: InjectedConfig }).__MANAGERS_CONFIG__;
   return { ...DEFAULT_BRAND, ...(injected?.brand ?? {}) };
 }
 
 /** Whether/where the OpenAPI reference is served for this instance. */
 export function getOpenApi(): OpenApiInfo {
-  const injected = (globalThis as { __PADDOCK_CONFIG__?: InjectedConfig }).__PADDOCK_CONFIG__;
+  const injected = (globalThis as { __MANAGERS_CONFIG__?: InjectedConfig }).__MANAGERS_CONFIG__;
   return { ...DEFAULT_OPENAPI, ...(injected?.openapi ?? {}) };
 }
 

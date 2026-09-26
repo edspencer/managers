@@ -60,8 +60,8 @@ describe("renderIndexHtml", () => {
 
   it("injects the config global with name + logo before </head>", () => {
     const out = renderIndexHtml(RAW_HTML, brand({ name: "Homelab", logo: "🏠" }));
-    expect(out).toContain("window.__PADDOCK_CONFIG__=");
-    const idx = out.indexOf("window.__PADDOCK_CONFIG__=");
+    expect(out).toContain("window.__MANAGERS_CONFIG__=");
+    const idx = out.indexOf("window.__MANAGERS_CONFIG__=");
     expect(out.indexOf("</head>")).toBeGreaterThan(idx); // injected before </head>
     const json = JSON.parse(
       out.slice(out.indexOf("=", idx) + 1, out.indexOf(";</script>", idx)),
@@ -78,7 +78,7 @@ describe("renderIndexHtml", () => {
   it("escapes a </script> in a brand value so it can't break out of the script", () => {
     const out = renderIndexHtml(RAW_HTML, brand({ name: "</script><script>alert(1)</script>" }));
     // The raw closing tag must not appear inside the injected config script.
-    const cfgStart = out.indexOf("window.__PADDOCK_CONFIG__=");
+    const cfgStart = out.indexOf("window.__MANAGERS_CONFIG__=");
     const cfgEnd = out.indexOf(";</script>", cfgStart);
     expect(out.slice(cfgStart, cfgEnd)).not.toContain("</script>");
     expect(out.slice(cfgStart, cfgEnd)).toContain("\\u003c/script>");
@@ -88,6 +88,6 @@ describe("renderIndexHtml", () => {
 
   it("still injects config when there is no </head> (degenerate input)", () => {
     const out = renderIndexHtml("<html><body>x</body></html>", brand({ name: "X" }));
-    expect(out).toContain("window.__PADDOCK_CONFIG__=");
+    expect(out).toContain("window.__MANAGERS_CONFIG__=");
   });
 });

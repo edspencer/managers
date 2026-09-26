@@ -202,7 +202,7 @@ export const TIPS: Tip[] = [
   {
     id: "dictation-is-one-variable-away",
     title: "Dictation is one variable away",
-    body: "Set PADDOCK_WHISPER_ENDPOINT to a Whisper-compatible endpoint and a microphone button appears in the composer — nothing else needs configuring. Nothing in the UI hints the feature exists until it is set.",
+    body: "Set MANAGERS_WHISPER_ENDPOINT to a Whisper-compatible endpoint and a microphone button appears in the composer — nothing else needs configuring. Nothing in the UI hints the feature exists until it is set.",
     href: `${DOCS}/configuration/environment/#voice-dictation-whisper`,
   },
   {

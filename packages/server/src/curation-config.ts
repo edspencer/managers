@@ -4,7 +4,7 @@
  * per-project override layer (issue #384).
  *
  * ── Config discipline (the `recovery`/`driveMode` pattern) ────────────────────
- * Every budget is an instance default (`PADDOCK_CURATION_*` env, YAML instance
+ * Every budget is an instance default (`MANAGERS_CURATION_*` env, YAML instance
  * file beneath it — resolved in config.ts's `loadCurationConfig`) with an
  * optional PER-PROJECT override (`project.yaml` →
  * {@link import("./projects.js").ProjectYaml.curation}). An absent/invalid

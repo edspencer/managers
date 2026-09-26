@@ -32,7 +32,7 @@
  * So a process is a candidate only when its OWN environment, read out of
  * `/proc/<pid>/environ`, says it is a throwaway fixture:
  *
- *   1. `PADDOCK_DATA_DIR` is set, and
+ *   1. `MANAGERS_DATA_DIR` is set, and
  *   2. it resolves INSIDE the OS temp dir, and
  *   3. the temp component is the fixture's own `paddock-e2e-` prefix
  *      (`server.mjs`: `mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-"))`).
@@ -156,9 +156,9 @@ for (const pid of pids) {
   if (s.state === "Z") continue; // a zombie cannot be killed; tini (#794) reaps these
 
   const env = environ(pid);
-  if (!env || !isFixtureDataDir(env.PADDOCK_DATA_DIR)) continue;
+  if (!env || !isFixtureDataDir(env.MANAGERS_DATA_DIR)) continue;
 
-  candidates.push({ pid, name, rssKb: rss, state: s.state, dataDir: env.PADDOCK_DATA_DIR });
+  candidates.push({ pid, name, rssKb: rss, state: s.state, dataDir: env.MANAGERS_DATA_DIR });
 }
 
 // ── census ────────────────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ for (const c of candidates) {
   // is not atomic. Never widen this to a group kill — a fixture server leads
   // its own group, but so does plenty else we have no business touching.
   const env = environ(c.pid);
-  if (!env || !isFixtureDataDir(env.PADDOCK_DATA_DIR)) {
+  if (!env || !isFixtureDataDir(env.MANAGERS_DATA_DIR)) {
     console.log(`  pid ${c.pid}: changed identity since the scan — skipped`);
     continue;
   }

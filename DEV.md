@@ -33,7 +33,7 @@ set -a; source ~/herds/.env; set +a
 npm run build
 
 # 3. (optional) Use a throwaway data dir so you don't touch real projects.
-export PADDOCK_DATA_DIR="$(mktemp -d /tmp/paddock-dev.XXXXXX)"
+export MANAGERS_DATA_DIR="$(mktemp -d /tmp/paddock-dev.XXXXXX)"
 export PORT=7233            # default; change if 7233 is taken
 
 # 4. Start the single server process.
@@ -75,7 +75,7 @@ instance) point the dev server at a backend on another port:
 # Terminal 1 — backend on :4200
 PORT=4200 npm run dev
 # Terminal 2 — Vite on :4100, proxying to the :4200 backend
-PADDOCK_DEV_PORT=4100 PADDOCK_PROXY_TARGET=http://localhost:4200 npm run dev:web
+MANAGERS_DEV_PORT=4100 MANAGERS_PROXY_TARGET=http://localhost:4200 npm run dev:web
 ```
 
 ## Stopping
@@ -95,19 +95,19 @@ rm -rf /tmp/paddock-dev.*
 |-----|---------|---------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | **Required.** Max auth, passed to the agents. |
 | `PORT` | `7233` | HTTP/WS listen port. |
-| `HOST` | `127.0.0.1` | Bind host — loopback by default. Binding a routable interface while `PADDOCK_AUTH_MODE=none` refuses to start unless `PADDOCK_DANGEROUSLY_ALLOW_OPEN` is set. |
-| `PADDOCK_DATA_DIR` | `./data` | Root for projects, herdctl config + state. |
-| `PADDOCK_WEB_DIST` | `packages/web/dist` | Built SPA served in production. |
+| `HOST` | `127.0.0.1` | Bind host — loopback by default. Binding a routable interface while `MANAGERS_AUTH_MODE=none` refuses to start unless `MANAGERS_DANGEROUSLY_ALLOW_OPEN` is set. |
+| `MANAGERS_DATA_DIR` | `./data` | Root for projects, herdctl config + state. |
+| `MANAGERS_WEB_DIST` | `packages/web/dist` | Built SPA served in production. |
 | `VITE_API_BASE` *(web build)* | same-origin | Point the SPA at a non-default API origin. |
 | `VITE_WS_BASE` *(web build)* | same-origin | Point the SPA at a non-default WS origin. |
-| `PADDOCK_DEV_PORT` *(Mode B)* | `5173` | Vite dev-server port. |
-| `PADDOCK_PROXY_TARGET` *(Mode B)* | `http://localhost:7233` | Backend origin the Vite dev server proxies `/api` + `/ws` to (WS target derived by swapping `http`→`ws`). |
-| `PADDOCK_WHISPER_MODE` | `off` (or `remote` if an endpoint is set) | Voice dictation backend: `off` \| `remote` \| `local`. |
-| `PADDOCK_WHISPER_ENDPOINT` | — | **remote:** OpenAI-compatible base URL, e.g. `http://whisper.local:8385/v1`. `/audio/transcriptions` is appended. |
-| `PADDOCK_WHISPER_MODEL` | `base` | Whisper model (`tiny`/`base`/`small`/…; `.en` variants for English-only). |
-| `PADDOCK_WHISPER_API_KEY` | — | **remote:** optional bearer token for the endpoint. |
-| `PADDOCK_WHISPER_LANGUAGE` | — | Optional spoken-language hint (e.g. `en`); unset ⇒ auto-detect. |
-| `PADDOCK_WHISPER_MAX_UPLOAD_BYTES` | `26214400` (25 MB) | Max accepted dictation upload size. |
+| `MANAGERS_DEV_PORT` *(Mode B)* | `5173` | Vite dev-server port. |
+| `MANAGERS_PROXY_TARGET` *(Mode B)* | `http://localhost:7233` | Backend origin the Vite dev server proxies `/api` + `/ws` to (WS target derived by swapping `http`→`ws`). |
+| `MANAGERS_WHISPER_MODE` | `off` (or `remote` if an endpoint is set) | Voice dictation backend: `off` \| `remote` \| `local`. |
+| `MANAGERS_WHISPER_ENDPOINT` | — | **remote:** OpenAI-compatible base URL, e.g. `http://whisper.local:8385/v1`. `/audio/transcriptions` is appended. |
+| `MANAGERS_WHISPER_MODEL` | `base` | Whisper model (`tiny`/`base`/`small`/…; `.en` variants for English-only). |
+| `MANAGERS_WHISPER_API_KEY` | — | **remote:** optional bearer token for the endpoint. |
+| `MANAGERS_WHISPER_LANGUAGE` | — | Optional spoken-language hint (e.g. `en`); unset ⇒ auto-detect. |
+| `MANAGERS_WHISPER_MAX_UPLOAD_BYTES` | `26214400` (25 MB) | Max accepted dictation upload size. |
 
 > **Voice dictation** (see [Voice dictation](#voice-dictation)) is off unless a
 > whisper backend is configured. `local` mode needs the optional `nodejs-whisper`
@@ -120,14 +120,14 @@ whisper backend configured. Recording happens in the browser; the clip is POSTed
 to `/api/transcribe`, transcribed server-side, and the text is inserted into the
 draft.
 
-- **remote** (recommended): point `PADDOCK_WHISPER_ENDPOINT` at any
+- **remote** (recommended): point `MANAGERS_WHISPER_ENDPOINT` at any
   OpenAI-compatible whisper server (whisper-server, faster-whisper-server,
   speaches, …). This is the same contract HushPod uses, so both can share one
   server:
 
   ```bash
-  export PADDOCK_WHISPER_ENDPOINT=http://whisper.local:8385/v1
-  export PADDOCK_WHISPER_MODEL=base
+  export MANAGERS_WHISPER_ENDPOINT=http://whisper.local:8385/v1
+  export MANAGERS_WHISPER_MODEL=base
   ```
 
 - **local**: run whisper.cpp on the box. Needs `ffmpeg` on `PATH` and the
@@ -135,8 +135,8 @@ draft.
   transcription compiles whisper.cpp and downloads the model.
 
   ```bash
-  export PADDOCK_WHISPER_MODE=local
-  export PADDOCK_WHISPER_MODEL=base   # or base.en / small for more accuracy
+  export MANAGERS_WHISPER_MODE=local
+  export MANAGERS_WHISPER_MODEL=base   # or base.en / small for more accuracy
   ```
 
 `GET /api/transcription` reports `{ available, mode, model }` — the composer uses

@@ -63,7 +63,7 @@ import {
  * (auto-loaded via the cwd walk-up, since a project dir is a child of the
  * projects root) plus a per-project CLAUDE.md. This is its own decision (issue
  * #176): an instance with no CLAUDE.md files can opt back into the terse replace
- * prompt below with `PADDOCK_NATIVE_PROMPT=false`.
+ * prompt below with `MANAGERS_NATIVE_PROMPT=false`.
  *
  * This is the reading #512 settled on, and the reason it is `projectsRoot` and
  * not `<dataDir>`: `projectsRoot` IS the instance's backing repo, so the file is
@@ -133,7 +133,7 @@ export function buildAgentConfig(
   if (project.docker) config.docker = { enabled: true };
   // Native by default: omit the replace prompt so the default coding prompt +
   // CLAUDE.md hierarchy apply (issue #176). Only a non-native instance
-  // (PADDOCK_NATIVE_PROMPT=false) gets the terse replace prompt.
+  // (MANAGERS_NATIVE_PROMPT=false) gets the terse replace prompt.
   if (!cfg.nativeSystemPrompt) {
     config.system_prompt =
       "You are a Claude Code agent for this project directory. " +
@@ -419,7 +419,7 @@ export async function ensureConfigFile(cfg: PaddockConfig): Promise<void> {
       // end-to-end (adds no capability the keeper's existing tools don't).
       // BROWSER_MCP_TOOL (mcp__playwright__*) is listed unconditionally: it is a
       // no-op unless the keeper agent actually attaches the playwright
-      // server (gated by PADDOCK_BROWSER_MCP), and having it on the allowlist
+      // server (gated by MANAGERS_BROWSER_MCP), and having it on the allowlist
       // means enabling the browser is a per-box env flip with no code change.
       // Timer-class autonomy tools (Paddock#111): `ScheduleWakeup` + the
       // session-only `Cron*` set + `Monitor` must be on the allowlist or the

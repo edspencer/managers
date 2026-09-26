@@ -9,7 +9,7 @@
  *
  * Every one of those cases starts from a SCRUBBED environment. This suite would
  * otherwise pass or fail depending on the machine — a dev box that exports
- * `PADDOCK_SELF_MCP` turns every "comes from the profile" assertion into "comes
+ * `MANAGERS_SELF_MCP` turns every "comes from the profile" assertion into "comes
  * from the environment", correctly, and the test would be wrong rather than the
  * code. The scrub list is derived from `FIELDS` instead of typed out, so a lever
  * added tomorrow is covered without anyone remembering this file.
@@ -114,9 +114,9 @@ describe("paddock config: parseCommand (#878)", () => {
 const ENV_KEYS = [
   ...new Set([
     ...FIELDS.flatMap((f) => f.envVars),
-    "PADDOCK_PROFILE",
-    "PADDOCK_CONFIG",
-    "PADDOCK_DATA_DIR",
+    "MANAGERS_PROFILE",
+    "MANAGERS_CONFIG",
+    "MANAGERS_DATA_DIR",
   ]),
 ];
 
@@ -131,7 +131,7 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of ENV_KEYS) {
@@ -179,10 +179,10 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
     );
   });
 
-  it("names PADDOCK_PROFILE when the environment picks the profile", () => {
-    process.env.PADDOCK_PROFILE = "yolo";
+  it("names MANAGERS_PROFILE when the environment picks the profile", () => {
+    process.env.MANAGERS_PROFILE = "yolo";
     const r = report();
-    expect(r.profile).toEqual({ name: "yolo", source: "env", origin: "PADDOCK_PROFILE" });
+    expect(r.profile).toEqual({ name: "yolo", source: "env", origin: "MANAGERS_PROFILE" });
     expect(field(r, "browserMcp")).toMatchObject({ value: true, source: "profile", origin: "yolo" });
   });
 
@@ -198,15 +198,15 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
    * `resolveProfileName` falls back rather than failing the boot, which is right
    * for a boot and useless for a diagnostic — the typo would simply vanish and
    * the operator would be left wondering why `yolo` did nothing. Note also what
-   * this pins: a bad `PADDOCK_PROFILE` does NOT fall through to the file's value.
+   * this pins: a bad `MANAGERS_PROFILE` does NOT fall through to the file's value.
    */
   it("surfaces a profile name that is not one of the three", () => {
     writeConfig("profile: yolo\n");
-    process.env.PADDOCK_PROFILE = "paranoyd";
+    process.env.MANAGERS_PROFILE = "paranoyd";
     const r = report();
     expect(r.profile.name).toBe("balanced");
     expect(r.profile.source).toBe("default");
-    expect(r.profile.unrecognised).toEqual({ value: "paranoyd", origin: "PADDOCK_PROFILE" });
+    expect(r.profile.unrecognised).toEqual({ value: "paranoyd", origin: "MANAGERS_PROFILE" });
   });
 
   it("reports a key the config file sets", () => {
@@ -219,13 +219,13 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
 
   /**
    * The precedence wrinkle #878 introduces, and the reason a reader needs this
-   * command: an individual FILE key beats `PADDOCK_PROFILE` in the environment,
+   * command: an individual FILE key beats `MANAGERS_PROFILE` in the environment,
    * inverting Paddock's otherwise universal env-beats-file rule.
    */
-  it("shows a file key beating PADDOCK_PROFILE, and an env var beating the file", () => {
+  it("shows a file key beating MANAGERS_PROFILE, and an env var beating the file", () => {
     writeConfig("claude:\n  hooks: host\n  mcpServers: own\n");
-    process.env.PADDOCK_PROFILE = "paranoid";
-    process.env.PADDOCK_CLAUDE_MCP_SERVERS = "host";
+    process.env.MANAGERS_PROFILE = "paranoid";
+    process.env.MANAGERS_CLAUDE_MCP_SERVERS = "host";
     const r = report();
 
     expect(field(r, "claude.hooks")).toMatchObject({ value: "host", source: "file" });
@@ -233,7 +233,7 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
     expect(field(r, "claude.mcpServers")).toMatchObject({
       value: "host",
       source: "env",
-      origin: "PADDOCK_CLAUDE_MCP_SERVERS",
+      origin: "MANAGERS_CLAUDE_MCP_SERVERS",
       shadowedFileValue: "own",
     });
   });
@@ -287,7 +287,7 @@ describe("resolveConfigReport: which layer supplied each value (#878)", () => {
    */
   it("does not create the data dir it reports on", async () => {
     const absent = path.join(dataDir, "never-created");
-    process.env.PADDOCK_DATA_DIR = absent;
+    process.env.MANAGERS_DATA_DIR = absent;
     expect(resolveConfigReport(loadPaddockConfig({ createDataDir: false })).dataDir).toBe(absent);
     expect(fs.existsSync(absent)).toBe(false);
     // The default is unchanged for every caller that goes on to run something.
@@ -387,11 +387,11 @@ describe("paddock config show: rendering (#878)", () => {
         profile: {
           name: "balanced",
           source: "default",
-          unrecognised: { value: "paranoyd", origin: "PADDOCK_PROFILE" },
+          unrecognised: { value: "paranoyd", origin: "MANAGERS_PROFILE" },
         },
       }),
     );
-    expect(out).toContain('PADDOCK_PROFILE names "paranoyd"');
+    expect(out).toContain('MANAGERS_PROFILE names "paranoyd"');
     expect(out).toContain("fell back to balanced");
   });
 });
@@ -491,7 +491,7 @@ describe("buildEjectPlan: what gets frozen, and what deliberately does not (#878
    * posture actually ejected.
    */
   it("writes profile: first, even when the environment chose it", () => {
-    const p = plan({ profile: { name: "yolo", source: "env", origin: "PADDOCK_PROFILE" } });
+    const p = plan({ profile: { name: "yolo", source: "env", origin: "MANAGERS_PROFILE" } });
     expect(p.profile.write).toBe(true);
     expect(p.pairs[0]).toEqual({ key: "profile", value: "yolo" });
   });
@@ -508,7 +508,7 @@ describe("buildEjectPlan: what gets frozen, and what deliberately does not (#878
       profile: {
         name: "balanced",
         source: "default",
-        unrecognised: { value: "paranoyd", origin: "PADDOCK_PROFILE" },
+        unrecognised: { value: "paranoyd", origin: "MANAGERS_PROFILE" },
       },
     });
     expect(p.pairs[0]).toEqual({ key: "profile", value: "balanced" });
@@ -577,7 +577,7 @@ describe("eject round-trip: the file resolves to what it froze (#878)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of ENV_KEYS) {
@@ -601,14 +601,14 @@ describe("eject round-trip: the file resolves to what it froze (#878)", () => {
 
   for (const profile of ["paranoid", "balanced", "yolo"] as const) {
     it(`preserves every effective value under ${profile}`, () => {
-      process.env.PADDOCK_PROFILE = profile;
+      process.env.MANAGERS_PROFILE = profile;
       const before = values(report());
       eject();
 
       // Drop the variable that chose the posture: the file must now stand on
       // its own. This is what the `profile:` line and the explicit posture keys
       // are FOR, and nothing else in the suite would notice if it regressed.
-      delete process.env.PADDOCK_PROFILE;
+      delete process.env.MANAGERS_PROFILE;
       const after = report();
       expect(values(after)).toEqual(before);
       expect(after.profile).toMatchObject({ name: profile, source: "file" });
@@ -654,21 +654,21 @@ describe("eject round-trip: the file resolves to what it froze (#878)", () => {
    * naive round-trip check, and only diverge once the variable went away.
    */
   it("leaves an env-supplied value out of the file, without changing what resolves", () => {
-    process.env.PADDOCK_BRAND_NAME = "QA Rig";
+    process.env.MANAGERS_BRAND_NAME = "QA Rig";
     const before = values(report());
     eject();
     expect(fs.readFileSync(configPath(), "utf8")).not.toContain("QA Rig");
     expect(values(report())).toEqual(before);
 
     // And with the variable gone, the file does NOT assert the env's value.
-    delete process.env.PADDOCK_BRAND_NAME;
+    delete process.env.MANAGERS_BRAND_NAME;
     expect(report().fields.find((f) => f.key === "brand.name")?.value).toBe("Paddock");
   });
 
   it("writes an env-supplied value when asked, and then it survives the variable", () => {
-    process.env.PADDOCK_BRAND_NAME = "QA Rig";
+    process.env.MANAGERS_BRAND_NAME = "QA Rig";
     eject(true);
-    delete process.env.PADDOCK_BRAND_NAME;
+    delete process.env.MANAGERS_BRAND_NAME;
     expect(report().fields.find((f) => f.key === "brand.name")).toMatchObject({
       value: "QA Rig",
       source: "file",

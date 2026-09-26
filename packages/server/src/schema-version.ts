@@ -123,7 +123,7 @@ export function configSchemaRefusal(raw: unknown, configPath: string): string | 
     `format, but this build understands up to version ${CONFIG_SCHEMA_VERSION}. It was written ` +
     `by a NEWER paddock. Reading it with this build would silently drop every key this version ` +
     `does not know, and the next write would persist the loss. Upgrade paddock to a version that ` +
-    `understands it, or point PADDOCK_CONFIG at a config file this build wrote.`
+    `understands it, or point MANAGERS_CONFIG at a config file this build wrote.`
   );
 }
 

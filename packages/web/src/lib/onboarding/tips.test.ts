@@ -25,7 +25,7 @@ describe("TIPS", () => {
 
   // The card renders `body` as text. A stray backtick, asterisk or link would
   // show up literally rather than as formatting. Underscores are NOT checked:
-  // env var names like PADDOCK_WHISPER_ENDPOINT are the point of some TIPS.
+  // env var names like MANAGERS_WHISPER_ENDPOINT are the point of some TIPS.
   it("carries plain-text bodies, not markdown", () => {
     for (const tip of TIPS) {
       expect(tip.body, `${tip.id} body`).not.toMatch(/[`*]|\[.+\]\(.+\)/);

@@ -11,7 +11,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT auth (`PADDOCK_AUTH_MODE=jwt`). A signed token verified against the configured JWKS (`PADDOCK_AUTH_JWKS_URL`), sent as `Authorization: Bearer <token>`."
+        "description": "JWT auth (`MANAGERS_AUTH_MODE=jwt`). A signed token verified against the configured JWKS (`MANAGERS_AUTH_JWKS_URL`), sent as `Authorization: Bearer <token>`."
       }
     },
     "schemas": {}
@@ -192,7 +192,7 @@
         "tags": [
           "System"
         ],
-        "description": "Returns the models this instance offers (the built-in catalog filtered to the `PADDOCK_MODELS` / YAML `models:` allow-list; unset ⇒ the whole catalog) plus the default model and the box-wide defaults (drive mode, max spawn depth, recovery, attachments, curation) that projects fall back to when their own overrides are unset. `defaultModel` is the effective default for the offered list. Returns a JSON object with `models`, `defaultModel`, `driveModeDefault`, `maxSpawnDepthDefault`, `recoveryDefault`, `attachmentsDefault`, `curationDefault`, and `uiDefault`.",
+        "description": "Returns the models this instance offers (the built-in catalog filtered to the `MANAGERS_MODELS` / YAML `models:` allow-list; unset ⇒ the whole catalog) plus the default model and the box-wide defaults (drive mode, max spawn depth, recovery, attachments, curation) that projects fall back to when their own overrides are unset. `defaultModel` is the effective default for the offered list. Returns a JSON object with `models`, `defaultModel`, `driveModeDefault`, `maxSpawnDepthDefault`, `recoveryDefault`, `attachmentsDefault`, `curationDefault`, and `uiDefault`.",
         "responses": {
           "200": {
             "description": "Model list and inherited defaults.",
@@ -590,7 +590,7 @@
         "tags": [
           "System"
         ],
-        "description": "The banner's probe (#882). Answers 'is there anything to migrate?' without classifying anything and without reading a transcript or the host store: it readdirs each project's `.chats/` and asks whether it is non-empty. That is the right question because of the migration's postcondition — the redirect symlink is only planted if `.chats/` ends up EMPTY, so every entry has to move, including a chat that is byte-identical on both sides. (An earlier draft short-circuited on the first chat absent from the host store, which is invisible to a user who adopted their CLI history and then worked on both sides: every id exists in both places, so there are zero such chats and the banner never appeared for the exact person the feature is for.) Memoised per project on `mtimeMs:size` of `.chats/` plus the config version, so it costs one stat per project when nothing has changed and is cheap enough for every page load. `eligible` is false with a `reason` when PADDOCK_CLAUDE_TRANSCRIPTS shadows the config file (the write would be inert), when the posture profile is `paranoid` and mode is `own` (which chose isolation deliberately — the migration stays reachable from the Config screen), or when nothing is pending. **Mode alone is NOT a reason.** `host` shipped as an unconditional `already-host` refusal, which was wrong for the instance that needs the offer most: one that flipped to `host` while `.chats/` was non-empty is #708's STRANDED state — `pointChatsDirAt` declines the redirect against a non-empty real directory, so the pre-flip transcripts sit in a `.chats/` nothing can read, and the probe told exactly those users there was nothing to do (#882 §2, superseding DESIGN-transcripts-migration.md §7.2). The predicate is now the same under both modes and the distinction is the DIRECTORY: under `host`, a `.chats` SYMLINK into the host store or an EMPTY real directory is the healthy, already-migrated instance and keeps reporting `already-host`; only a NON-EMPTY REAL directory is eligible. Under `host` the run is a recovery rather than a flip — execute moves the files and skips the config write (`configWritten: false`, `restartRequired: true`), and the next boot plants the redirect. `pendingChats` counts transcripts and is contractually a LOWER BOUND; eligibility is about ENTRIES, so a `.chats/` holding only `memory/` is eligible with a count of 0. Key the banner off `eligible`, never off the count.",
+        "description": "The banner's probe (#882). Answers 'is there anything to migrate?' without classifying anything and without reading a transcript or the host store: it readdirs each project's `.chats/` and asks whether it is non-empty. That is the right question because of the migration's postcondition — the redirect symlink is only planted if `.chats/` ends up EMPTY, so every entry has to move, including a chat that is byte-identical on both sides. (An earlier draft short-circuited on the first chat absent from the host store, which is invisible to a user who adopted their CLI history and then worked on both sides: every id exists in both places, so there are zero such chats and the banner never appeared for the exact person the feature is for.) Memoised per project on `mtimeMs:size` of `.chats/` plus the config version, so it costs one stat per project when nothing has changed and is cheap enough for every page load. `eligible` is false with a `reason` when MANAGERS_CLAUDE_TRANSCRIPTS shadows the config file (the write would be inert), when the posture profile is `paranoid` and mode is `own` (which chose isolation deliberately — the migration stays reachable from the Config screen), or when nothing is pending. **Mode alone is NOT a reason.** `host` shipped as an unconditional `already-host` refusal, which was wrong for the instance that needs the offer most: one that flipped to `host` while `.chats/` was non-empty is #708's STRANDED state — `pointChatsDirAt` declines the redirect against a non-empty real directory, so the pre-flip transcripts sit in a `.chats/` nothing can read, and the probe told exactly those users there was nothing to do (#882 §2, superseding DESIGN-transcripts-migration.md §7.2). The predicate is now the same under both modes and the distinction is the DIRECTORY: under `host`, a `.chats` SYMLINK into the host store or an EMPTY real directory is the healthy, already-migrated instance and keeps reporting `already-host`; only a NON-EMPTY REAL directory is eligible. Under `host` the run is a recovery rather than a flip — execute moves the files and skips the config write (`configWritten: false`, `restartRequired: true`), and the next boot plants the redirect. `pendingChats` counts transcripts and is contractually a LOWER BOUND; eligibility is about ENTRIES, so a `.chats/` holding only `memory/` is eligible with a count of 0. Key the banner off `eligible`, never off the count.",
         "responses": {
           "200": {
             "description": "Whether a migration is available, and roughly how much.",
@@ -634,7 +634,7 @@
                     },
                     "envVar": {
                       "type": "string",
-                      "description": "The environment variable shadowing the config file. Present only with reason `env-shadowed`; always PADDOCK_CLAUDE_TRANSCRIPTS."
+                      "description": "The environment variable shadowing the config file. Present only with reason `env-shadowed`; always MANAGERS_CLAUDE_TRANSCRIPTS."
                     },
                     "pendingChats": {
                       "type": "integer",
@@ -1010,11 +1010,11 @@
             }
           },
           "400": {
-            "description": "`env_shadowed` when PADDOCK_CLAUDE_TRANSCRIPTS is set — env beats the config file, so the write would be inert and the flip would never happen. `invalid` for a malformed session id. Nothing was moved.",
+            "description": "`env_shadowed` when MANAGERS_CLAUDE_TRANSCRIPTS is set — env beats the config file, so the write would be inert and the flip would never happen. `invalid` for a malformed session id. Nothing was moved.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "`env_shadowed` when PADDOCK_CLAUDE_TRANSCRIPTS is set — env beats the config file, so the write would be inert and the flip would never happen. `invalid` for a malformed session id. Nothing was moved.",
+                  "description": "`env_shadowed` when MANAGERS_CLAUDE_TRANSCRIPTS is set — env beats the config file, so the write would be inert and the flip would never happen. `invalid` for a malformed session id. Nothing was moved.",
                   "type": "object",
                   "additionalProperties": false,
                   "required": [

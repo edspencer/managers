@@ -207,10 +207,10 @@ describe("/mcp list_chats hides archived chats", () => {
         MCP_READER: READER,
         // Hermetic: this is the only test here that opens a real socket, and the
         // browser-auth hook guards `/ws` app-wide. A dev box that exports
-        // PADDOCK_AUTH_MODE=jwt (the projects box does) would 401 the upgrade,
+        // MANAGERS_AUTH_MODE=jwt (the projects box does) would 401 the upgrade,
         // so pin the mode the way the helper already pins HOST/drive-mode. CI
         // has it unset, where `none` is the default anyway.
-        PADDOCK_AUTH_MODE: "none",
+        MANAGERS_AUTH_MODE: "none",
       },
     });
     const { port } = await listen(t.app);

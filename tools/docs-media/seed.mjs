@@ -10,17 +10,17 @@
  * only names the rig has ever seen.
  *
  * Env:
- *   PADDOCK_RIG_HOME   required — the rig scratch root (same var as serve.sh)
- *   PADDOCK_RIG_BASE   instance URL (default http://127.0.0.1:4000)
+ *   MANAGERS_RIG_HOME   required — the rig scratch root (same var as serve.sh)
+ *   MANAGERS_RIG_BASE   instance URL (default http://127.0.0.1:4000)
  *
  * Usage:  node seed.mjs [--base http://127.0.0.1:PORT]
  */
 import { mkdirSync, writeFileSync, utimesSync as fsUtimes } from "node:fs";
 import path from "node:path";
 
-const RIG = process.env.PADDOCK_RIG_HOME;
+const RIG = process.env.MANAGERS_RIG_HOME;
 if (!RIG) {
-  console.error("set PADDOCK_RIG_HOME (the rig scratch root — the same value serve.sh uses)");
+  console.error("set MANAGERS_RIG_HOME (the rig scratch root — the same value serve.sh uses)");
   process.exit(1);
 }
 
@@ -28,7 +28,7 @@ const argBase = process.argv.indexOf("--base");
 // Default matches capture.mjs. The two files disagreeing on a default port is
 // itself a bug, so they are kept identical here deliberately.
 const BASE =
-  argBase > -1 ? process.argv[argBase + 1] : process.env.PADDOCK_RIG_BASE || "http://127.0.0.1:4000";
+  argBase > -1 ? process.argv[argBase + 1] : process.env.MANAGERS_RIG_BASE || "http://127.0.0.1:4000";
 const API = `${BASE}/api`;
 
 // --- guard: refuse to seed anything that is not the rig ---------------------

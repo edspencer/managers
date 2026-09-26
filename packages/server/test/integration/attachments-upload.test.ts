@@ -5,7 +5,7 @@
  *   - server-authoritative validation: disabled (403), too-large (413),
  *     disallowed type (415), too-many (413), unknown project (404).
  *
- * Config is driven by PADDOCK_ATTACHMENTS_* env set BEFORE startTestApp (it lands
+ * Config is driven by MANAGERS_ATTACHMENTS_* env set BEFORE startTestApp (it lands
  * in cfg.attachments, the instance default the endpoint resolves against).
  */
 import { describe, it, expect, afterEach } from "vitest";
@@ -13,19 +13,19 @@ import { startTestApp, type TestApp } from "../helpers/app.js";
 
 let app: TestApp | null = null;
 const SAVED = {
-  enabled: process.env.PADDOCK_ATTACHMENTS_ENABLED,
-  size: process.env.PADDOCK_ATTACHMENTS_MAX_FILE_SIZE_MB,
-  count: process.env.PADDOCK_ATTACHMENTS_MAX_FILES_PER_MESSAGE,
-  types: process.env.PADDOCK_ATTACHMENTS_ALLOWED_TYPES,
+  enabled: process.env.MANAGERS_ATTACHMENTS_ENABLED,
+  size: process.env.MANAGERS_ATTACHMENTS_MAX_FILE_SIZE_MB,
+  count: process.env.MANAGERS_ATTACHMENTS_MAX_FILES_PER_MESSAGE,
+  types: process.env.MANAGERS_ATTACHMENTS_ALLOWED_TYPES,
 };
 
 afterEach(async () => {
   await app?.teardown();
   app = null;
-  restore("PADDOCK_ATTACHMENTS_ENABLED", SAVED.enabled);
-  restore("PADDOCK_ATTACHMENTS_MAX_FILE_SIZE_MB", SAVED.size);
-  restore("PADDOCK_ATTACHMENTS_MAX_FILES_PER_MESSAGE", SAVED.count);
-  restore("PADDOCK_ATTACHMENTS_ALLOWED_TYPES", SAVED.types);
+  restore("MANAGERS_ATTACHMENTS_ENABLED", SAVED.enabled);
+  restore("MANAGERS_ATTACHMENTS_MAX_FILE_SIZE_MB", SAVED.size);
+  restore("MANAGERS_ATTACHMENTS_MAX_FILES_PER_MESSAGE", SAVED.count);
+  restore("MANAGERS_ATTACHMENTS_ALLOWED_TYPES", SAVED.types);
 });
 
 function restore(key: string, val: string | undefined) {
@@ -112,7 +112,7 @@ describe("attachment upload — happy path (default allow-all)", () => {
 
 describe("attachment upload — server-authoritative validation", () => {
   it("403s when attachments are disabled", async () => {
-    process.env.PADDOCK_ATTACHMENTS_ENABLED = "false";
+    process.env.MANAGERS_ATTACHMENTS_ENABLED = "false";
     app = await startTestApp();
     const slug = await makeProject(app);
     const body = multipart([
@@ -123,7 +123,7 @@ describe("attachment upload — server-authoritative validation", () => {
   });
 
   it("413s a file over the configured size cap", async () => {
-    process.env.PADDOCK_ATTACHMENTS_MAX_FILE_SIZE_MB = "1";
+    process.env.MANAGERS_ATTACHMENTS_MAX_FILE_SIZE_MB = "1";
     app = await startTestApp();
     const slug = await makeProject(app);
     const big = Buffer.alloc(2 * 1024 * 1024, 0x61); // 2 MB > 1 MB cap
@@ -133,7 +133,7 @@ describe("attachment upload — server-authoritative validation", () => {
   });
 
   it("415s a disallowed file type (allow-list of images only)", async () => {
-    process.env.PADDOCK_ATTACHMENTS_ALLOWED_TYPES = "image/*";
+    process.env.MANAGERS_ATTACHMENTS_ALLOWED_TYPES = "image/*";
     app = await startTestApp();
     const slug = await makeProject(app);
     const body = multipart([
@@ -145,7 +145,7 @@ describe("attachment upload — server-authoritative validation", () => {
 
   it("allows an empty-MIME extension match under a mixed allow-list", async () => {
     // A .md file arrives with a generic/empty MIME; the extension entry saves it.
-    process.env.PADDOCK_ATTACHMENTS_ALLOWED_TYPES = "image/*,.md";
+    process.env.MANAGERS_ATTACHMENTS_ALLOWED_TYPES = "image/*,.md";
     app = await startTestApp();
     const slug = await makeProject(app);
     const body = multipart([
@@ -157,7 +157,7 @@ describe("attachment upload — server-authoritative validation", () => {
   });
 
   it("413s when more than the per-message file count is posted", async () => {
-    process.env.PADDOCK_ATTACHMENTS_MAX_FILES_PER_MESSAGE = "2";
+    process.env.MANAGERS_ATTACHMENTS_MAX_FILES_PER_MESSAGE = "2";
     app = await startTestApp();
     const slug = await makeProject(app);
     const body = multipart([

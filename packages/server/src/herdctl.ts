@@ -574,7 +574,7 @@ export class HerdctlService {
       configPath: this.cfg.herdctlConfigPath,
       stateDir: this.cfg.stateDir,
       // Per-deployment gate for programmatic schedule mutation (issue #265 / DD-7,
-      // herdctl#376). OFF by default: an instance opts in (PADDOCK_SCHEDULE_MUTATION)
+      // herdctl#376). OFF by default: an instance opts in (MANAGERS_SCHEDULE_MUTATION)
       // before herdctl's runtime schedule-mutation APIs can add or remove a
       // schedule at runtime. Declaring schedules in project.yaml is unaffected.
       allowScheduleMutation: this.cfg.scheduleMutationEnabled,

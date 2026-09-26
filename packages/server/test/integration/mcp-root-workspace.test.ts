@@ -78,7 +78,7 @@ describe("integration: /mcp reaches the root workspace (#560)", () => {
           clients: { reader: { auth: { ref: "env:MCP_READER" } } },
         },
       },
-      env: { MCP_READER: READER, PADDOCK_AUTH_MODE: "none" },
+      env: { MCP_READER: READER, MANAGERS_AUTH_MODE: "none" },
     });
     await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "Alpha" } });
     const { port } = await listen(t.app);

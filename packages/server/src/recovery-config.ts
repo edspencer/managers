@@ -25,7 +25,7 @@
  *     module only defines + resolves the flag so the config surface exists.
  *
  * ── Config discipline (the `driveMode`/`maxSpawnDepth` pattern) ───────────────
- * Every field is an instance default (`PADDOCK_RECOVERY_*` env, YAML instance
+ * Every field is an instance default (`MANAGERS_RECOVERY_*` env, YAML instance
  * file beneath it) with an optional PER-PROJECT override (`project.yaml` →
  * {@link import("./projects.js").ProjectYaml.recovery}). An absent/invalid
  * override inherits the instance default, resolved at dispatch by
@@ -45,27 +45,27 @@ export interface RecoveryConfig {
    * Layer 2 — render the killed/stopped `<task-notification>` as a distinct
    * "keeper is idle" affordance with a one-click Continue button, instead of
    * silently hiding it. Default ON (pure visibility + a manual button is
-   * low-risk). Env `PADDOCK_RECOVERY_SURFACE`.
+   * low-risk). Env `MANAGERS_RECOVERY_SURFACE`.
    */
   surfaceKilledTask: boolean;
   /**
    * Layer 3 — automatically re-drive a keeper whose background task was killed at
    * the turn boundary (detect + inject a nudge so it wakes on its own). Default
    * OFF (auto-acts and costs a turn/tokens → opt-in). Env
-   * `PADDOCK_RECOVERY_AUTODRIVE`. NOTE: this chat only plumbs the flag; the
+   * `MANAGERS_RECOVERY_AUTODRIVE`. NOTE: this chat only plumbs the flag; the
    * detection/inject engine lands in a follow-up.
    */
   autoReDrive: boolean;
   /**
    * Layer 3 guard — minimum ms of quiet after a killed-task notification before
    * the auto re-drive fires, so a genuinely-finishing keeper isn't poked. Default
-   * 5000. Env `PADDOCK_RECOVERY_DEBOUNCE_MS`.
+   * 5000. Env `MANAGERS_RECOVERY_DEBOUNCE_MS`.
    */
   debounceMs: number;
   /**
    * Layer 3 guard — how many times a single hung session may be auto re-driven
    * before giving up, so a wedged keeper isn't poked in a loop. Default 1. Env
-   * `PADDOCK_RECOVERY_MAX_RETRIES`.
+   * `MANAGERS_RECOVERY_MAX_RETRIES`.
    */
   maxRetries: number;
 }

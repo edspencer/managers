@@ -5,9 +5,9 @@
  * Fastify `schema` ({ tags, summary, description, params, querystring, body,
  * response }) and `@fastify/swagger` (registered in app.ts before the routes)
  * collects them into a live OpenAPI 3 document. When enabled
- * (`PADDOCK_OPENAPI_ENABLED`) it is served at `/open-api` (Swagger UI) with the
+ * (`MANAGERS_OPENAPI_ENABLED`) it is served at `/open-api` (Swagger UI) with the
  * raw spec at `/open-api/json` plus the `/open-api.json` alias; the prefix is
- * configurable via `PADDOCK_OPENAPI_PATH`. This module only provides the
+ * configurable via `MANAGERS_OPENAPI_PATH`. This module only provides the
  * top-level document metadata (info, tags, security) that Fastify can't infer
  * from routes, plus the Paddock-branded Swagger-UI mount options.
  *
@@ -93,9 +93,9 @@ function authDoc(auth: AuthConfig): {
           in: "header",
           name: auth.userHeader,
           description:
-            `Trusted-header auth (\`PADDOCK_AUTH_MODE=trusted-header\`). The identity header your ` +
+            `Trusted-header auth (\`MANAGERS_AUTH_MODE=trusted-header\`). The identity header your ` +
             `reverse proxy injects after SSO — here \`${auth.userHeader}\` ` +
-            `(configurable via \`PADDOCK_AUTH_USER_HEADER\`). In production the proxy sets this and ` +
+            `(configurable via \`MANAGERS_AUTH_USER_HEADER\`). In production the proxy sets this and ` +
             `Paddock trusts it, so the app MUST be reachable only through the proxy (a direct client ` +
             `could otherwise forge the header).`,
         },
@@ -117,8 +117,8 @@ function authDoc(auth: AuthConfig): {
             scheme: "bearer",
             bearerFormat: "JWT",
             description:
-              "JWT auth (`PADDOCK_AUTH_MODE=jwt`). A signed token verified against the configured " +
-              "JWKS (`PADDOCK_AUTH_JWKS_URL`), sent as `Authorization: Bearer <token>`.",
+              "JWT auth (`MANAGERS_AUTH_MODE=jwt`). A signed token verified against the configured " +
+              "JWKS (`MANAGERS_AUTH_JWKS_URL`), sent as `Authorization: Bearer <token>`.",
           },
         }
       : {
@@ -127,7 +127,7 @@ function authDoc(auth: AuthConfig): {
             in: "header",
             name: auth.jwtHeader,
             description:
-              `JWT auth (\`PADDOCK_AUTH_MODE=jwt\`). A signed token verified against the JWKS, sent ` +
+              `JWT auth (\`MANAGERS_AUTH_MODE=jwt\`). A signed token verified against the JWKS, sent ` +
               `in the \`${auth.jwtHeader}\` header.`,
           },
         };

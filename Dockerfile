@@ -66,7 +66,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=7233 \
     HOST=0.0.0.0 \
-    PADDOCK_DATA_DIR=/data \
+    MANAGERS_DATA_DIR=/data \
     HOME=/data
 
 # System deps + GitHub CLI + the Claude CLI (the CLI runtime's PATH binary; the
@@ -97,12 +97,12 @@ RUN npm ci --omit=dev
 COPY LICENSE ./
 
 # Built artifacts. The server resolves the SPA at ../../web/dist relative to
-# packages/server/dist, so this layout needs no PADDOCK_WEB_DIST override.
+# packages/server/dist, so this layout needs no MANAGERS_WEB_DIST override.
 COPY --from=build /app/packages/server/dist packages/server/dist
 COPY --from=build /app/packages/web/dist packages/web/dist
 
 # Configure git auth from GITHUB_TOKEN (if provided) then exec the server.
-RUN printf '#!/bin/sh\nif [ -n "$GITHUB_TOKEN" ]; then\n  git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"\nfi\nmkdir -p "$PADDOCK_DATA_DIR"\nexec "$@"\n' > /usr/local/bin/docker-entrypoint.sh \
+RUN printf '#!/bin/sh\nif [ -n "$GITHUB_TOKEN" ]; then\n  git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"\nfi\nmkdir -p "$MANAGERS_DATA_DIR"\nexec "$@"\n' > /usr/local/bin/docker-entrypoint.sh \
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 VOLUME ["/data"]
@@ -152,9 +152,9 @@ CMD ["node", "packages/server/dist/index.js"]
 # boundary; #435 handled the source default + open-network guard).
 FROM base AS devbox
 
-# Browser tools attach out of the box (issue #269): PADDOCK_BROWSER_MCP=1 makes
+# Browser tools attach out of the box (issue #269): MANAGERS_BROWSER_MCP=1 makes
 # browserMcpServers() launch the Playwright MCP server we install below.
-ENV PADDOCK_BROWSER_MCP=1
+ENV MANAGERS_BROWSER_MCP=1
 
 # ffmpeg (media work) + the Docker CLI. Ship the *client* only — no daemon, no
 # privilege baked in; the deploy recipe decides socket-mount (docker-outside-of-

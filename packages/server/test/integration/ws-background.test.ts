@@ -29,7 +29,7 @@ describe("integration: WS background-work signal (#604)", () => {
     t = await startTestApp({
       script: { "[[BGTASK]] go": "Kicked off some background work." },
       sweepIntervalMs: 600_000,
-      env: { PADDOCK_FAKE_BGTASK_MS: "1500" },
+      env: { MANAGERS_FAKE_BGTASK_MS: "1500" },
     });
     ({ port } = await listen(t.app));
   });

@@ -7,10 +7,10 @@
  * + HOME, with the fake `claude` first on PATH so NO Anthropic calls happen.
  * Playwright's `webServer` runs this and waits for the port.
  *
- * Live mode: set PADDOCK_TEST_LIVE=1 to use the REAL claude + the Max OAuth
+ * Live mode: set MANAGERS_TEST_LIVE=1 to use the REAL claude + the Max OAuth
  * token (CLAUDE_CODE_OAUTH_TOKEN). Default is the fake. Do NOT run live in CI.
  *
- * The temp dir path is written to PADDOCK_E2E_TMP (passed by the config) so the
+ * The temp dir path is written to MANAGERS_E2E_TMP (passed by the config) so the
  * harness can clean it up; if absent we create one under the OS temp root.
  */
 import { spawn, execFileSync } from "node:child_process";
@@ -25,10 +25,10 @@ const fakeBin = path.join(repoRoot, "test", "bin");
 const serverEntry = path.join(repoRoot, "packages", "server", "dist", "index.js");
 const webDist = path.join(repoRoot, "packages", "web", "dist");
 
-const live = process.env.PADDOCK_TEST_LIVE === "1";
-const port = process.env.PADDOCK_E2E_PORT || "4317";
+const live = process.env.MANAGERS_TEST_LIVE === "1";
+const port = process.env.MANAGERS_E2E_PORT || "4317";
 
-const tmp = process.env.PADDOCK_E2E_TMP || mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-"));
+const tmp = process.env.MANAGERS_E2E_TMP || mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-"));
 const home = path.join(tmp, "home");
 const dataDir = path.join(tmp, "data");
 const projectsDir = path.join(dataDir, "projects");
@@ -37,9 +37,9 @@ mkdirSync(projectsDir, { recursive: true });
 
 // ── Additive harness extensions (for journey-*.spec.ts seeding) ─────────────
 // Optionally make the projects root a git repo so the Changes/git UI lights up.
-// Gated by PADDOCK_E2E_GIT=1 so the default server keeps its non-repo behavior
+// Gated by MANAGERS_E2E_GIT=1 so the default server keeps its non-repo behavior
 // (the comprehensive suite runs a second, git-enabled Playwright project).
-if (process.env.PADDOCK_E2E_GIT === "1") {
+if (process.env.MANAGERS_E2E_GIT === "1") {
   const gitEnv = {
     ...process.env,
     GIT_AUTHOR_NAME: "E2E",
@@ -59,7 +59,7 @@ if (process.env.PADDOCK_E2E_GIT === "1") {
 // Expose the CANONICAL (realpath-resolved) data/projects paths so specs can seed
 // state on disk (projects, files, git changes). The server canonicalizes these
 // paths internally (macOS /var -> /private/var), so specs must use the resolved
-// form to write where the server reads. Written once at boot to PADDOCK_E2E_TMP.
+// form to write where the server reads. Written once at boot to MANAGERS_E2E_TMP.
 try {
   const real = (p) => {
     try {
@@ -76,8 +76,8 @@ try {
         dataDir: real(dataDir),
         projectsDir: real(projectsDir),
         home: real(home),
-        git: process.env.PADDOCK_E2E_GIT === "1",
-        githubConfigured: !!process.env.PADDOCK_GITHUB_CLIENT_ID,
+        git: process.env.MANAGERS_E2E_GIT === "1",
+        githubConfigured: !!process.env.MANAGERS_GITHUB_CLIENT_ID,
       },
       null,
       2,
@@ -92,9 +92,9 @@ const env = {
   HOME: home,
   PORT: port,
   HOST: "127.0.0.1",
-  PADDOCK_DATA_DIR: dataDir,
-  PADDOCK_PROJECTS_DIR: projectsDir,
-  PADDOCK_WEB_DIST: webDist,
+  MANAGERS_DATA_DIR: dataDir,
+  MANAGERS_PROJECTS_DIR: projectsDir,
+  MANAGERS_WEB_DIST: webDist,
   LOG_LEVEL: process.env.LOG_LEVEL || "warn",
 };
 delete env.CLAUDE_CONFIG_DIR; // use paddock's own <dataDir>/claude-home (#691)
@@ -104,13 +104,13 @@ delete env.CLAUDE_CONFIG_DIR; // use paddock's own <dataDir>/claude-home (#691)
 delete env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
 // Same for the two levers #691 step 4 added: the E2E instance should run on the
 // shipped defaults, not on whatever a dev box happens to export.
-delete env.PADDOCK_CLAUDE_INSTRUCTIONS;
-delete env.PADDOCK_CLAUDE_HOOKS;
+delete env.MANAGERS_CLAUDE_INSTRUCTIONS;
+delete env.MANAGERS_CLAUDE_HOOKS;
 
 if (live) {
   // Live: keep the real claude on PATH, require the Max token.
   if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
-    console.error("PADDOCK_TEST_LIVE=1 but CLAUDE_CODE_OAUTH_TOKEN is not set");
+    console.error("MANAGERS_TEST_LIVE=1 but CLAUDE_CODE_OAUTH_TOKEN is not set");
     process.exit(1);
   }
   // In live mode we deliberately use the real ~/.claude (not the temp home) so
@@ -123,9 +123,9 @@ if (live) {
   // runtime. The built-in default drive mode is now `session` (#316), which
   // would route turns through openChatSession → the SDK runtime (needs a real
   // login → no streamed reply → the chat E2E journeys time out). Pin `batch`
-  // explicitly (also overriding any leaked PADDOCK_DRIVE_MODE from the
+  // explicitly (also overriding any leaked MANAGERS_DRIVE_MODE from the
   // host env). Live mode (real claude) leaves the default in place.
-  env.PADDOCK_DRIVE_MODE = "batch";
+  env.MANAGERS_DRIVE_MODE = "batch";
 }
 
 const child = spawn("node", [serverEntry], { env, stdio: "inherit" });

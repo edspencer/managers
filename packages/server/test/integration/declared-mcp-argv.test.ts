@@ -72,12 +72,12 @@ describe("integration: what a declared MCP server puts in the spawned argv (#691
     // the fake `claude`), which is exactly the runtime this test is about.
     t = await startTestApp({
       script: { "Hello there": "Hi!" },
-      env: { PADDOCK_FAKE_INVOCATION_LOG: logPath, PADDOCK_TEST_NOTION_TOKEN: SECRET },
+      env: { MANAGERS_FAKE_INVOCATION_LOG: logPath, MANAGERS_TEST_NOTION_TOKEN: SECRET },
       configFile: {
         mcpServers: {
           notion: {
             command: "npx-not-real",
-            env: { NOTION_TOKEN: "env:PADDOCK_TEST_NOTION_TOKEN" },
+            env: { NOTION_TOKEN: "env:MANAGERS_TEST_NOTION_TOKEN" },
           },
         },
       },

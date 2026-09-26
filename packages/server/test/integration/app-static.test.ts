@@ -47,15 +47,15 @@ async function boot(opts: {
   const saved: Record<string, string | undefined> = {
     HOME: process.env.HOME,
     PATH: process.env.PATH,
-    PADDOCK_DATA_DIR: process.env.PADDOCK_DATA_DIR,
-    PADDOCK_PROJECTS_DIR: process.env.PADDOCK_PROJECTS_DIR,
-    PADDOCK_WEB_DIST: process.env.PADDOCK_WEB_DIST,
+    MANAGERS_DATA_DIR: process.env.MANAGERS_DATA_DIR,
+    MANAGERS_PROJECTS_DIR: process.env.MANAGERS_PROJECTS_DIR,
+    MANAGERS_WEB_DIST: process.env.MANAGERS_WEB_DIST,
     CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
     LOG_LEVEL: process.env.LOG_LEVEL,
-    PADDOCK_FAKE_SCRIPT: process.env.PADDOCK_FAKE_SCRIPT,
-    PADDOCK_BRAND_NAME: process.env.PADDOCK_BRAND_NAME,
-    PADDOCK_BRAND_LOGO: process.env.PADDOCK_BRAND_LOGO,
-    PADDOCK_BRAND_ACCENT: process.env.PADDOCK_BRAND_ACCENT,
+    MANAGERS_FAKE_SCRIPT: process.env.MANAGERS_FAKE_SCRIPT,
+    MANAGERS_BRAND_NAME: process.env.MANAGERS_BRAND_NAME,
+    MANAGERS_BRAND_LOGO: process.env.MANAGERS_BRAND_LOGO,
+    MANAGERS_BRAND_ACCENT: process.env.MANAGERS_BRAND_ACCENT,
     HOST: process.env.HOST,
   };
   process.env.HOME = home;
@@ -63,19 +63,19 @@ async function boot(opts: {
   // under a dev box's ambient HOST=0.0.0.0 + auth=none (CI leaves HOST unset).
   process.env.HOST = "127.0.0.1";
   delete process.env.CLAUDE_CONFIG_DIR;
-  delete process.env.PADDOCK_FAKE_SCRIPT;
+  delete process.env.MANAGERS_FAKE_SCRIPT;
   process.env.PATH = `${FAKE_BIN}${path.delimiter}${process.env.PATH ?? ""}`;
-  process.env.PADDOCK_DATA_DIR = dataDir;
-  process.env.PADDOCK_PROJECTS_DIR = projectsRoot;
-  process.env.PADDOCK_WEB_DIST = opts.withDist ? webDist : path.join(tmp, "no-such-dist");
+  process.env.MANAGERS_DATA_DIR = dataDir;
+  process.env.MANAGERS_PROJECTS_DIR = projectsRoot;
+  process.env.MANAGERS_WEB_DIST = opts.withDist ? webDist : path.join(tmp, "no-such-dist");
   process.env.LOG_LEVEL = "silent";
   // Branding env (issue #34) — set or clear per test.
-  for (const k of ["PADDOCK_BRAND_NAME", "PADDOCK_BRAND_LOGO", "PADDOCK_BRAND_ACCENT"]) {
+  for (const k of ["MANAGERS_BRAND_NAME", "MANAGERS_BRAND_LOGO", "MANAGERS_BRAND_ACCENT"]) {
     delete process.env[k];
   }
-  if (opts.brand?.name) process.env.PADDOCK_BRAND_NAME = opts.brand.name;
-  if (opts.brand?.logo) process.env.PADDOCK_BRAND_LOGO = opts.brand.logo;
-  if (opts.brand?.accent) process.env.PADDOCK_BRAND_ACCENT = opts.brand.accent;
+  if (opts.brand?.name) process.env.MANAGERS_BRAND_NAME = opts.brand.name;
+  if (opts.brand?.logo) process.env.MANAGERS_BRAND_LOGO = opts.brand.logo;
+  if (opts.brand?.accent) process.env.MANAGERS_BRAND_ACCENT = opts.brand.accent;
 
   const built = await buildApp({ serveStatic: true });
   await built.app.ready();
@@ -106,14 +106,14 @@ describe("integration: app.ts static-SPA serving", () => {
     expect(root.statusCode).toBe(200);
     expect(root.body).toContain("paddock SPA");
     // Default branding: the config global is injected but no accent override.
-    expect(root.body).toContain("window.__PADDOCK_CONFIG__=");
+    expect(root.body).toContain("window.__MANAGERS_CONFIG__=");
     expect(root.body).not.toContain("<style>");
 
     // A client-side route (non-/api, non-/ws GET) falls back to index.html.
     const spaRoute = await h.built.app.inject({ method: "GET", url: "/projects/anything" });
     expect(spaRoute.statusCode).toBe(200);
     expect(spaRoute.body).toContain("paddock SPA");
-    expect(spaRoute.body).toContain("window.__PADDOCK_CONFIG__=");
+    expect(spaRoute.body).toContain("window.__MANAGERS_CONFIG__=");
 
     // The API still works (and an unknown /api path is a JSON 404, not the SPA).
     const api = await h.built.app.inject({ method: "GET", url: "/api/health" });

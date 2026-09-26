@@ -197,7 +197,7 @@ export type DriveMode = (typeof DRIVE_MODES)[number];
  * Default drive mode. `session` (#316): a fresh/un-configured instance
  * gets cross-turn autonomy (`ScheduleWakeup`, `/loop`, reaper-backed background
  * work) and the SDK streaming runtime by default, instead of only when an
- * operator sets `PADDOCK_DRIVE_MODE=session`. The env var and per-project
+ * operator sets `MANAGERS_DRIVE_MODE=session`. The env var and per-project
  * `driveMode` override still take precedence; this only moves the built-in
  * default off the legacy one-shot `batch` path.
  */

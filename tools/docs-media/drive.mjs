@@ -5,25 +5,25 @@
  * seed.mjs creates projects and adoptable transcripts; it cannot create CHATS,
  * because a chat is the product of a turn. This runs those turns through the
  * fake `claude` on the rig's PATH, so it costs nothing and is deterministic:
- * replies come from $PADDOCK_FAKE_SCRIPT (a prompt -> reply JSON map), which is
+ * replies come from $MANAGERS_FAKE_SCRIPT (a prompt -> reply JSON map), which is
  * how the on-camera text is authored rather than improvised.
  *
  * Env:
- *   PADDOCK_RIG_HOME   required — same var as serve.sh (identity guard)
- *   PADDOCK_RIG_BASE   instance URL (default http://127.0.0.1:4000)
+ *   MANAGERS_RIG_HOME   required — same var as serve.sh (identity guard)
+ *   MANAGERS_RIG_BASE   instance URL (default http://127.0.0.1:4000)
  *
  * Usage:  node drive.mjs [--base http://127.0.0.1:PORT]
  */
 import WebSocket from "ws";
 
-const RIG = process.env.PADDOCK_RIG_HOME;
+const RIG = process.env.MANAGERS_RIG_HOME;
 if (!RIG) {
-  console.error("set PADDOCK_RIG_HOME (the rig scratch root — the same value serve.sh uses)");
+  console.error("set MANAGERS_RIG_HOME (the rig scratch root — the same value serve.sh uses)");
   process.exit(1);
 }
 const argBase = process.argv.indexOf("--base");
 const BASE =
-  argBase > -1 ? process.argv[argBase + 1] : process.env.PADDOCK_RIG_BASE || "http://127.0.0.1:4000";
+  argBase > -1 ? process.argv[argBase + 1] : process.env.MANAGERS_RIG_BASE || "http://127.0.0.1:4000";
 const API = `${BASE}/api`;
 const WS = BASE.replace(/^http/, "ws") + "/ws";
 

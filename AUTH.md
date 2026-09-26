@@ -9,11 +9,11 @@ There is one exception, covered at the end of this document: the **Management
 API** at `/mcp` authenticates itself with its own credentials, independent of
 everything below.
 
-The auth layer is **provider-agnostic** — driven entirely by `PADDOCK_AUTH_*`
+The auth layer is **provider-agnostic** — driven entirely by `MANAGERS_AUTH_*`
 environment variables — so it is not tied to any single proxy or IdP. It works
 with Authentik, oauth2-proxy, Authelia, Cloudflare Access, Keycloak, and others.
 
-All of it is **optional**. The default (`PADDOCK_AUTH_MODE=none`) is fully open.
+All of it is **optional**. The default (`MANAGERS_AUTH_MODE=none`) is fully open.
 
 ---
 
@@ -62,7 +62,7 @@ this machine". You need to read the rest of this file when you put Paddock somew
 other people can reach.
 
 The bind host defaults to **`127.0.0.1`** (loopback only), and if
-you bind a non-loopback host (e.g. `0.0.0.0`) while `PADDOCK_AUTH_MODE=none`,
+you bind a non-loopback host (e.g. `0.0.0.0`) while `MANAGERS_AUTH_MODE=none`,
 startup **fails closed** with a clear message — the same fail-closed posture as
 `jwt` mode without a JWKS URL. To bind a routable interface, do one of:
 
@@ -70,7 +70,7 @@ startup **fails closed** with a clear message — the same fail-closed posture a
   flag needed;
 - keep the bind on loopback and reach Paddock via a proxy/sidecar on the same host;
 - or, **only if you truly intend an open, unauthenticated server**, set
-  `PADDOCK_DANGEROUSLY_ALLOW_OPEN=1` — it boots but logs a loud warning.
+  `MANAGERS_DANGEROUSLY_ALLOW_OPEN=1` — it boots but logs a loud warning.
 
 (Inside a container the network namespace is the boundary and Docker can't reach
 `127.0.0.1` in the container, so the image binds `0.0.0.0` and the deploy recipe
@@ -82,22 +82,22 @@ carries the safe host-side publish — see the Securing guide.)
 
 | Variable | Mode | Default | Purpose |
 |----------|------|---------|---------|
-| `PADDOCK_AUTH_MODE` | all | `none` | `none` \| `trusted-header` \| `jwt` |
-| `PADDOCK_AUTH_USER_HEADER` | trusted-header | `X-Forwarded-User` | Header carrying the username (required in this mode) |
-| `PADDOCK_AUTH_EMAIL_HEADER` | trusted-header | — | Optional header carrying the email |
-| `PADDOCK_AUTH_GROUPS_HEADER` | trusted-header (also jwt override) | — | Optional header carrying groups (comma/space-split) |
-| `PADDOCK_AUTH_JWT_HEADER` | jwt | `Authorization` | Header carrying the JWT. If `Authorization`, a leading `Bearer ` is stripped |
-| `PADDOCK_AUTH_JWKS_URL` | jwt | — | **Required in jwt mode.** The IdP's JWKS endpoint |
-| `PADDOCK_AUTH_JWT_ISSUER` | jwt | — | Optional; validate the `iss` claim |
-| `PADDOCK_AUTH_JWT_AUDIENCE` | jwt | — | Optional; validate the `aud` claim |
-| `PADDOCK_AUTH_USERNAME_CLAIM` | jwt | — | Claim to read the username from. Default tries `preferred_username` → `email` → `sub` |
-| `PADDOCK_AUTH_GROUPS_CLAIM` | jwt | `groups` | Claim to read group membership from |
+| `MANAGERS_AUTH_MODE` | all | `none` | `none` \| `trusted-header` \| `jwt` |
+| `MANAGERS_AUTH_USER_HEADER` | trusted-header | `X-Forwarded-User` | Header carrying the username (required in this mode) |
+| `MANAGERS_AUTH_EMAIL_HEADER` | trusted-header | — | Optional header carrying the email |
+| `MANAGERS_AUTH_GROUPS_HEADER` | trusted-header (also jwt override) | — | Optional header carrying groups (comma/space-split) |
+| `MANAGERS_AUTH_JWT_HEADER` | jwt | `Authorization` | Header carrying the JWT. If `Authorization`, a leading `Bearer ` is stripped |
+| `MANAGERS_AUTH_JWKS_URL` | jwt | — | **Required in jwt mode.** The IdP's JWKS endpoint |
+| `MANAGERS_AUTH_JWT_ISSUER` | jwt | — | Optional; validate the `iss` claim |
+| `MANAGERS_AUTH_JWT_AUDIENCE` | jwt | — | Optional; validate the `aud` claim |
+| `MANAGERS_AUTH_USERNAME_CLAIM` | jwt | — | Claim to read the username from. Default tries `preferred_username` → `email` → `sub` |
+| `MANAGERS_AUTH_GROUPS_CLAIM` | jwt | `groups` | Claim to read group membership from |
 
 In `jwt` mode, Paddock validates `iss`/`aud` only when you set them, and always
 validates the signature and expiry (`exp`). Supported signature algorithms are
 the asymmetric ones JWKS publishes (RS256, ES256, etc.).
 
-If `PADDOCK_AUTH_MODE=jwt` is set **without** `PADDOCK_AUTH_JWKS_URL`, Paddock
+If `MANAGERS_AUTH_MODE=jwt` is set **without** `MANAGERS_AUTH_JWKS_URL`, Paddock
 **refuses to start** (fails closed, loudly) rather than booting an
 auth-misconfigured server.
 
@@ -129,12 +129,12 @@ header. Each Authentik *application* exposes its own JWKS at
 `https://<authentik-host>/application/o/<app-slug>/jwks/`.
 
 ```bash
-PADDOCK_AUTH_MODE=jwt
-PADDOCK_AUTH_JWT_HEADER=X-authentik-jwt
-PADDOCK_AUTH_JWKS_URL=https://sso.example.com/application/o/<app-slug>/jwks/
+MANAGERS_AUTH_MODE=jwt
+MANAGERS_AUTH_JWT_HEADER=X-authentik-jwt
+MANAGERS_AUTH_JWKS_URL=https://sso.example.com/application/o/<app-slug>/jwks/
 # optional hardening:
-# PADDOCK_AUTH_JWT_ISSUER=https://sso.example.com/application/o/<app-slug>/
-# PADDOCK_AUTH_JWT_AUDIENCE=<client-id>
+# MANAGERS_AUTH_JWT_ISSUER=https://sso.example.com/application/o/<app-slug>/
+# MANAGERS_AUTH_JWT_AUDIENCE=<client-id>
 ```
 
 Username maps from `preferred_username` by default; groups from `groups`.
@@ -149,10 +149,10 @@ oauth2-proxy sets `X-Forwarded-User` / `X-Forwarded-Email` (enable
 reachable through oauth2-proxy.
 
 ```bash
-PADDOCK_AUTH_MODE=trusted-header
-PADDOCK_AUTH_USER_HEADER=X-Forwarded-User
-PADDOCK_AUTH_EMAIL_HEADER=X-Forwarded-Email
-PADDOCK_AUTH_GROUPS_HEADER=X-Forwarded-Groups
+MANAGERS_AUTH_MODE=trusted-header
+MANAGERS_AUTH_USER_HEADER=X-Forwarded-User
+MANAGERS_AUTH_EMAIL_HEADER=X-Forwarded-Email
+MANAGERS_AUTH_GROUPS_HEADER=X-Forwarded-Groups
 ```
 
 oauth2-proxy can alternatively pass a JWT (`--pass-access-token` /
@@ -164,11 +164,11 @@ Cloudflare Access injects a signed JWT in the `Cf-Access-Jwt-Assertion` header
 and publishes a JWKS per team.
 
 ```bash
-PADDOCK_AUTH_MODE=jwt
-PADDOCK_AUTH_JWT_HEADER=Cf-Access-Jwt-Assertion
-PADDOCK_AUTH_JWKS_URL=https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
-PADDOCK_AUTH_JWT_AUDIENCE=<application-aud-tag>
-PADDOCK_AUTH_USERNAME_CLAIM=email
+MANAGERS_AUTH_MODE=jwt
+MANAGERS_AUTH_JWT_HEADER=Cf-Access-Jwt-Assertion
+MANAGERS_AUTH_JWKS_URL=https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
+MANAGERS_AUTH_JWT_AUDIENCE=<application-aud-tag>
+MANAGERS_AUTH_USERNAME_CLAIM=email
 ```
 
 ### Authelia / Keycloak
@@ -187,7 +187,7 @@ The external Management API is deliberately **not** part of it.
 `/mcp` (and its `/.well-known/oauth-protected-resource*` metadata) is exempt
 from the `onRequest` auth hook — not because it's open, but because it runs its
 own credential check first. Paddock authenticates that surface **itself**, so it
-stays gated even on an instance running `PADDOCK_AUTH_MODE=none`, and it does
+stays gated even on an instance running `MANAGERS_AUTH_MODE=none`, and it does
 not inherit or depend on your proxy's identity.
 
 Practical consequences:

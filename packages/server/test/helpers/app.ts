@@ -26,7 +26,7 @@ export interface TestApp extends BuiltApp {
   tmp: string;
   /** The throwaway HOME (== ~/.claude lives under here). */
   home: string;
-  /** The projects root (PADDOCK_PROJECTS_DIR). */
+  /** The projects root (MANAGERS_PROJECTS_DIR). */
   projectsRoot: string;
   /** Teardown: close fleet+server, restore env, remove temp dirs. */
   teardown: () => Promise<void>;
@@ -40,24 +40,24 @@ interface StartOptions {
   /**
    * Override the post-turn sweep's min interval (ms). Set to 0 to make the sweep
    * fire on the next tick instead of waiting the 5-min default — lets a test
-   * drive the curation path deterministically. Sets PADDOCK_SWEEP_MIN_INTERVAL_MS.
+   * drive the curation path deterministically. Sets MANAGERS_SWEEP_MIN_INTERVAL_MS.
    */
   sweepIntervalMs?: number;
   /**
    * Configure the GitHub device-flow client id (folded into PaddockConfig, issue
-   * #269). Sets `PADDOCK_GITHUB_CLIENT_ID` before build so it lands in `cfg`; a
+   * #269). Sets `MANAGERS_GITHUB_CLIENT_ID` before build so it lands in `cfg`; a
    * bare app (no value) reports the GitHub feature as "not configured".
    */
   githubClientId?: string;
   /**
-   * Instance offered-models allow-list (issue #457 Step 2). Sets `PADDOCK_MODELS`
+   * Instance offered-models allow-list (issue #457 Step 2). Sets `MANAGERS_MODELS`
    * (comma-separated) before build so it lands in `cfg.models` — narrows what
    * `/api/models` offers and what a per-project `models` override may subset.
    */
   models?: string[];
   /**
    * Instance YAML config (issue #270) for this app, written to the temp dir and
-   * pointed at via `PADDOCK_CONFIG`. Use for config that has no env equivalent —
+   * pointed at via `MANAGERS_CONFIG`. Use for config that has no env equivalent —
    * e.g. the `managementApi.clients` block (#312), which is file-only by design.
    */
   configFile?: Record<string, unknown>;
@@ -107,30 +107,30 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
   const saved: Record<string, string | undefined> = {
     HOME: process.env.HOME,
     PATH: process.env.PATH,
-    PADDOCK_DATA_DIR: process.env.PADDOCK_DATA_DIR,
-    PADDOCK_PROJECTS_DIR: process.env.PADDOCK_PROJECTS_DIR,
-    PADDOCK_STATE_DIR: process.env.PADDOCK_STATE_DIR,
-    PADDOCK_HERDCTL_CONFIG: process.env.PADDOCK_HERDCTL_CONFIG,
-    PADDOCK_WEB_DIST: process.env.PADDOCK_WEB_DIST,
+    MANAGERS_DATA_DIR: process.env.MANAGERS_DATA_DIR,
+    MANAGERS_PROJECTS_DIR: process.env.MANAGERS_PROJECTS_DIR,
+    MANAGERS_STATE_DIR: process.env.MANAGERS_STATE_DIR,
+    MANAGERS_HERDCTL_CONFIG: process.env.MANAGERS_HERDCTL_CONFIG,
+    MANAGERS_WEB_DIST: process.env.MANAGERS_WEB_DIST,
     CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
     CLAUDE_SECURESTORAGE_CONFIG_DIR: process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
-    PADDOCK_CLAUDE_CREDENTIALS: process.env.PADDOCK_CLAUDE_CREDENTIALS,
-    PADDOCK_CLAUDE_INSTRUCTIONS: process.env.PADDOCK_CLAUDE_INSTRUCTIONS,
-    PADDOCK_CLAUDE_HOOKS: process.env.PADDOCK_CLAUDE_HOOKS,
-    PADDOCK_CLAUDE_MCP_SERVERS: process.env.PADDOCK_CLAUDE_MCP_SERVERS,
-    PADDOCK_FAKE_SCRIPT: process.env.PADDOCK_FAKE_SCRIPT,
-    PADDOCK_FAKE_SWEEP: process.env.PADDOCK_FAKE_SWEEP,
-    PADDOCK_SWEEP_MIN_INTERVAL_MS: process.env.PADDOCK_SWEEP_MIN_INTERVAL_MS,
-    PADDOCK_DRIVE_MODE: process.env.PADDOCK_DRIVE_MODE,
-    PADDOCK_GITHUB_CLIENT_ID: process.env.PADDOCK_GITHUB_CLIENT_ID,
-    PADDOCK_MODELS: process.env.PADDOCK_MODELS,
+    MANAGERS_CLAUDE_CREDENTIALS: process.env.MANAGERS_CLAUDE_CREDENTIALS,
+    MANAGERS_CLAUDE_INSTRUCTIONS: process.env.MANAGERS_CLAUDE_INSTRUCTIONS,
+    MANAGERS_CLAUDE_HOOKS: process.env.MANAGERS_CLAUDE_HOOKS,
+    MANAGERS_CLAUDE_MCP_SERVERS: process.env.MANAGERS_CLAUDE_MCP_SERVERS,
+    MANAGERS_FAKE_SCRIPT: process.env.MANAGERS_FAKE_SCRIPT,
+    MANAGERS_FAKE_SWEEP: process.env.MANAGERS_FAKE_SWEEP,
+    MANAGERS_SWEEP_MIN_INTERVAL_MS: process.env.MANAGERS_SWEEP_MIN_INTERVAL_MS,
+    MANAGERS_DRIVE_MODE: process.env.MANAGERS_DRIVE_MODE,
+    MANAGERS_GITHUB_CLIENT_ID: process.env.MANAGERS_GITHUB_CLIENT_ID,
+    MANAGERS_MODELS: process.env.MANAGERS_MODELS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     HOST: process.env.HOST,
-    PADDOCK_HOST: process.env.PADDOCK_HOST,
-    PADDOCK_DANGEROUSLY_ALLOW_OPEN: process.env.PADDOCK_DANGEROUSLY_ALLOW_OPEN,
-    PADDOCK_CONFIG: process.env.PADDOCK_CONFIG,
-    PADDOCK_ENVIRONMENT_PROMPT: process.env.PADDOCK_ENVIRONMENT_PROMPT,
-    PADDOCK_FAKE_INVOCATION_LOG: process.env.PADDOCK_FAKE_INVOCATION_LOG,
+    MANAGERS_HOST: process.env.MANAGERS_HOST,
+    MANAGERS_DANGEROUSLY_ALLOW_OPEN: process.env.MANAGERS_DANGEROUSLY_ALLOW_OPEN,
+    MANAGERS_CONFIG: process.env.MANAGERS_CONFIG,
+    MANAGERS_ENVIRONMENT_PROMPT: process.env.MANAGERS_ENVIRONMENT_PROMPT,
+    MANAGERS_FAKE_INVOCATION_LOG: process.env.MANAGERS_FAKE_INVOCATION_LOG,
     ...Object.fromEntries(Object.keys(opts.env ?? {}).map((k) => [k, process.env[k]])),
   };
 
@@ -140,8 +140,8 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
   // in-process app builds deterministically regardless of the ambient env (CI
   // leaves HOST unset, where the new loopback default applies anyway).
   process.env.HOST = "127.0.0.1";
-  delete process.env.PADDOCK_HOST;
-  delete process.env.PADDOCK_DANGEROUSLY_ALLOW_OPEN;
+  delete process.env.MANAGERS_HOST;
+  delete process.env.MANAGERS_DANGEROUSLY_ALLOW_OPEN;
   // Cleared so the suite exercises the DEFAULT resolution —
   // `<dataDir>/claude-home`. A dev box may export `CLAUDE_CONFIG_DIR`, and it is
   // honoured (#691), so without this the whole suite would silently run against
@@ -156,62 +156,62 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
   // from a previous app in this same worker would be indistinguishable from
   // paddock's own.
   delete process.env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
-  delete process.env.PADDOCK_CLAUDE_CREDENTIALS;
+  delete process.env.MANAGERS_CLAUDE_CREDENTIALS;
   // And the two levers #691 step 4 added, for the same reason: an ambient
-  // PADDOCK_CLAUDE_HOOKS=host on a dev box would make the suite assert the
+  // MANAGERS_CLAUDE_HOOKS=host on a dev box would make the suite assert the
   // opposite of the shipped default.
-  delete process.env.PADDOCK_CLAUDE_INSTRUCTIONS;
-  delete process.env.PADDOCK_CLAUDE_HOOKS;
+  delete process.env.MANAGERS_CLAUDE_INSTRUCTIONS;
+  delete process.env.MANAGERS_CLAUDE_HOOKS;
   // And step 5's, which would otherwise make `buildApp` read the DEV BOX's real
   // ~/.claude.json — the one file this suite must never depend on the contents of.
-  delete process.env.PADDOCK_CLAUDE_MCP_SERVERS;
+  delete process.env.MANAGERS_CLAUDE_MCP_SERVERS;
   // Hermetic drive mode: this integration harness drives turns through a fake
   // `claude` on PATH, which only the CLI (batch) runtime uses — the SDK/session
   // runtime needs a real login ("Not logged in"). The built-in default is now
   // `session` (#316) and the projects box also exports
-  // PADDOCK_DRIVE_MODE=session, so we can't rely on the default or on
+  // MANAGERS_DRIVE_MODE=session, so we can't rely on the default or on
   // deleting the var; explicitly PIN `batch` so the suite is deterministic
   // regardless of the box env (CI has it unset; a dev box may not). The session
   // path has its own coverage (unit/mocked harnesses).
-  process.env.PADDOCK_DRIVE_MODE = "batch";
-  // #635: a defined-but-blank PADDOCK_ENVIRONMENT_PROMPT is the opt-out, so an
+  process.env.MANAGERS_DRIVE_MODE = "batch";
+  // #635: a defined-but-blank MANAGERS_ENVIRONMENT_PROMPT is the opt-out, so an
   // ambient value on a dev box would silently change what every turn's system
   // prompt looks like. Clear it; tests that want one pass it via `opts.env`.
-  delete process.env.PADDOCK_ENVIRONMENT_PROMPT;
-  delete process.env.PADDOCK_FAKE_INVOCATION_LOG;
+  delete process.env.MANAGERS_ENVIRONMENT_PROMPT;
+  delete process.env.MANAGERS_FAKE_INVOCATION_LOG;
   process.env.PATH = `${FAKE_BIN}${path.delimiter}${process.env.PATH ?? ""}`;
-  process.env.PADDOCK_DATA_DIR = dataDir;
-  process.env.PADDOCK_PROJECTS_DIR = projectsRoot;
-  process.env.LOG_LEVEL = process.env.PADDOCK_TEST_LOG ?? "silent";
+  process.env.MANAGERS_DATA_DIR = dataDir;
+  process.env.MANAGERS_PROJECTS_DIR = projectsRoot;
+  process.env.LOG_LEVEL = process.env.MANAGERS_TEST_LOG ?? "silent";
   // Point the web-dist somewhere that does not exist so the app runs API-only
   // (component/E2E tests build + serve the SPA via a different harness).
-  process.env.PADDOCK_WEB_DIST = path.join(tmp, "no-web-dist");
+  process.env.MANAGERS_WEB_DIST = path.join(tmp, "no-web-dist");
 
   let scriptPath: string | undefined;
   if (opts.script) {
     scriptPath = path.join(tmp, "fake-script.json");
     await fs.writeFile(scriptPath, JSON.stringify(opts.script), "utf8");
-    process.env.PADDOCK_FAKE_SCRIPT = scriptPath;
+    process.env.MANAGERS_FAKE_SCRIPT = scriptPath;
   } else {
-    delete process.env.PADDOCK_FAKE_SCRIPT;
+    delete process.env.MANAGERS_FAKE_SCRIPT;
   }
 
   if (opts.sweepIntervalMs !== undefined) {
-    process.env.PADDOCK_SWEEP_MIN_INTERVAL_MS = String(opts.sweepIntervalMs);
+    process.env.MANAGERS_SWEEP_MIN_INTERVAL_MS = String(opts.sweepIntervalMs);
   } else {
-    delete process.env.PADDOCK_SWEEP_MIN_INTERVAL_MS;
+    delete process.env.MANAGERS_SWEEP_MIN_INTERVAL_MS;
   }
 
   if (opts.githubClientId !== undefined) {
-    process.env.PADDOCK_GITHUB_CLIENT_ID = opts.githubClientId;
+    process.env.MANAGERS_GITHUB_CLIENT_ID = opts.githubClientId;
   } else {
-    delete process.env.PADDOCK_GITHUB_CLIENT_ID;
+    delete process.env.MANAGERS_GITHUB_CLIENT_ID;
   }
 
   if (opts.models !== undefined) {
-    process.env.PADDOCK_MODELS = opts.models.join(",");
+    process.env.MANAGERS_MODELS = opts.models.join(",");
   } else {
-    delete process.env.PADDOCK_MODELS;
+    delete process.env.MANAGERS_MODELS;
   }
 
   // Instance YAML config (#270). Written before build and pointed at explicitly,
@@ -220,9 +220,9 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
     const YAML = await import("yaml");
     const configPath = path.join(tmp, "paddock.config.yaml");
     await fs.writeFile(configPath, YAML.stringify(opts.configFile), "utf8");
-    process.env.PADDOCK_CONFIG = configPath;
+    process.env.MANAGERS_CONFIG = configPath;
   } else {
-    delete process.env.PADDOCK_CONFIG;
+    delete process.env.MANAGERS_CONFIG;
   }
 
   // The host's MCP declarations (#691 step 5). `<home>/.claude.json`, not

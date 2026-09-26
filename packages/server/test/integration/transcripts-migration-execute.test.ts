@@ -78,7 +78,7 @@ describe("integration: own → host migration execute (#882)", () => {
   beforeEach(async () => {
     // OpenAPI is off by default; on, so the published-contract test can read
     // the same document `scripts/dump-openapi.mjs` writes.
-    t = await startTestApp({ env: { PADDOCK_OPENAPI_ENABLED: "1" } });
+    t = await startTestApp({ env: { MANAGERS_OPENAPI_ENABLED: "1" } });
     userHome = path.join(t.home, ".claude");
     await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "Acme" } });
     acmeDir = path.join(t.projectsRoot, "acme");
@@ -103,11 +103,11 @@ describe("integration: own → host migration execute (#882)", () => {
 
     resetMigrationProbeCache();
     resetMigrationSingleFlight();
-    delete process.env.PADDOCK_CLAUDE_TRANSCRIPTS;
+    delete process.env.MANAGERS_CLAUDE_TRANSCRIPTS;
   });
 
   afterEach(async () => {
-    delete process.env.PADDOCK_CLAUDE_TRANSCRIPTS;
+    delete process.env.MANAGERS_CLAUDE_TRANSCRIPTS;
     await t.teardown();
   });
 
@@ -181,14 +181,14 @@ describe("integration: own → host migration execute (#882)", () => {
   });
 
   it("400 env_shadowed when the env beats the config file, with nothing moved", async () => {
-    process.env.PADDOCK_CLAUDE_TRANSCRIPTS = "own";
+    process.env.MANAGERS_CLAUDE_TRANSCRIPTS = "own";
     const before = await snapshot();
 
     const res = await post({ sessionIds: ["new-1"] });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({
       code: "env_shadowed",
-      envVar: "PADDOCK_CLAUDE_TRANSCRIPTS",
+      envVar: "MANAGERS_CLAUDE_TRANSCRIPTS",
     });
     // The point of refusing rather than moving: the write would be inert, so the
     // instance would come back on `own` with an empty `.chats/` — every chat

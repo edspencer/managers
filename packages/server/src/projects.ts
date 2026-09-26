@@ -149,7 +149,7 @@ function sanitizeModelsOverride(raw: unknown): string[] | undefined {
  *
  * A project falls back to its slug. The ROOT has no slug to fall back to, so it
  * used to read as `basename(projectsRoot)` — a filesystem detail in the title
- * bar: lowercase `projects` by default, and whatever `PADDOCK_PROJECTS_DIR`
+ * bar: lowercase `projects` by default, and whatever `MANAGERS_PROJECTS_DIR`
  * happened to be called otherwise. It now reads as {@link ROOT_DEFAULT_NAME},
  * the word the side-nav row and the workspace's own tab label already use. A
  * name the user actually set still wins. (No instance-name config field exists

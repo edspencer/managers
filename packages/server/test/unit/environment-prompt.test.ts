@@ -33,7 +33,7 @@ import {
 import { HerdctlService } from "../../src/herdctl.js";
 import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 
-const TOUCHED = ["PADDOCK_CONFIG", "PADDOCK_ENVIRONMENT_PROMPT", "PADDOCK_DATA_DIR"];
+const TOUCHED = ["MANAGERS_CONFIG", "MANAGERS_ENVIRONMENT_PROMPT", "MANAGERS_DATA_DIR"];
 
 describe("environment prompt (#635)", () => {
   let dataDir: string;
@@ -46,7 +46,7 @@ describe("environment prompt (#635)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of TOUCHED) {
@@ -59,7 +59,7 @@ describe("environment prompt (#635)", () => {
   const writeYaml = (body: string) => {
     const p = path.join(dataDir, "paddock.config.yaml");
     fs.writeFileSync(p, body, "utf8");
-    process.env.PADDOCK_CONFIG = p;
+    process.env.MANAGERS_CONFIG = p;
     return p;
   };
 
@@ -90,13 +90,13 @@ describe("environment prompt (#635)", () => {
 
     it("env beats the file", () => {
       writeYaml("environmentPrompt: from-file\n");
-      process.env.PADDOCK_ENVIRONMENT_PROMPT = "from-env";
+      process.env.MANAGERS_ENVIRONMENT_PROMPT = "from-env";
       expect(loadPaddockConfig().environmentPrompt).toBe("from-env");
     });
 
     it("a DEFINED-but-blank env var is the env-level opt-out, even over a file value", () => {
       writeYaml("environmentPrompt: from-file\n");
-      process.env.PADDOCK_ENVIRONMENT_PROMPT = "";
+      process.env.MANAGERS_ENVIRONMENT_PROMPT = "";
       expect(loadPaddockConfig().environmentPrompt).toBe("");
     });
 
@@ -108,7 +108,7 @@ describe("environment prompt (#635)", () => {
     });
 
     it("keeps whitespace verbatim — no trimming", () => {
-      process.env.PADDOCK_ENVIRONMENT_PROMPT = "  padded  \n";
+      process.env.MANAGERS_ENVIRONMENT_PROMPT = "  padded  \n";
       expect(loadPaddockConfig().environmentPrompt).toBe("  padded  \n");
     });
   });
@@ -134,14 +134,14 @@ describe("environment prompt (#635)", () => {
       expect(plain.value).toBe(DEFAULT_ENVIRONMENT_PROMPT);
       expect(plain.envOverridden).toBe(false);
 
-      process.env.PADDOCK_ENVIRONMENT_PROMPT = "";
+      process.env.MANAGERS_ENVIRONMENT_PROMPT = "";
       const shadowed = buildInstanceConfig(loadPaddockConfig())
         .groups.flatMap((g) => g.fields)
         .find((f) => f.key === "environmentPrompt")!;
       expect(shadowed.value).toBe("");
       // A blank var really does win, so the UI must render it read-only.
       expect(shadowed.envOverridden).toBe(true);
-      expect(shadowed.envVar).toBe("PADDOCK_ENVIRONMENT_PROMPT");
+      expect(shadowed.envVar).toBe("MANAGERS_ENVIRONMENT_PROMPT");
     });
 
     it("accepts an empty string (opt out) and null (restore the default)", () => {
@@ -184,7 +184,7 @@ describe("environment prompt (#635)", () => {
 
       const configPath = path.join(dataDir, "paddock.config.yaml");
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: hostile }));
-      process.env.PADDOCK_CONFIG = configPath;
+      process.env.MANAGERS_CONFIG = configPath;
 
       expect(loadPaddockConfig().environmentPrompt).toBe(hostile);
     });
@@ -196,7 +196,7 @@ describe("environment prompt (#635)", () => {
 
       const configPath = path.join(dataDir, "paddock.config.yaml");
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: long }));
-      process.env.PADDOCK_CONFIG = configPath;
+      process.env.MANAGERS_CONFIG = configPath;
 
       expect(loadPaddockConfig().environmentPrompt).toBe(long);
     });
@@ -204,7 +204,7 @@ describe("environment prompt (#635)", () => {
     it("a null patch DELETES the key, restoring the built-in default", () => {
       const configPath = path.join(dataDir, "paddock.config.yaml");
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: "custom" }));
-      process.env.PADDOCK_CONFIG = configPath;
+      process.env.MANAGERS_CONFIG = configPath;
       expect(loadPaddockConfig().environmentPrompt).toBe("custom");
 
       writeInstanceConfig(configPath, validatePatch({ environmentPrompt: null }));

@@ -33,7 +33,7 @@ describe("integration: WS chat:stop_task (#848)", () => {
     t = await startTestApp({
       script: { "[[BGTASK]] go": "Kicked off some background work." },
       sweepIntervalMs: 600_000,
-      env: { PADDOCK_FAKE_BGTASK_MS: "10000" },
+      env: { MANAGERS_FAKE_BGTASK_MS: "10000" },
     });
     ({ port } = await listen(t.app));
   });
@@ -87,7 +87,7 @@ describe("integration: WS chat:stop_task (#848)", () => {
       sessionId: frame.payload!.sessionId as string,
       tasks,
       // The stop-flow tests target the SHELL: it is the one the server marks
-      // stoppable, and it stays live for the whole PADDOCK_FAKE_BGTASK_MS
+      // stoppable, and it stays live for the whole MANAGERS_FAKE_BGTASK_MS
       // window — far longer than a round trip — so "is this row still listed"
       // is an assertion rather than a race.
       shell: tasks.find((x) => x.type === "local_bash")!,

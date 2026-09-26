@@ -52,17 +52,17 @@ never by line number). The essentials:
   turn's stream survives socket death and re-attaches.
 - **MCP injection** (§5) — agents get extra tools via in-process MCP injection
   (`injectedMcpServers`), no network/auth: `send_file` on every turn, env-gated
-  project-only self-management (`PADDOCK_SELF_MCP`). Automated/spawned turns get
+  project-only self-management (`MANAGERS_SELF_MCP`). Automated/spawned turns get
   `send_file` only (anti-fork-bomb).
 - **Auth boundary** (§7) — no native login; `auth.ts` `onRequest` hook turns
-  upstream identity into `req.user` (`PADDOCK_AUTH_MODE`: `none` / `trusted-header`
+  upstream identity into `req.user` (`MANAGERS_AUTH_MODE`: `none` / `trusted-header`
   / `jwt`). See [`AUTH.md`](AUTH.md).
 - **Sweeper + drive mode** (§6, §9) — post-turn tool-less `sweeper-<slug>` curates
   notes out of band (always a one-shot `trigger()`, so always the CLI runtime —
   it is the *only* unconditional CLI-runtime user). Chat turns run `batch`
   (one-shot `trigger()`, CLI runtime) or `session` (persistent `openChatSession`,
   which hard-codes the SDK runtime; background tasks / wake-ups survive the
-  turn), per `PADDOCK_DRIVE_MODE` / `project.driveMode`. **Triggers resolve
+  turn), per `MANAGERS_DRIVE_MODE` / `project.driveMode`. **Triggers resolve
   drive mode the same way chats do** (`resolveDriveMode` in `ws-triggers.ts`),
   so they are NOT unconditionally CLI-runtime either. `session` is the default,
   so **chats and triggers normally run on the SDK, not `claude -p`**.
@@ -128,7 +128,7 @@ The five rules it exists to protect, all enforced by
   in the primitive, where one edit reaches every call site.
 - **`--accent` / `--accent-600` / `--accent-700` are the branding seam** (#34):
   space-separated sRGB channels a running server overwrites for
-  `PADDOCK_BRAND_ACCENT`. Keep that format and keep every other accent token
+  `MANAGERS_BRAND_ACCENT`. Keep that format and keep every other accent token
   derived from them.
 
 Styling is **Tailwind v4** — configuration is CSS (`packages/web/src/index.css`),
@@ -226,8 +226,8 @@ advice that breaks a server (`CLAUDE_HOME=$HOME/.claude`, removed in #691).
 | What a project/agent/chat/sweeper *is* | [`website/src/content/docs/concepts/`](website/src/content/docs/concepts/) |
 | Running the full stack locally | [`DEV.md`](DEV.md) |
 | Contributing, tests, gotchas | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
-| Every `PADDOCK_*` env var | [`website/src/content/docs/configuration/environment.md`](website/src/content/docs/configuration/environment.md) |
-| REST endpoints | [`openapi-site/open-api.json`](openapi-site/open-api.json) — the OpenAPI 3 spec, generated from the Fastify route schemas (published at `/api/`; live on an instance at `/open-api` when `PADDOCK_OPENAPI_ENABLED=1`) |
+| Every `MANAGERS_*` env var | [`website/src/content/docs/configuration/environment.md`](website/src/content/docs/configuration/environment.md) |
+| REST endpoints | [`openapi-site/open-api.json`](openapi-site/open-api.json) — the OpenAPI 3 spec, generated from the Fastify route schemas (published at `/api/`; live on an instance at `/open-api` when `MANAGERS_OPENAPI_ENABLED=1`) |
 | WebSocket (`/ws`) frame contract | [`website/src/content/docs/reference/websocket.md`](website/src/content/docs/reference/websocket.md) — hand-maintained; OpenAPI cannot describe it |
 | Test strategy & layers | [`website/src/content/docs/contributing/testing.md`](website/src/content/docs/contributing/testing.md) |
 | Auth modes & secrets | [`AUTH.md`](AUTH.md) |

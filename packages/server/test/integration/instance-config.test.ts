@@ -19,7 +19,7 @@ import { FIELDS } from "../../src/instance-config.js";
 describe("integration: instance-config (#385)", () => {
   let t: TestApp;
   let configPath: string;
-  // This suite WRITES fields through the API, and `env > file` — a PADDOCK_* var
+  // This suite WRITES fields through the API, and `env > file` — a MANAGERS_* var
   // leaked in from the shell (this repo's own dev box exports several) would make
   // those writes legitimately 400. Scrub every var any field references so the
   // suite asserts the code's behaviour and not the box's environment.
@@ -150,13 +150,13 @@ describe("integration: instance-config (#385)", () => {
   });
 
   it("PUT rejects a field the environment shadows", async () => {
-    process.env.PADDOCK_BRAND_LOGO = "🚜";
+    process.env.MANAGERS_BRAND_LOGO = "🚜";
     try {
       const res = await put({ patch: { "brand.logo": "🐴" } });
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toMatch(/PADDOCK_BRAND_LOGO/);
+      expect(res.json().error).toMatch(/MANAGERS_BRAND_LOGO/);
     } finally {
-      delete process.env.PADDOCK_BRAND_LOGO;
+      delete process.env.MANAGERS_BRAND_LOGO;
     }
   });
 

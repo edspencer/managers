@@ -116,15 +116,15 @@ describe("integration: read-state shared/anonymous path (none mode, #189)", () =
 describe("integration: read-state user-keyed path (trusted-header mode, #189)", () => {
   let t: TestApp;
   const saved = {
-    mode: process.env.PADDOCK_AUTH_MODE,
-    header: process.env.PADDOCK_AUTH_USER_HEADER,
+    mode: process.env.MANAGERS_AUTH_MODE,
+    header: process.env.MANAGERS_AUTH_USER_HEADER,
   };
   const slug = "keyed-proj";
   const sid = "11111111-2222-3333-4444-555555555555";
 
   beforeAll(async () => {
-    process.env.PADDOCK_AUTH_MODE = "trusted-header";
-    process.env.PADDOCK_AUTH_USER_HEADER = "x-forwarded-user";
+    process.env.MANAGERS_AUTH_MODE = "trusted-header";
+    process.env.MANAGERS_AUTH_USER_HEADER = "x-forwarded-user";
     t = await startTestApp();
     // Create a project (as a real user — trusted-header 401s without the header).
     await t.app.inject({
@@ -136,10 +136,10 @@ describe("integration: read-state user-keyed path (trusted-header mode, #189)", 
   });
   afterAll(async () => {
     await t.teardown();
-    if (saved.mode === undefined) delete process.env.PADDOCK_AUTH_MODE;
-    else process.env.PADDOCK_AUTH_MODE = saved.mode;
-    if (saved.header === undefined) delete process.env.PADDOCK_AUTH_USER_HEADER;
-    else process.env.PADDOCK_AUTH_USER_HEADER = saved.header;
+    if (saved.mode === undefined) delete process.env.MANAGERS_AUTH_MODE;
+    else process.env.MANAGERS_AUTH_MODE = saved.mode;
+    if (saved.header === undefined) delete process.env.MANAGERS_AUTH_USER_HEADER;
+    else process.env.MANAGERS_AUTH_USER_HEADER = saved.header;
   });
 
   it("GET /api/me returns the real principal (not anonymous)", async () => {

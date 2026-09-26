@@ -127,7 +127,7 @@ describe("resolveManagementApiConfig — trustedProxies", () => {
   it("lets the env var win over the file, like every other setting", () => {
     const { config } = resolveManagementApiConfig(
       { ...base, trustedProxies: ["172.18.0.0/16"] },
-      { ...env, PADDOCK_MANAGEMENT_TRUSTED_PROXIES: "none" },
+      { ...env, MANAGERS_MANAGEMENT_TRUSTED_PROXIES: "none" },
     );
     expect(config.trustedProxies).toEqual({ entries: [], explicit: true });
   });

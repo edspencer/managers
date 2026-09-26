@@ -1,10 +1,10 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { getBrand, getOpenApi, logoIsImage, DEFAULT_BRAND, DEFAULT_OPENAPI } from "./brand";
 
-type WithConfig = { __PADDOCK_CONFIG__?: unknown };
+type WithConfig = { __MANAGERS_CONFIG__?: unknown };
 
 afterEach(() => {
-  delete (globalThis as WithConfig).__PADDOCK_CONFIG__;
+  delete (globalThis as WithConfig).__MANAGERS_CONFIG__;
 });
 
 describe("getBrand", () => {
@@ -13,12 +13,12 @@ describe("getBrand", () => {
   });
 
   it("merges an injected brand over the defaults", () => {
-    (globalThis as WithConfig).__PADDOCK_CONFIG__ = { brand: { name: "Homelab", logo: "🏠" } };
+    (globalThis as WithConfig).__MANAGERS_CONFIG__ = { brand: { name: "Homelab", logo: "🏠" } };
     expect(getBrand()).toEqual({ name: "Homelab", logo: "🏠", accent: DEFAULT_BRAND.accent });
   });
 
   it("ignores a malformed / empty config", () => {
-    (globalThis as WithConfig).__PADDOCK_CONFIG__ = {};
+    (globalThis as WithConfig).__MANAGERS_CONFIG__ = {};
     expect(getBrand()).toEqual(DEFAULT_BRAND);
   });
 });
@@ -30,7 +30,7 @@ describe("getOpenApi", () => {
   });
 
   it("reads the injected enabled flag + path", () => {
-    (globalThis as WithConfig).__PADDOCK_CONFIG__ = { openapi: { enabled: true, path: "/open-api" } };
+    (globalThis as WithConfig).__MANAGERS_CONFIG__ = { openapi: { enabled: true, path: "/open-api" } };
     expect(getOpenApi()).toEqual({ enabled: true, path: "/open-api" });
   });
 });

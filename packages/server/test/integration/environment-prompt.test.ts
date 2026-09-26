@@ -6,7 +6,7 @@
  * this issue exists to fix, so "the setting persists" is deliberately NOT what
  * these tests assert. They drive a REAL turn through the REAL @herdctl/core CLI
  * runtime and read back the `--system-prompt` argv the fake `claude` was spawned
- * with (`PADDOCK_FAKE_INVOCATION_LOG`, see `test/bin/claude`).
+ * with (`MANAGERS_FAKE_INVOCATION_LOG`, see `test/bin/claude`).
  *
  * Coverage boundary, stated honestly: this is the CLI/batch runtime, which is
  * the only one whose prompt assembly is observable from outside a test — the SDK
@@ -67,7 +67,7 @@ describe("integration: environment prompt reaches the runtime (#635)", () => {
     );
     t = await startTestApp({
       script: { "Hello there": "Hi!" },
-      env: { ...opts.env, PADDOCK_FAKE_INVOCATION_LOG: logPath },
+      env: { ...opts.env, MANAGERS_FAKE_INVOCATION_LOG: logPath },
       // Default the fixture to the non-native prompt: that is the configuration
       // in which the CLI runtime appends (rather than replaces), and therefore
       // the only one where --system-prompt reflects our value. Cases override it.
@@ -110,7 +110,7 @@ describe("integration: environment prompt reaches the runtime (#635)", () => {
 
   it("appends nothing when the instance opts out", async () => {
     const systemPrompt = await systemPromptForOneTurn({
-      env: { PADDOCK_ENVIRONMENT_PROMPT: "" },
+      env: { MANAGERS_ENVIRONMENT_PROMPT: "" },
     });
     // Just the agent's own prompt — pre-#635 behaviour, byte for byte.
     expect(systemPrompt).toBe(

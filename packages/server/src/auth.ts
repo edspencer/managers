@@ -6,7 +6,7 @@
  * oauth2-proxy, Authelia, Cloudflare Access, Keycloak, …). This plugin turns
  * that upstream identity into a `req.user` that the rest of the app can read,
  * WITHOUT hardcoding any single provider. Behaviour is driven entirely by the
- * `PADDOCK_AUTH_*` env vars resolved into `cfg.auth` (see config.ts + AUTH.md).
+ * `MANAGERS_AUTH_*` env vars resolved into `cfg.auth` (see config.ts + AUTH.md).
  *
  * Three modes:
  *   - `none`            — no-op; every request is anonymous. Fully open (default).
@@ -274,7 +274,7 @@ export function registerAuth(app: FastifyInstance, auth: AuthConfig): void {
   // mode === "jwt"
   if (!cfg.jwksUrl) {
     throw new Error(
-      "auth: PADDOCK_AUTH_MODE=jwt requires PADDOCK_AUTH_JWKS_URL (the IdP's JWKS endpoint)",
+      "auth: MANAGERS_AUTH_MODE=jwt requires MANAGERS_AUTH_JWKS_URL (the IdP's JWKS endpoint)",
     );
   }
   let jwks: JWTVerifyGetKey;
@@ -282,7 +282,7 @@ export function registerAuth(app: FastifyInstance, auth: AuthConfig): void {
     jwks = createRemoteJWKSet(new URL(cfg.jwksUrl));
   } catch (err) {
     throw new Error(
-      `auth: invalid PADDOCK_AUTH_JWKS_URL (${cfg.jwksUrl}): ${(err as Error).message}`,
+      `auth: invalid MANAGERS_AUTH_JWKS_URL (${cfg.jwksUrl}): ${(err as Error).message}`,
     );
   }
   app.log.info(

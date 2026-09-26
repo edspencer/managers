@@ -25,7 +25,7 @@ import { AppearancePanel } from "./AppearancePanel";
  * disables the other. Concretely:
  *
  *  - **Filter bar** — matches label, dotted key, help text, env var and enum
- *    values, so an operator who thinks in `PADDOCK_*` names finds the field by
+ *    values, so an operator who thinks in `MANAGERS_*` names finds the field by
  *    typing one. A group whose LABEL matches keeps all of its fields.
  *  - **"Modified only"** — the other way in: show just what differs from the
  *    built-in default, which on a real instance is a handful of rows.

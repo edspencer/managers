@@ -255,7 +255,7 @@ describe("project.yaml: schemaVersion (#724)", () => {
 describe("paddock.config.yaml: schemaVersion (#724)", () => {
   // Cleared so the file layer is observed in isolation, and so an ambient
   // CLAUDE_CONFIG_DIR on the dev box cannot trip the unrelated claudeHome refusal.
-  const ENV_KEYS = ["PADDOCK_DATA_DIR", "PADDOCK_CONFIG", "CLAUDE_CONFIG_DIR", "PORT"];
+  const ENV_KEYS = ["MANAGERS_DATA_DIR", "MANAGERS_CONFIG", "CLAUDE_CONFIG_DIR", "PORT"];
 
   let dataDir: string;
   let saved: Record<string, string | undefined>;
@@ -273,7 +273,7 @@ describe("paddock.config.yaml: schemaVersion (#724)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of ENV_KEYS) {

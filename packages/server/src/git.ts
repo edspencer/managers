@@ -91,7 +91,7 @@ export class GitService {
   /**
    * @param projectsRoot Absolute path to the projects root the service operates on.
    * @param author Commit identity used when Paddock commits on a project's behalf.
-   *   Folded into PaddockConfig from `PADDOCK_GIT_AUTHOR_*` (issue #269); defaults
+   *   Folded into PaddockConfig from `MANAGERS_GIT_AUTHOR_*` (issue #269); defaults
    *   preserve the pre-fold values so a bare `new GitService(root)` is unchanged.
    */
   constructor(

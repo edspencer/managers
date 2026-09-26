@@ -10,7 +10,7 @@
 #   INSTALL.md (run instructions)
 #
 # Consumer:  tar xzf paddock-<v>.tgz && cd paddock && npm ci --omit=dev \
-#            && PADDOCK_DATA_DIR=/var/lib/paddock node packages/server/dist/index.js
+#            && MANAGERS_DATA_DIR=/var/lib/paddock node packages/server/dist/index.js
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -35,7 +35,7 @@ cat > "${STAGE}/INSTALL.md" <<EOF
 
 \`\`\`sh
 npm ci --omit=dev
-PADDOCK_DATA_DIR=/var/lib/paddock \\
+MANAGERS_DATA_DIR=/var/lib/paddock \\
 CLAUDE_CODE_OAUTH_TOKEN=... \\
 PORT=7233 HOST=0.0.0.0 \\
 node packages/server/dist/index.js

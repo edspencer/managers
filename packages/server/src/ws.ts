@@ -998,7 +998,7 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
         };
 
         // Self-management MCP (issue #214): only on keeper turns, and only when
-        // the instance opts in via PADDOCK_SELF_MCP. A HUMAN turn is
+        // the instance opts in via MANAGERS_SELF_MCP. A HUMAN turn is
         // the ROOT of any spawn tree (origin human, depth 0), so its children are
         // depth 1 — the same builder the spawned path uses, just seeded with
         // HUMAN_ROOT. Write tools follow the instance write opt-in (B1 #262: the

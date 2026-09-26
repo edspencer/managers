@@ -4,7 +4,7 @@
  * This module is imported LAZILY (see transcribe.ts) so its heavy, optional
  * dependencies — `nodejs-whisper` (which builds/bundles whisper.cpp) and a
  * system `ffmpeg` — are only required on instances that actually set
- * `PADDOCK_WHISPER_MODE=local`. Remote-mode and dictation-off instances never
+ * `MANAGERS_WHISPER_MODE=local`. Remote-mode and dictation-off instances never
  * touch it.
  *
  * Flow: the browser records WebM/Opus, which whisper.cpp can't read directly, so
@@ -65,7 +65,7 @@ async function runWhisper(wavPath: string, cfg: TranscriptionConfig): Promise<st
   } catch {
     throw new TranscriptionError(
       "local whisper is not installed on this instance (missing nodejs-whisper). " +
-        "Install it, or set PADDOCK_WHISPER_MODE=remote.",
+        "Install it, or set MANAGERS_WHISPER_MODE=remote.",
       503,
     );
   }

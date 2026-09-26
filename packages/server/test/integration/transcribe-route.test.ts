@@ -13,15 +13,15 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { startTestApp, type TestApp } from "../helpers/app.js";
 
 let app: TestApp | null = null;
-const savedEndpoint = process.env.PADDOCK_WHISPER_ENDPOINT;
-const savedMode = process.env.PADDOCK_WHISPER_MODE;
+const savedEndpoint = process.env.MANAGERS_WHISPER_ENDPOINT;
+const savedMode = process.env.MANAGERS_WHISPER_MODE;
 
 afterEach(async () => {
   await app?.teardown();
   app = null;
   vi.restoreAllMocks();
-  restore("PADDOCK_WHISPER_ENDPOINT", savedEndpoint);
-  restore("PADDOCK_WHISPER_MODE", savedMode);
+  restore("MANAGERS_WHISPER_ENDPOINT", savedEndpoint);
+  restore("MANAGERS_WHISPER_MODE", savedMode);
 });
 
 function restore(key: string, val: string | undefined) {
@@ -46,8 +46,8 @@ function multipart(field: string, filename: string, contentType: string, data: B
 
 describe("transcription route — dictation off (default)", () => {
   it("reports unavailable and rejects transcription with 503", async () => {
-    delete process.env.PADDOCK_WHISPER_ENDPOINT;
-    delete process.env.PADDOCK_WHISPER_MODE;
+    delete process.env.MANAGERS_WHISPER_ENDPOINT;
+    delete process.env.MANAGERS_WHISPER_MODE;
     app = await startTestApp();
 
     const status = await app.app.inject({ method: "GET", url: "/api/transcription" });
@@ -62,8 +62,8 @@ describe("transcription route — dictation off (default)", () => {
 
 describe("transcription route — remote configured", () => {
   it("reports available and returns the whisper server's transcript", async () => {
-    process.env.PADDOCK_WHISPER_ENDPOINT = "http://fake-whisper.test/v1";
-    process.env.PADDOCK_WHISPER_MODE = "remote";
+    process.env.MANAGERS_WHISPER_ENDPOINT = "http://fake-whisper.test/v1";
+    process.env.MANAGERS_WHISPER_MODE = "remote";
 
     const realFetch = globalThis.fetch;
     const fetchSpy = vi

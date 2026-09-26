@@ -10,7 +10,7 @@
  * `paddock.config.yaml` is git-tracked (and editable from the instance Settings
  * screen, #385). A secret written there leaks into history the moment it is
  * committed, and no later edit removes it. So a client's credential is given as
- * an env REFERENCE (`ref: env:PADDOCK_MCP_TOKEN_MY_LAPTOP`) and an inline value
+ * an env REFERENCE (`ref: env:MANAGERS_MCP_TOKEN_MY_LAPTOP`) and an inline value
  * is a hard config error — not a warning — because accepting one silently would
  * teach operators the unsafe habit.
  *
@@ -252,7 +252,7 @@ export function resolveManagementApiConfig(
   // file, matching every other setting's precedence; saying nothing yields the
   // compatibility default rather than a strict list, so an existing deployment
   // behind a TLS-terminating sidecar keeps working across the upgrade.
-  const trustedProxiesRaw = env.PADDOCK_MANAGEMENT_TRUSTED_PROXIES ?? file?.trustedProxies;
+  const trustedProxiesRaw = env.MANAGERS_MANAGEMENT_TRUSTED_PROXIES ?? file?.trustedProxies;
   const parsedProxies = parseTrustedProxies(trustedProxiesRaw);
   errors.push(...parsedProxies.errors);
   warnings.push(...parsedProxies.warnings);
@@ -328,7 +328,7 @@ export function resolveManagementApiConfig(
     const ref = auth.ref?.trim();
     if (!ref) {
       errors.push(
-        `${where}.auth.ref: required (e.g. \`env:PADDOCK_MCP_TOKEN_${clientId
+        `${where}.auth.ref: required (e.g. \`env:MANAGERS_MCP_TOKEN_${clientId
           .toUpperCase()
           .replace(/[^A-Z0-9]/g, "_")}\`) — skipped`,
       );

@@ -11,7 +11,7 @@
  *
  * The server canonicalizes its data paths (macOS /var -> /private/var), so we
  * read the resolved paths from `paddock-e2e-paths.json`, which server.mjs writes
- * at boot into PADDOCK_E2E_TMP (default server) / PADDOCK_E2E_GIT_TMP (git one).
+ * at boot into MANAGERS_E2E_TMP (default server) / MANAGERS_E2E_GIT_TMP (git one).
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -35,9 +35,9 @@ export interface E2EPaths {
 /** Read the canonical paths the (default or git) server wrote at boot. */
 export function paths(opts: { git?: boolean } = {}): E2EPaths {
   const tmp = opts.git
-    ? process.env.PADDOCK_E2E_GIT_TMP
-    : process.env.PADDOCK_E2E_TMP;
-  if (!tmp) throw new Error("PADDOCK_E2E_TMP not set (run via playwright.config.ts)");
+    ? process.env.MANAGERS_E2E_GIT_TMP
+    : process.env.MANAGERS_E2E_TMP;
+  if (!tmp) throw new Error("MANAGERS_E2E_TMP not set (run via playwright.config.ts)");
   const file = path.join(tmp, "paddock-e2e-paths.json");
   if (!existsSync(file)) {
     throw new Error(`server has not written ${file} yet — is the webServer up?`);
@@ -367,7 +367,7 @@ export async function sendChatTurn(
  * someone:
  *
  *  1. **The turn has to outlive the assertion.** `[[SLOWTOOL]]` holds a Task
- *     tool_use open for `PADDOCK_FAKE_SLOWTOOL_MS` (12s in `playwright.config`),
+ *     tool_use open for `MANAGERS_FAKE_SLOWTOOL_MS` (12s in `playwright.config`),
  *     which is the only mechanism here that keeps the hub reporting `running`
  *     for an observable window.
  *  2. **The chat has to already EXIST.** A first turn on a new chat races

@@ -3,7 +3,7 @@ import { createProjectViaUI, seedGithubToken, uniq } from "./helpers";
 
 /**
  * Journey: the "Connect GitHub" device-flow affordance in the Changes header
- * (git server only; PADDOCK_GITHUB_CLIENT_ID is set so github.configured=true).
+ * (git server only; MANAGERS_GITHUB_CLIENT_ID is set so github.configured=true).
  *
  * The full device flow hits real GitHub (github.com/login/device + token
  * endpoints), so we do NOT drive it end-to-end. Instead we assert the two

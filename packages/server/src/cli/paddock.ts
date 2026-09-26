@@ -185,8 +185,8 @@ async function service(command: Extract<Command, { verb: "service" }>): Promise<
       scriptPath: entryScript,
       packageRoot,
       homeDir: safeHomeDir(),
-      ...(process.env.PADDOCK_DATA_DIR !== undefined
-        ? { envDataDir: process.env.PADDOCK_DATA_DIR }
+      ...(process.env.MANAGERS_DATA_DIR !== undefined
+        ? { envDataDir: process.env.MANAGERS_DATA_DIR }
         : {}),
       ...(process.env.XDG_CONFIG_HOME !== undefined
         ? { xdgConfigHome: process.env.XDG_CONFIG_HOME }
@@ -211,14 +211,14 @@ async function service(command: Extract<Command, { verb: "service" }>): Promise<
  */
 function resolveDataDir(opts: CliOptions): string {
   return path.resolve(
-    opts.dataDir ?? process.env.PADDOCK_DATA_DIR ?? path.join(os.homedir(), ".paddock"),
+    opts.dataDir ?? process.env.MANAGERS_DATA_DIR ?? path.join(os.homedir(), ".paddock"),
   );
 }
 
 /**
  * `paddock config …` — print the resolved configuration (#878).
  *
- * Sets `PADDOCK_DATA_DIR` before the dynamic import for the same reason the
+ * Sets `MANAGERS_DATA_DIR` before the dynamic import for the same reason the
  * start path does: `loadPaddockConfig` reads the environment, so the environment
  * has to be finished first. Nothing else `main` does on the way to `start()` —
  * the PATH edit, the first-run notice, the log-level defaults — applies to a
@@ -232,7 +232,7 @@ async function config(command: Extract<Command, { verb: "config" }>): Promise<vo
     console.log(CONFIG_USAGE);
     return;
   }
-  process.env.PADDOCK_DATA_DIR = resolveDataDir(opts);
+  process.env.MANAGERS_DATA_DIR = resolveDataDir(opts);
   const { runConfig } = await import("./config.js");
   try {
     await runConfig(action, opts);
@@ -285,7 +285,7 @@ async function main(): Promise<void> {
 
   // NOTHING here reads `process.cwd()`, and that is the point (#798). `--here`
   // used to make the current directory the workspace by setting
-  // `PADDOCK_PROJECTS_DIR = cwd`, which was the only place that variable was
+  // `MANAGERS_PROJECTS_DIR = cwd`, which was the only place that variable was
   // ever set from cwd. It also made the instance you got depend on where you
   // stood — and because its marker directory was `.paddock`, the same name as
   // the default data dir, a bare run from `$HOME` on any machine that had ever
@@ -310,7 +310,7 @@ async function main(): Promise<void> {
 
   noteFirstRun(dataDir);
 
-  process.env.PADDOCK_DATA_DIR = dataDir;
+  process.env.MANAGERS_DATA_DIR = dataDir;
 
   if (opts.port) process.env.PORT = opts.port;
   if (opts.host) process.env.HOST = opts.host;
@@ -333,7 +333,7 @@ async function main(): Promise<void> {
   if (!opts.verbose) {
     if (process.env.LOG_LEVEL === undefined) process.env.LOG_LEVEL = "warn";
     if (process.env.HERDCTL_LOG_LEVEL === undefined) process.env.HERDCTL_LOG_LEVEL = "warn";
-    process.env.PADDOCK_QUIET = "1";
+    process.env.MANAGERS_QUIET = "1";
   }
 
   // No credential preflight here: `ensureClaudeHome` (claude-home.ts) already

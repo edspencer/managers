@@ -25,7 +25,7 @@
     "test:server": "npm run test -w packages/server",
     "test:web": "npm run test -w packages/web",
     "test:e2e": "playwright test -c test/e2e/playwright.config.ts",
-    "test:e2e:live": "PADDOCK_TEST_LIVE=1 playwright test -c test/e2e/playwright.config.ts",
+    "test:e2e:live": "MANAGERS_TEST_LIVE=1 playwright test -c test/e2e/playwright.config.ts",
     "changeset": "changeset",
     "changeset:version": "changeset version && node scripts/sync-root-version.mjs && npm install --package-lock-only",
     "version:print": "node -p \"require('./packages/server/package.json').version\"",

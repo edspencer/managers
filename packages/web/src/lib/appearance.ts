@@ -7,12 +7,12 @@
  *   per-device override   localStorage, instant, no reload    <- implemented
  *   instance default      paddock.config.yaml / env           <- stubbed
  *
- * The instance-default half is a stub on this branch. `PADDOCK_BRAND_ACCENT`
+ * The instance-default half is a stub on this branch. `MANAGERS_BRAND_ACCENT`
  * already exists and already composes correctly: with no per-device hue picked,
  * `applyAccent` reads the hue off whatever `--accent` the cascade produced —
  * which is the server's injected brand colour if there is one. So the seam that
  * matters is live; what is missing is a `theme:` key in the config file and a
- * matching `PADDOCK_THEME`, which is server plumbing and a different PR.
+ * matching `MANAGERS_THEME`, which is server plumbing and a different PR.
  *
  * Storage keys. `paddock:theme` is left exactly as it was — light/dark, read by
  * the pre-paint script in index.html since issue #23. This module adds
@@ -111,7 +111,7 @@ export const TINTS = [
  * The hue to use when the user has picked nothing — i.e. the INSTANCE default,
  * the other half of the two-scope model.
  *
- * If an operator set `PADDOCK_BRAND_ACCENT`, that colour's hue wins; otherwise
+ * If an operator set `MANAGERS_BRAND_ACCENT`, that colour's hue wins; otherwise
  * the active theme's own accent supplies it. Note what this does and does not
  * take from the brand colour: the hue, and nothing else. Its lightness and
  * chroma are discarded and re-solved against the theme, which is precisely the
@@ -122,7 +122,7 @@ export const TINTS = [
  * during the design run and two were readable. Under this seam all ten are,
  * because lightness stopped being an input.
  *
- * Read from `window.__PADDOCK_CONFIG__` rather than from the injected `<style>`
+ * Read from `window.__MANAGERS_CONFIG__` rather than from the injected `<style>`
  * because the theme blocks outrank a `:root` rule — the style element is still
  * there, it just no longer decides anything.
  */

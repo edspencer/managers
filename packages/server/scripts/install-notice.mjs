@@ -17,7 +17,7 @@
  * is a courtesy, not a guarantee. The same warning belongs in the README, where
  * people actually look before running an unfamiliar command.
  */
-if (!process.env.PADDOCK_QUIET_INSTALL) {
+if (!process.env.MANAGERS_QUIET_INSTALL) {
   process.stdout.write(
     [
       "",

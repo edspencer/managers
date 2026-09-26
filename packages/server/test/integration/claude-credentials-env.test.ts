@@ -78,7 +78,7 @@ describe("integration: claude.credentials decides the runtime's environment (#69
   });
 
   it("own leaves it unset, so Claude Code scopes credentials to paddock's own home", async () => {
-    t = await startTestApp({ env: { PADDOCK_CLAUDE_CREDENTIALS: "own" } });
+    t = await startTestApp({ env: { MANAGERS_CLAUDE_CREDENTIALS: "own" } });
     expect(t.cfg.claude.credentials).toBe("own");
 
     const sdkEnv = withClaudeConfigDir(t.cfg.claudeHome, process.env);
@@ -100,7 +100,7 @@ describe("integration: claude.credentials decides the runtime's environment (#69
     // The point of splitting the levers (#691). `transcripts: host` used to imply
     // a shared login and vice versa, because both were the same Claude home.
     t = await startTestApp({
-      env: { PADDOCK_CLAUDE_TRANSCRIPTS: "host", PADDOCK_CLAUDE_CREDENTIALS: "own" },
+      env: { MANAGERS_CLAUDE_TRANSCRIPTS: "host", MANAGERS_CLAUDE_CREDENTIALS: "own" },
     });
     expect(t.cfg.claude.transcripts).toBe("host");
     expect(t.cfg.claude.credentials).toBe("own");

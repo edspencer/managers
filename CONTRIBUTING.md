@@ -7,7 +7,7 @@ re-reading it here:
 
 - **[DEV.md](DEV.md)** — running the full stack locally (production-like and
   hot-reload modes), voice dictation setup.
-- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — every `PADDOCK_*` env var
+- **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — every `MANAGERS_*` env var
   with its default.
 - **[docs/API.md](docs/API.md)** — the REST + WebSocket contract.
 - **[docs/TESTING.md](docs/TESTING.md)** — the test strategy and layers.
@@ -63,7 +63,7 @@ npm run test:e2e            # Playwright journeys against the real server + a fa
   failing fast. Give each concurrent run its own fixture port and temp dir:
 
   ```bash
-  PADDOCK_E2E_PORT=4391 PADDOCK_E2E_TMP=$(mktemp -d) npm run test:e2e
+  MANAGERS_E2E_PORT=4391 MANAGERS_E2E_TMP=$(mktemp -d) npm run test:e2e
   ```
 
   The tell that you are looking at contention rather than a regression: the
@@ -109,7 +109,7 @@ These bite everyone at least once:
   ```
 
 - **Use a throwaway data dir** so local runs don't touch real projects:
-  `export PADDOCK_DATA_DIR="$(mktemp -d /tmp/paddock-dev.XXXXXX)"`.
+  `export MANAGERS_DATA_DIR="$(mktemp -d /tmp/paddock-dev.XXXXXX)"`.
 
 ## Branch, commit & PR conventions
 

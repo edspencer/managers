@@ -46,7 +46,7 @@ export function isRootKey(key: WorkspaceKey): boolean {
  *
  * A project falls back to its slug; the root has none, so it used to read as
  * `basename(projectsRoot)` — which surfaced a filesystem detail as a title:
- * lowercase `projects` by default, and whatever `PADDOCK_PROJECTS_DIR` happens
+ * lowercase `projects` by default, and whatever `MANAGERS_PROJECTS_DIR` happens
  * to be called otherwise. "Home" is what the rest of the app already calls this
  * place (the side-nav row and the workspace's own tab label), so the title bar
  * now agrees with them.

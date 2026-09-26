@@ -49,7 +49,7 @@ Stills land in `/tmp/paddock-demo/stills/`, output in `/tmp/paddock-demo/dist/`.
 | --- | --- |
 | `fixtures.mjs` | The synthetic world: projects, summaries, the file contents behind the git diff, the trigger definitions. **Edit this to change what the demo is about.** |
 | `beats.mjs` | The storyboard — which beats, in what order, held for how long. Read by both the shoot and the build, so they cannot drift apart. |
-| `seed.mjs` | Writes a complete `PADDOCK_DATA_DIR`: chats with rich tool blocks, a finished sub-agent, job records, read state, triggers, and a real git repo. |
+| `seed.mjs` | Writes a complete `MANAGERS_DATA_DIR`: chats with rich tool blocks, a finished sub-agent, job records, read state, triggers, and a real git repo. |
 | `shoot.mjs` | Boots a server on the seeded dir, drives live turns, and captures one PNG per beat with Playwright — plus one recorded screen capture. |
 | `build.mjs` | Crossfades the stills with ffmpeg and encodes GIF + MP4 + WebM. |
 | `serve.mjs` | Launches the demo server with a scrubbed environment. Also runnable standalone to eyeball the rig. |
@@ -115,8 +115,8 @@ written down rather than left to be rediscovered.
   the model on the transcript.
 
 - **The environment must be scrubbed, not overridden.** A devbox already running
-  Paddock exports ~20 `PADDOCK_*` vars; `PADDOCK_BRAND_NAME`/`_LOGO` silently
-  rebrand the sidebar in every frame, and `PADDOCK_DATA_DIR` would point the demo
+  Paddock exports ~20 `MANAGERS_*` vars; `MANAGERS_BRAND_NAME`/`_LOGO` silently
+  rebrand the sidebar in every frame, and `MANAGERS_DATA_DIR` would point the demo
   at production. `serve.mjs` builds the child env from a whitelist.
 
 - **Never kill "stray" Paddock processes by pattern.** A devbox runs many
@@ -124,7 +124,7 @@ written down rather than left to be rediscovered.
   them. `serve.mjs` refuses to start when the port is occupied instead — and note
   that a stale server on the port will happily answer the health check, so
   without that guard a run can silently photograph the wrong instance. If you do
-  need to find this pipeline's own server, match on its `PADDOCK_DATA_DIR` in
+  need to find this pipeline's own server, match on its `MANAGERS_DATA_DIR` in
   `/proc/*/environ`.
 
 - **`reducedMotion: "reduce"` is what makes the shoot deterministic.** The UI has

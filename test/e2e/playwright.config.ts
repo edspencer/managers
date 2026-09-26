@@ -5,7 +5,7 @@ import { mkdtempSync } from "node:fs";
 
 /**
  * Playwright E2E config. Drives Chromium against the REAL built server + SPA
- * with the fake `claude` (default) or the real claude (PADDOCK_TEST_LIVE=1).
+ * with the fake `claude` (default) or the real claude (MANAGERS_TEST_LIVE=1).
  *
  * The web bundle + server must be BUILT first (`npm run build`); `npm run
  * test:e2e` is expected to be run after a build. Screenshots + traces are
@@ -19,18 +19,18 @@ import { mkdtempSync } from "node:fs";
  * lights up without changing the default server (the projects-root repo flag is
  * a process-wide cached value, so repo vs. non-repo needs separate servers).
  */
-const PORT = process.env.PADDOCK_E2E_PORT || "4317";
+const PORT = process.env.MANAGERS_E2E_PORT || "4317";
 const GIT_PORT = String(Number(PORT) + 1);
 // One temp dir for the whole run, shared with the launcher so state is isolated.
 const TMP =
-  process.env.PADDOCK_E2E_TMP || mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-"));
-process.env.PADDOCK_E2E_TMP = TMP;
+  process.env.MANAGERS_E2E_TMP || mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-"));
+process.env.MANAGERS_E2E_TMP = TMP;
 // A SECOND temp dir for the git-enabled server (kept distinct so its repo + data
 // never collide with the default server's). Specs read paddock-e2e-paths.json
-// from here (PADDOCK_E2E_GIT_TMP) to seed on-disk state.
+// from here (MANAGERS_E2E_GIT_TMP) to seed on-disk state.
 const GIT_TMP =
-  process.env.PADDOCK_E2E_GIT_TMP || mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-git-"));
-process.env.PADDOCK_E2E_GIT_TMP = GIT_TMP;
+  process.env.MANAGERS_E2E_GIT_TMP || mkdtempSync(path.join(os.tmpdir(), "paddock-e2e-git-"));
+process.env.MANAGERS_E2E_GIT_TMP = GIT_TMP;
 
 export default defineConfig({
   testDir: ".",
@@ -91,15 +91,15 @@ export default defineConfig({
       timeout: 60_000,
       reuseExistingServer: !process.env.CI,
       env: {
-        PADDOCK_E2E_PORT: PORT,
-        PADDOCK_E2E_TMP: TMP,
-        PADDOCK_TEST_LIVE: process.env.PADDOCK_TEST_LIVE ?? "",
+        MANAGERS_E2E_PORT: PORT,
+        MANAGERS_E2E_TMP: TMP,
+        MANAGERS_TEST_LIVE: process.env.MANAGERS_TEST_LIVE ?? "",
         // How long the fake's [[SLOWTOOL]] holds a turn IN FLIGHT. The default
         // (5s) is tuned for assertions made on the SAME page; Home's Running
         // feed (#599) has to be observed from another route, so the window must
         // outlast a navigation plus the attention fetch. Nothing else in the
         // e2e suite uses [[SLOWTOOL]], so widening it here costs nothing.
-        PADDOCK_FAKE_SLOWTOOL_MS: "12000",
+        MANAGERS_FAKE_SLOWTOOL_MS: "12000",
         // How long the fake's [[BGSUBAGENT]] sub-agent keeps working AFTER its
         // parent turn has finished (default 3s). journey-subagents.spec.ts has
         // to observe that state across a tab switch AND a full reload, sampling
@@ -108,14 +108,14 @@ export default defineConfig({
         // spec fails looking exactly like the bug it is meant to detect. Set
         // comfortably beyond that spec's own 120s timeout so a slow run can
         // never be mistaken for a regression. Nothing else uses [[BGSUBAGENT]].
-        PADDOCK_FAKE_BGSUBAGENT_MS: "150000",
+        MANAGERS_FAKE_BGSUBAGENT_MS: "150000",
         // How long the fake's [[BGTASK]] shells stay live (default 3s).
         // journey-running-work.spec.ts has to load the chat, find the bar and
         // read a row off it; 3s is tight enough that a slow run would see the
         // shell legitimately complete and read as a regression. Nothing else in
         // the e2e suite uses [[BGTASK]], so widening it costs nothing but the
         // length of that one spec's turn.
-        PADDOCK_FAKE_BGTASK_MS: "30000",
+        MANAGERS_FAKE_BGTASK_MS: "30000",
       },
     },
     {
@@ -125,15 +125,15 @@ export default defineConfig({
       timeout: 60_000,
       reuseExistingServer: !process.env.CI,
       env: {
-        PADDOCK_E2E_PORT: GIT_PORT,
-        PADDOCK_E2E_TMP: GIT_TMP,
-        PADDOCK_E2E_GIT: "1",
+        MANAGERS_E2E_PORT: GIT_PORT,
+        MANAGERS_E2E_TMP: GIT_TMP,
+        MANAGERS_E2E_GIT: "1",
         // A dummy client id so the "Connect GitHub" device-flow affordance shows
         // (configured=true). The flow itself is never driven (it'd hit real
         // GitHub); specs only assert the affordance + the seeded "connected"
         // state. See journey-git-github.spec.ts.
-        PADDOCK_GITHUB_CLIENT_ID: "Iv1.e2e0000client0id",
-        PADDOCK_TEST_LIVE: process.env.PADDOCK_TEST_LIVE ?? "",
+        MANAGERS_GITHUB_CLIENT_ID: "Iv1.e2e0000client0id",
+        MANAGERS_TEST_LIVE: process.env.MANAGERS_TEST_LIVE ?? "",
       },
     },
   ],

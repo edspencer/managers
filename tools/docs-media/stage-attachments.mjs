@@ -18,7 +18,7 @@
  * The rig runs the fake `claude` on driveMode: batch with the credentials
  * unset, so the reply costs nothing.
  *
- * Run: node stage-attachments.mjs [--base URL] [--slug SLUG]   (or $PADDOCK_RIG_BASE)
+ * Run: node stage-attachments.mjs [--base URL] [--slug SLUG]   (or $MANAGERS_RIG_BASE)
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
@@ -28,9 +28,9 @@ const arg = (n, d) => {
   const i = process.argv.indexOf(n);
   return i > -1 ? process.argv[i + 1] : d;
 };
-const BASE = arg("--base", process.env.PADDOCK_RIG_BASE || "http://127.0.0.1:4000");
+const BASE = arg("--base", process.env.MANAGERS_RIG_BASE || "http://127.0.0.1:4000");
 const SLUG = arg("--slug", "tidepool");
-const TMP = process.env.PADDOCK_STAGE_TMP || "./.stage-attachments";
+const TMP = process.env.MANAGERS_STAGE_TMP || "./.stage-attachments";
 
 /**
  * A plausible thing to drop into this project's chat. Deliberately plain: it is

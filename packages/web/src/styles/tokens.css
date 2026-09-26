@@ -18,7 +18,7 @@
  *    opinion.
  *  - `--accent` / `--accent-600` / `--accent-700` are space-separated sRGB
  *    channels, NOT oklch, because a running server overrides them with an
- *    injected `<style>` for `PADDOCK_BRAND_ACCENT` (issue #34, see
+ *    injected `<style>` for `MANAGERS_BRAND_ACCENT` (issue #34, see
  *    packages/server/src/brand.ts). Keep that format and those three names or
  *    per-instance branding breaks. Everything accent-flavoured below is derived
  *    from them so a brand colour propagates.

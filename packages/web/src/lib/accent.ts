@@ -2,7 +2,7 @@
  * The accent solver.
  *
  * ── The problem ──────────────────────────────────────────────────────────────
- * Today `PADDOCK_BRAND_ACCENT` lets an operator inject a raw hex over
+ * Today `MANAGERS_BRAND_ACCENT` lets an operator inject a raw hex over
  * `--accent` / `--accent-600` / `--accent-700` (see `packages/server/src/brand.ts`).
  * That is unsafe in a way nothing catches: the contrast guard's brand test only
  * asserts a token *changed*, never that it stayed readable, and a theme like
@@ -138,7 +138,7 @@ function readColor(root: HTMLElement, name: string): Rgba | null {
   const raw = getComputedStyle(root).getPropertyValue(name).trim();
   if (!raw) return null;
   // The three brand channels are stored as a bare `R G B` triple, not as a
-  // colour — that IS the format `PADDOCK_BRAND_ACCENT` injects and the one the
+  // colour — that IS the format `MANAGERS_BRAND_ACCENT` injects and the one the
   // token file's `rgb(var(--accent))` derivations expect. It is not a valid CSS
   // colour on its own, so it has to be wrapped before it can be parsed.
   const value = /^\d+(\.\d+)?( \d+(\.\d+)?){2}$/.test(raw) ? `rgb(${raw})` : raw;
@@ -398,7 +398,7 @@ function withThemeDefaults<T>(root: HTMLElement, read: () => T): T {
 }
 
 /**
- * The hue the current theme (or the server's `PADDOCK_BRAND_ACCENT` injection)
+ * The hue the current theme (or the server's `MANAGERS_BRAND_ACCENT` injection)
  * would use if the user picked nothing. This is how the two compose: the brand
  * seam supplies a hue like any other source, and the theme still owns the
  * chroma, the target contrast, and therefore the lightness.

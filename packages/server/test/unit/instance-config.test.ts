@@ -2,7 +2,7 @@
  * Unit tests for the instance-settings surface (issue #385): the GET DTO
  * builder, the PUT validator, and the comment-preserving YAML writer.
  *
- * These touch real `PADDOCK_*` env vars (to exercise env-shadow reporting), so
+ * These touch real `MANAGERS_*` env vars (to exercise env-shadow reporting), so
  * each case saves/restores the ones it sets. The writer tests round-trip a real
  * temp file on disk.
  */
@@ -22,9 +22,9 @@ import { DEFAULT_RECOVERY } from "../../src/recovery-config.js";
 import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 
 // Every env var any field references — cleared before each case so the box's
-// leaked PADDOCK_* vars don't poison env-shadow assertions, restored after.
+// leaked MANAGERS_* vars don't poison env-shadow assertions, restored after.
 const TOUCHED = [
-  "PADDOCK_CONFIG",
+  "MANAGERS_CONFIG",
   ...new Set(FIELDS.flatMap((f) => f.envVars)),
 ];
 
@@ -39,7 +39,7 @@ describe("instance-config (#385)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of TOUCHED) {
@@ -69,32 +69,32 @@ describe("instance-config (#385)", () => {
       expect(authMode.sensitive).toBe(true);
     });
 
-    it("marks a field env-overridden when its PADDOCK_* var is set", () => {
-      process.env.PADDOCK_CURATION_OVERVIEW_MAX_TOKENS = "3333";
+    it("marks a field env-overridden when its MANAGERS_* var is set", () => {
+      process.env.MANAGERS_CURATION_OVERVIEW_MAX_TOKENS = "3333";
       const dto = buildInstanceConfig(loadPaddockConfig());
       const overview = field(dto, "curation.overviewMaxTokens");
       expect(overview.value).toBe(3333);
       expect(overview.envOverridden).toBe(true);
-      expect(overview.envVar).toBe("PADDOCK_CURATION_OVERVIEW_MAX_TOKENS");
+      expect(overview.envVar).toBe("MANAGERS_CURATION_OVERVIEW_MAX_TOKENS");
     });
 
     it("does not mark a normal field overridden by a blank env var", () => {
       // For most knobs (envOr/envOpt semantics) a blank env var is not a shadow.
-      process.env.PADDOCK_CURATION_OVERVIEW_MAX_TOKENS = "   ";
+      process.env.MANAGERS_CURATION_OVERVIEW_MAX_TOKENS = "   ";
       const dto = buildInstanceConfig(loadPaddockConfig());
       expect(field(dto, "curation.overviewMaxTokens").envOverridden).toBe(false);
     });
 
     it("marks browserMcp overridden by a DEFINED-but-blank env var (matches loadBrowserMcp)", () => {
       // loadBrowserMcp keys off `env !== undefined`, so a defined-but-blank
-      // PADDOCK_BROWSER_MCP forces browserMcp=false — the UI must render it
+      // MANAGERS_BROWSER_MCP forces browserMcp=false — the UI must render it
       // read-only, not as an editable toggle that would silently no-op.
-      process.env.PADDOCK_BROWSER_MCP = "   ";
+      process.env.MANAGERS_BROWSER_MCP = "   ";
       const dto = buildInstanceConfig(loadPaddockConfig());
       const bm = field(dto, "browserMcp");
       expect(bm.value).toBe(false);
       expect(bm.envOverridden).toBe(true);
-      expect(bm.envVar).toBe("PADDOCK_BROWSER_MCP");
+      expect(bm.envVar).toBe("MANAGERS_BROWSER_MCP");
     });
 
     it("never surfaces secret values (transcription apiKey / auth jwt)", () => {
@@ -226,7 +226,7 @@ describe("instance-config (#385)", () => {
     ] as const)(
       "reports %s's levers, and credits the profile for each",
       (name, transcripts, instructions, selfMcp, depth) => {
-        process.env.PADDOCK_PROFILE = name;
+        process.env.MANAGERS_PROFILE = name;
         const dto = buildInstanceConfig(loadPaddockConfig());
 
         expect(field(dto, "profile").value).toBe(name);
@@ -269,7 +269,7 @@ describe("instance-config (#385)", () => {
     });
 
     it("falls back to balanced on an unrecognised name, and reports what is in force", () => {
-      process.env.PADDOCK_PROFILE = "paranoidd"; // a typo, not a profile
+      process.env.MANAGERS_PROFILE = "paranoidd"; // a typo, not a profile
       const dto = buildInstanceConfig(loadPaddockConfig());
       const p = field(dto, "profile");
       // The row shows the posture actually resolved, not the string typed —
@@ -277,7 +277,7 @@ describe("instance-config (#385)", () => {
       expect(p.value).toBe("balanced");
       // …and still says the env var was read, so the typo is findable.
       expect(p.envOverridden).toBe(true);
-      expect(p.envVar).toBe("PADDOCK_PROFILE");
+      expect(p.envVar).toBe("MANAGERS_PROFILE");
       expect(field(dto, "claude.instructions").value).toBe("host"); // balanced's
       expect(field(dto, "claude.instructions").fromProfile).toBe(true);
     });
@@ -288,14 +288,14 @@ describe("instance-config (#385)", () => {
      * credit the env var it already reports — not the profile.
      */
     it("does NOT credit the profile for a value an env var set", () => {
-      process.env.PADDOCK_PROFILE = "yolo";
-      process.env.PADDOCK_CLAUDE_INSTRUCTIONS = "own";
+      process.env.MANAGERS_PROFILE = "yolo";
+      process.env.MANAGERS_CLAUDE_INSTRUCTIONS = "own";
       const dto = buildInstanceConfig(loadPaddockConfig());
 
       const instructions = field(dto, "claude.instructions");
       expect(instructions.value).toBe("own"); // env beat the profile
       expect(instructions.envOverridden).toBe(true);
-      expect(instructions.envVar).toBe("PADDOCK_CLAUDE_INSTRUCTIONS");
+      expect(instructions.envVar).toBe("MANAGERS_CLAUDE_INSTRUCTIONS");
       expect(instructions.fromProfile).toBe(false);
 
       // The control: its sibling, untouched by the environment, still is.
@@ -304,8 +304,8 @@ describe("instance-config (#385)", () => {
     });
 
     it("does NOT credit the profile for a value an env var set to the SAME thing", () => {
-      process.env.PADDOCK_PROFILE = "yolo";
-      process.env.PADDOCK_CLAUDE_HOOKS = "host"; // what yolo wanted anyway
+      process.env.MANAGERS_PROFILE = "yolo";
+      process.env.MANAGERS_CLAUDE_HOOKS = "host"; // what yolo wanted anyway
       const hooks = field(buildInstanceConfig(loadPaddockConfig()), "claude.hooks");
       expect(hooks.value).toBe("host");
       // Agreement is a coincidence, not provenance — the env var is what is
@@ -441,11 +441,11 @@ describe("instance-config (#385)", () => {
     // effect, so a 200 + "restartRequired" was a lie the UI already knew better
     // than (it renders these read-only).
     it("rejects a field an env var currently shadows", () => {
-      process.env.PADDOCK_BRAND_NAME = "From The Environment";
+      process.env.MANAGERS_BRAND_NAME = "From The Environment";
       expect(() => validatePatch({ "brand.name": "From The File" })).toThrow(
-        /PADDOCK_BRAND_NAME/,
+        /MANAGERS_BRAND_NAME/,
       );
-      delete process.env.PADDOCK_BRAND_NAME;
+      delete process.env.MANAGERS_BRAND_NAME;
       expect(validatePatch({ "brand.name": "From The File" })).toEqual([
         { key: "brand.name", value: "From The File" },
       ]);
@@ -519,10 +519,10 @@ describe("instance-config (#385)", () => {
       expect(loadPaddockConfig().sweepMinIntervalMs).toBeUndefined();
     });
 
-    it("respects PADDOCK_CONFIG for the target path", () => {
+    it("respects MANAGERS_CONFIG for the target path", () => {
       const explicit = path.join(dataDir, "nested", "custom.yaml");
-      process.env.PADDOCK_CONFIG = explicit;
-      // instanceConfigPath reads PADDOCK_CONFIG directly, so cfg.dataDir is moot.
+      process.env.MANAGERS_CONFIG = explicit;
+      // instanceConfigPath reads MANAGERS_CONFIG directly, so cfg.dataDir is moot.
       const p = instanceConfigPath({ dataDir } as never);
       expect(p).toBe(explicit);
       writeInstanceConfig(p, [{ key: "brand.name", value: "Explicit" }]);

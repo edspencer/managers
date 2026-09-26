@@ -23,7 +23,7 @@ export interface McpToolInfo {
 }
 
 /** Paddock's own injected MCP servers. */
-const PADDOCK_SERVERS = new Set(["paddock", "paddock_manage"]);
+const MANAGERS_SERVERS = new Set(["paddock", "paddock_manage"]);
 
 /** `create_chat` → "Create chat"; leaves an already-spaced label alone. */
 function humanize(segment: string): string {
@@ -49,7 +49,7 @@ export function mcpToolInfo(toolName: string): McpToolInfo {
   return {
     isMcp: true,
     server,
-    isPaddock: PADDOCK_SERVERS.has(server),
+    isPaddock: MANAGERS_SERVERS.has(server),
     display: humanize(tool || server),
     tool,
   };

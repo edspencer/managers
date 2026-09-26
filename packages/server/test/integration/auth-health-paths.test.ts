@@ -55,16 +55,16 @@ async function boot(): Promise<Harness> {
     "PATH",
     "HOST",
     "LOG_LEVEL",
-    "PADDOCK_DATA_DIR",
-    "PADDOCK_PROJECTS_DIR",
-    "PADDOCK_WEB_DIST",
+    "MANAGERS_DATA_DIR",
+    "MANAGERS_PROJECTS_DIR",
+    "MANAGERS_WEB_DIST",
     "CLAUDE_CONFIG_DIR",
-    "PADDOCK_FAKE_SCRIPT",
-    "PADDOCK_AUTH_MODE",
-    "PADDOCK_AUTH_USER_HEADER",
-    "PADDOCK_BRAND_NAME",
-    "PADDOCK_BRAND_LOGO",
-    "PADDOCK_BRAND_ACCENT",
+    "MANAGERS_FAKE_SCRIPT",
+    "MANAGERS_AUTH_MODE",
+    "MANAGERS_AUTH_USER_HEADER",
+    "MANAGERS_BRAND_NAME",
+    "MANAGERS_BRAND_LOGO",
+    "MANAGERS_BRAND_ACCENT",
   ] as const;
   const saved: Record<string, string | undefined> = {};
   for (const k of KEYS) saved[k] = process.env[k];
@@ -73,19 +73,19 @@ async function boot(): Promise<Harness> {
   // Pin loopback so the safe-by-default bind guard (#435) doesn't refuse to boot
   // under a dev box's ambient HOST=0.0.0.0.
   process.env.HOST = "127.0.0.1";
-  delete process.env.PADDOCK_FAKE_SCRIPT;
+  delete process.env.MANAGERS_FAKE_SCRIPT;
   delete process.env.CLAUDE_CONFIG_DIR;
-  for (const k of ["PADDOCK_BRAND_NAME", "PADDOCK_BRAND_LOGO", "PADDOCK_BRAND_ACCENT"]) {
+  for (const k of ["MANAGERS_BRAND_NAME", "MANAGERS_BRAND_LOGO", "MANAGERS_BRAND_ACCENT"]) {
     delete process.env[k];
   }
   process.env.PATH = `${FAKE_BIN}${path.delimiter}${process.env.PATH ?? ""}`;
-  process.env.PADDOCK_DATA_DIR = dataDir;
-  process.env.PADDOCK_PROJECTS_DIR = projectsRoot;
-  process.env.PADDOCK_WEB_DIST = webDist;
+  process.env.MANAGERS_DATA_DIR = dataDir;
+  process.env.MANAGERS_PROJECTS_DIR = projectsRoot;
+  process.env.MANAGERS_WEB_DIST = webDist;
   process.env.LOG_LEVEL = "silent";
   // Auth ON — the deployment shape where the exemption is load-bearing.
-  process.env.PADDOCK_AUTH_MODE = "trusted-header";
-  process.env.PADDOCK_AUTH_USER_HEADER = "X-Forwarded-User";
+  process.env.MANAGERS_AUTH_MODE = "trusted-header";
+  process.env.MANAGERS_AUTH_USER_HEADER = "X-Forwarded-User";
 
   const built = await buildApp({ serveStatic: true });
   await built.app.ready();

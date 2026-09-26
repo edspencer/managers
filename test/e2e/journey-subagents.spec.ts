@@ -89,7 +89,7 @@ test("a running sub-agent survives navigating away and back, and a reload (#725)
 }) => {
   // Three observation windows (initial, after the tab switch, after the reload),
   // each waiting on a 2s REST poll cadence and preceded by a turn completion,
-  // do not fit the suite's 60s default. PADDOCK_FAKE_BGSUBAGENT_MS is set beyond
+  // do not fit the suite's 60s default. MANAGERS_FAKE_BGSUBAGENT_MS is set beyond
   // this so the sub-agent cannot settle mid-test.
   test.setTimeout(120_000);
 

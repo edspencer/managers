@@ -5,7 +5,7 @@
  *   node scripts/demo-gif/seed.mjs --out /tmp/paddock-demo [--now <ISO>]
  *
  * Everything it writes is invented (see fixtures.mjs). The output is a complete
- * `PADDOCK_DATA_DIR` that serve.mjs can boot against: projects, chats with rich
+ * `MANAGERS_DATA_DIR` that serve.mjs can boot against: projects, chats with rich
  * tool blocks, a finished sub-agent, triggers, job records, read state, and a
  * real git repo so the Changes tab has a diff.
  *

@@ -30,7 +30,7 @@ describe("capMessages (issue #914)", () => {
 });
 
 describe("ui config resolution (issue #914)", () => {
-  const ENV_KEYS = ["PADDOCK_DATA_DIR", "PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT"] as const;
+  const ENV_KEYS = ["MANAGERS_DATA_DIR", "MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT"] as const;
   const saved: Record<string, string | undefined> = {};
   let dir: string;
 
@@ -40,7 +40,7 @@ describe("ui config resolution (issue #914)", () => {
       delete process.env[k];
     }
     dir = makeTmpDir("ui-config");
-    process.env.PADDOCK_DATA_DIR = dir;
+    process.env.MANAGERS_DATA_DIR = dir;
   });
   afterEach(() => {
     for (const k of ENV_KEYS) {
@@ -58,18 +58,18 @@ describe("ui config resolution (issue #914)", () => {
   });
 
   it("reads the env var", () => {
-    process.env.PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT = "120";
+    process.env.MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT = "120";
     expect(limit()).toBe(120);
   });
 
   it("accepts 0 (unlimited) — the floor is 0, not 1", () => {
-    process.env.PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT = "0";
+    process.env.MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT = "0";
     expect(limit()).toBe(0);
   });
 
   it("falls back to the default on a malformed value rather than failing boot", () => {
     for (const bad of ["nonsense", "-5", "1.5"]) {
-      process.env.PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT = bad;
+      process.env.MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT = bad;
       expect(limit()).toBe(DEFAULT_UI.transcriptRenderLimit);
     }
   });

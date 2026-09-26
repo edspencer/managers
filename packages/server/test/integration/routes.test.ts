@@ -87,7 +87,7 @@ describe("integration: REST route coverage (real app, fake claude)", () => {
       debounceMs: 5000,
       maxRetries: 1,
     });
-    // With no PADDOCK_MODELS set, the full catalog is offered (unchanged behaviour):
+    // With no MANAGERS_MODELS set, the full catalog is offered (unchanged behaviour):
     // every catalog id is present + the keeper default is the real default (#457).
     expect(ids).toContain("claude-haiku-4-5-20251001");
     expect(body.defaultModel).toBe("claude-opus-5-5");

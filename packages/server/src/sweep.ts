@@ -158,7 +158,7 @@ export class SweepService {
     this.herdctl = opts.herdctl;
     this.projects = opts.projects;
     this.stateFile = path.join(opts.dataDir, STATE_FILE);
-    // `PADDOCK_SWEEP_MIN_INTERVAL_MS` is now folded into PaddockConfig (issue
+    // `MANAGERS_SWEEP_MIN_INTERVAL_MS` is now folded into PaddockConfig (issue
     // #269) and passed in as `minIntervalMs`; the default applies when unset.
     this.minIntervalMs = opts.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS;
     this.instanceCuration = opts.budget ?? DEFAULT_CURATION;

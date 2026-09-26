@@ -1,7 +1,7 @@
 /**
  * Unit tests for loadPaddockConfig env resolution — focused on the native
  * system-prompt toggle (issue #176). Each case saves/restores the touched env
- * vars and points PADDOCK_DATA_DIR at a throwaway tmp dir (loadPaddockConfig
+ * vars and points MANAGERS_DATA_DIR at a throwaway tmp dir (loadPaddockConfig
  * mkdirs it).
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -16,20 +16,20 @@ import {
 import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 
 const ENV_KEYS = [
-  "PADDOCK_DATA_DIR",
-  "PADDOCK_NATIVE_PROMPT",
-  "PADDOCK_MAX_SPAWN_DEPTH",
+  "MANAGERS_DATA_DIR",
+  "MANAGERS_NATIVE_PROMPT",
+  "MANAGERS_MAX_SPAWN_DEPTH",
 ];
 
 /** Env vars folded into PaddockConfig by issue #269 (F1). */
 const FOLD_ENV_KEYS = [
-  "PADDOCK_DATA_DIR",
+  "MANAGERS_DATA_DIR",
   "LOG_LEVEL",
-  "PADDOCK_BROWSER_MCP",
-  "PADDOCK_SWEEP_MIN_INTERVAL_MS",
-  "PADDOCK_GIT_AUTHOR_NAME",
-  "PADDOCK_GIT_AUTHOR_EMAIL",
-  "PADDOCK_GITHUB_CLIENT_ID",
+  "MANAGERS_BROWSER_MCP",
+  "MANAGERS_SWEEP_MIN_INTERVAL_MS",
+  "MANAGERS_GIT_AUTHOR_NAME",
+  "MANAGERS_GIT_AUTHOR_EMAIL",
+  "MANAGERS_GITHUB_CLIENT_ID",
 ];
 
 describe("loadPaddockConfig: nativeSystemPrompt (#176)", () => {
@@ -40,9 +40,9 @@ describe("loadPaddockConfig: nativeSystemPrompt (#176)", () => {
     dataDir = await makeTmpDir("paddock-config-");
     saved = {};
     for (const k of ENV_KEYS) saved[k] = process.env[k];
-    process.env.PADDOCK_DATA_DIR = dataDir;
-    delete process.env.PADDOCK_NATIVE_PROMPT;
-    delete process.env.PADDOCK_MAX_SPAWN_DEPTH;
+    process.env.MANAGERS_DATA_DIR = dataDir;
+    delete process.env.MANAGERS_NATIVE_PROMPT;
+    delete process.env.MANAGERS_MAX_SPAWN_DEPTH;
   });
   afterEach(async () => {
     for (const k of ENV_KEYS) {
@@ -59,7 +59,7 @@ describe("loadPaddockConfig: nativeSystemPrompt (#176)", () => {
   it.each(["0", "false", "no", "FALSE", "No"])(
     "opts into the replace prompt when set to %s",
     (val) => {
-      process.env.PADDOCK_NATIVE_PROMPT = val;
+      process.env.MANAGERS_NATIVE_PROMPT = val;
       expect(loadPaddockConfig().nativeSystemPrompt).toBe(false);
     },
   );
@@ -67,7 +67,7 @@ describe("loadPaddockConfig: nativeSystemPrompt (#176)", () => {
   it.each(["1", "true", "yes", "anything-else"])(
     "stays native when set to %s",
     (val) => {
-      process.env.PADDOCK_NATIVE_PROMPT = val;
+      process.env.MANAGERS_NATIVE_PROMPT = val;
       expect(loadPaddockConfig().nativeSystemPrompt).toBe(true);
     },
   );
@@ -81,8 +81,8 @@ describe("loadPaddockConfig: maxSpawnDepth (#262)", () => {
     dataDir = await makeTmpDir("paddock-config-");
     saved = {};
     for (const k of ENV_KEYS) saved[k] = process.env[k];
-    process.env.PADDOCK_DATA_DIR = dataDir;
-    delete process.env.PADDOCK_MAX_SPAWN_DEPTH;
+    process.env.MANAGERS_DATA_DIR = dataDir;
+    delete process.env.MANAGERS_MAX_SPAWN_DEPTH;
   });
   afterEach(async () => {
     for (const k of ENV_KEYS) {
@@ -100,15 +100,15 @@ describe("loadPaddockConfig: maxSpawnDepth (#262)", () => {
     ["0", 0],
     ["2", 2],
     ["8", 8],
-  ])("honors a valid PADDOCK_MAX_SPAWN_DEPTH=%s", (raw, expected) => {
-    process.env.PADDOCK_MAX_SPAWN_DEPTH = raw;
+  ])("honors a valid MANAGERS_MAX_SPAWN_DEPTH=%s", (raw, expected) => {
+    process.env.MANAGERS_MAX_SPAWN_DEPTH = raw;
     expect(loadPaddockConfig().maxSpawnDepth).toBe(expected);
   });
 
   it.each(["-1", "9", "1.5", "nonsense", ""])(
     "falls back to the default 1 for the invalid value %s",
     (raw) => {
-      process.env.PADDOCK_MAX_SPAWN_DEPTH = raw;
+      process.env.MANAGERS_MAX_SPAWN_DEPTH = raw;
       expect(loadPaddockConfig().maxSpawnDepth).toBe(1);
     },
   );
@@ -117,14 +117,14 @@ describe("loadPaddockConfig: maxSpawnDepth (#262)", () => {
 describe("loadPaddockConfig: hooksMcpEnabled (G5)", () => {
   let dataDir: string;
   let saved: Record<string, string | undefined>;
-  const KEYS = ["PADDOCK_DATA_DIR", "PADDOCK_HOOKS_MCP"];
+  const KEYS = ["MANAGERS_DATA_DIR", "MANAGERS_HOOKS_MCP"];
 
   beforeEach(async () => {
     dataDir = await makeTmpDir("paddock-config-");
     saved = {};
     for (const k of KEYS) saved[k] = process.env[k];
-    process.env.PADDOCK_DATA_DIR = dataDir;
-    delete process.env.PADDOCK_HOOKS_MCP;
+    process.env.MANAGERS_DATA_DIR = dataDir;
+    delete process.env.MANAGERS_HOOKS_MCP;
   });
   afterEach(async () => {
     for (const k of KEYS) {
@@ -138,13 +138,13 @@ describe("loadPaddockConfig: hooksMcpEnabled (G5)", () => {
     expect(loadPaddockConfig().hooksMcpEnabled).toBe(false);
   });
 
-  it.each(["1", "true", "yes", "TRUE"])("PADDOCK_HOOKS_MCP=%s enables it", (raw) => {
-    process.env.PADDOCK_HOOKS_MCP = raw;
+  it.each(["1", "true", "yes", "TRUE"])("MANAGERS_HOOKS_MCP=%s enables it", (raw) => {
+    process.env.MANAGERS_HOOKS_MCP = raw;
     expect(loadPaddockConfig().hooksMcpEnabled).toBe(true);
   });
 
   it.each(["0", "false", "no", "nonsense", ""])("leaves it OFF for %s", (raw) => {
-    process.env.PADDOCK_HOOKS_MCP = raw;
+    process.env.MANAGERS_HOOKS_MCP = raw;
     expect(loadPaddockConfig().hooksMcpEnabled).toBe(false);
   });
 });
@@ -152,15 +152,15 @@ describe("loadPaddockConfig: hooksMcpEnabled (G5)", () => {
 describe("loadPaddockConfig: openapi reference", () => {
   let dataDir: string;
   let saved: Record<string, string | undefined>;
-  const KEYS = ["PADDOCK_DATA_DIR", "PADDOCK_OPENAPI_ENABLED", "PADDOCK_OPENAPI_PATH"];
+  const KEYS = ["MANAGERS_DATA_DIR", "MANAGERS_OPENAPI_ENABLED", "MANAGERS_OPENAPI_PATH"];
 
   beforeEach(async () => {
     dataDir = await makeTmpDir("paddock-config-");
     saved = {};
     for (const k of KEYS) saved[k] = process.env[k];
-    process.env.PADDOCK_DATA_DIR = dataDir;
-    delete process.env.PADDOCK_OPENAPI_ENABLED;
-    delete process.env.PADDOCK_OPENAPI_PATH;
+    process.env.MANAGERS_DATA_DIR = dataDir;
+    delete process.env.MANAGERS_OPENAPI_ENABLED;
+    delete process.env.MANAGERS_OPENAPI_PATH;
   });
   afterEach(async () => {
     for (const k of KEYS) {
@@ -176,18 +176,18 @@ describe("loadPaddockConfig: openapi reference", () => {
     expect(cfg.openapi.path).toBe("/open-api");
   });
 
-  it.each(["1", "true", "yes", "on", "TRUE"])("PADDOCK_OPENAPI_ENABLED=%s enables it", (raw) => {
-    process.env.PADDOCK_OPENAPI_ENABLED = raw;
+  it.each(["1", "true", "yes", "on", "TRUE"])("MANAGERS_OPENAPI_ENABLED=%s enables it", (raw) => {
+    process.env.MANAGERS_OPENAPI_ENABLED = raw;
     expect(loadPaddockConfig().openapi.enabled).toBe(true);
   });
 
   it.each(["0", "false", "no", "off", "nonsense", ""])("leaves it OFF for %s", (raw) => {
-    process.env.PADDOCK_OPENAPI_ENABLED = raw;
+    process.env.MANAGERS_OPENAPI_ENABLED = raw;
     expect(loadPaddockConfig().openapi.enabled).toBe(false);
   });
 
   it("normalizes a custom path to a leading slash, no trailing slash", () => {
-    process.env.PADDOCK_OPENAPI_PATH = "api-docs/";
+    process.env.MANAGERS_OPENAPI_PATH = "api-docs/";
     expect(loadPaddockConfig().openapi.path).toBe("/api-docs");
   });
 });
@@ -196,11 +196,11 @@ describe("loadPaddockConfig: recovery (#301)", () => {
   let dataDir: string;
   let saved: Record<string, string | undefined>;
   const KEYS = [
-    "PADDOCK_DATA_DIR",
-    "PADDOCK_RECOVERY_SURFACE",
-    "PADDOCK_RECOVERY_AUTODRIVE",
-    "PADDOCK_RECOVERY_DEBOUNCE_MS",
-    "PADDOCK_RECOVERY_MAX_RETRIES",
+    "MANAGERS_DATA_DIR",
+    "MANAGERS_RECOVERY_SURFACE",
+    "MANAGERS_RECOVERY_AUTODRIVE",
+    "MANAGERS_RECOVERY_DEBOUNCE_MS",
+    "MANAGERS_RECOVERY_MAX_RETRIES",
   ];
 
   beforeEach(async () => {
@@ -210,7 +210,7 @@ describe("loadPaddockConfig: recovery (#301)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of KEYS) {
@@ -229,19 +229,19 @@ describe("loadPaddockConfig: recovery (#301)", () => {
     });
   });
 
-  it("PADDOCK_RECOVERY_SURFACE=0 turns Layer 2 off", () => {
-    process.env.PADDOCK_RECOVERY_SURFACE = "0";
+  it("MANAGERS_RECOVERY_SURFACE=0 turns Layer 2 off", () => {
+    process.env.MANAGERS_RECOVERY_SURFACE = "0";
     expect(loadPaddockConfig().recovery.surfaceKilledTask).toBe(false);
   });
 
-  it.each(["1", "true", "yes"])("PADDOCK_RECOVERY_AUTODRIVE=%s opts Layer 3 in", (raw) => {
-    process.env.PADDOCK_RECOVERY_AUTODRIVE = raw;
+  it.each(["1", "true", "yes"])("MANAGERS_RECOVERY_AUTODRIVE=%s opts Layer 3 in", (raw) => {
+    process.env.MANAGERS_RECOVERY_AUTODRIVE = raw;
     expect(loadPaddockConfig().recovery.autoReDrive).toBe(true);
   });
 
   it("parses the numeric knobs from env", () => {
-    process.env.PADDOCK_RECOVERY_DEBOUNCE_MS = "1500";
-    process.env.PADDOCK_RECOVERY_MAX_RETRIES = "3";
+    process.env.MANAGERS_RECOVERY_DEBOUNCE_MS = "1500";
+    process.env.MANAGERS_RECOVERY_MAX_RETRIES = "3";
     const r = loadPaddockConfig().recovery;
     expect(r).toMatchObject({ debounceMs: 1500, maxRetries: 3 });
   });
@@ -249,7 +249,7 @@ describe("loadPaddockConfig: recovery (#301)", () => {
   it.each(["-1", "1.5", "nonsense", ""])(
     "falls back to the default for an invalid debounce value %j",
     (raw) => {
-      process.env.PADDOCK_RECOVERY_DEBOUNCE_MS = raw;
+      process.env.MANAGERS_RECOVERY_DEBOUNCE_MS = raw;
       expect(loadPaddockConfig().recovery.debounceMs).toBe(5000);
     },
   );
@@ -264,7 +264,7 @@ describe("loadPaddockConfig: folded env knobs (#269)", () => {
     saved = {};
     for (const k of FOLD_ENV_KEYS) saved[k] = process.env[k];
     for (const k of FOLD_ENV_KEYS) delete process.env[k];
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of FOLD_ENV_KEYS) {
@@ -288,10 +288,10 @@ describe("loadPaddockConfig: folded env knobs (#269)", () => {
     expect(loadPaddockConfig().logLevel).toBe("debug");
   });
 
-  it("PADDOCK_BROWSER_MCP=1 enables the browser MCP (only the literal '1')", () => {
-    process.env.PADDOCK_BROWSER_MCP = "1";
+  it("MANAGERS_BROWSER_MCP=1 enables the browser MCP (only the literal '1')", () => {
+    process.env.MANAGERS_BROWSER_MCP = "1";
     expect(loadPaddockConfig().browserMcp).toBe(true);
-    process.env.PADDOCK_BROWSER_MCP = "true";
+    process.env.MANAGERS_BROWSER_MCP = "true";
     expect(loadPaddockConfig().browserMcp).toBe(false);
   });
 
@@ -299,59 +299,59 @@ describe("loadPaddockConfig: folded env knobs (#269)", () => {
     ["0", 0],
     ["250", 250],
     ["60000", 60000],
-  ])("parses a valid PADDOCK_SWEEP_MIN_INTERVAL_MS=%s", (raw, expected) => {
-    process.env.PADDOCK_SWEEP_MIN_INTERVAL_MS = raw;
+  ])("parses a valid MANAGERS_SWEEP_MIN_INTERVAL_MS=%s", (raw, expected) => {
+    process.env.MANAGERS_SWEEP_MIN_INTERVAL_MS = raw;
     expect(loadPaddockConfig().sweepMinIntervalMs).toBe(expected);
   });
 
   it.each(["-1", "nonsense", "  "])(
-    "ignores an invalid PADDOCK_SWEEP_MIN_INTERVAL_MS=%s (falls back to the default)",
+    "ignores an invalid MANAGERS_SWEEP_MIN_INTERVAL_MS=%s (falls back to the default)",
     (raw) => {
-      process.env.PADDOCK_SWEEP_MIN_INTERVAL_MS = raw;
+      process.env.MANAGERS_SWEEP_MIN_INTERVAL_MS = raw;
       expect(loadPaddockConfig().sweepMinIntervalMs).toBeUndefined();
     },
   );
 
   it("threads the git author identity from env", () => {
-    process.env.PADDOCK_GIT_AUTHOR_NAME = "Ed";
-    process.env.PADDOCK_GIT_AUTHOR_EMAIL = "ed@example.com";
+    process.env.MANAGERS_GIT_AUTHOR_NAME = "Ed";
+    process.env.MANAGERS_GIT_AUTHOR_EMAIL = "ed@example.com";
     expect(loadPaddockConfig().gitAuthor).toEqual({ name: "Ed", email: "ed@example.com" });
   });
 
-  it("trims PADDOCK_GITHUB_CLIENT_ID and treats blank as unset", () => {
-    process.env.PADDOCK_GITHUB_CLIENT_ID = "  Iv1.abc  ";
+  it("trims MANAGERS_GITHUB_CLIENT_ID and treats blank as unset", () => {
+    process.env.MANAGERS_GITHUB_CLIENT_ID = "  Iv1.abc  ";
     expect(loadPaddockConfig().githubClientId).toBe("Iv1.abc");
-    process.env.PADDOCK_GITHUB_CLIENT_ID = "   ";
+    process.env.MANAGERS_GITHUB_CLIENT_ID = "   ";
     expect(loadPaddockConfig().githubClientId).toBeUndefined();
   });
 });
 
 /**
  * YAML instance-config file loader (issue #270 / DD-5) — precedence file < env.
- * Each case points PADDOCK_DATA_DIR at a throwaway tmp dir and writes the
+ * Each case points MANAGERS_DATA_DIR at a throwaway tmp dir and writes the
  * optional `paddock.config.yaml` under it; the surrounding env vars that could
  * shadow file values are cleared so the file layer is observed in isolation.
  */
 describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
   // Every env var the file layer can be overridden by, plus the file-path knob.
   const FILE_ENV_KEYS = [
-    "PADDOCK_DATA_DIR",
-    "PADDOCK_CONFIG",
+    "MANAGERS_DATA_DIR",
+    "MANAGERS_CONFIG",
     "PORT",
     "HOST",
-    "PADDOCK_AUTH_MODE",
-    "PADDOCK_AUTH_JWKS_URL",
-    "PADDOCK_BRAND_NAME",
-    "PADDOCK_DRIVE_MODE",
-    "PADDOCK_MAX_SPAWN_DEPTH",
-    "PADDOCK_SELF_MCP",
-    "PADDOCK_SELF_MCP_WRITE",
-    "PADDOCK_HOOKS_MCP",
-    "PADDOCK_BROWSER_MCP",
-    "PADDOCK_SWEEP_MIN_INTERVAL_MS",
-    "PADDOCK_GIT_AUTHOR_NAME",
-    "PADDOCK_RECOVERY_SURFACE",
-    "PADDOCK_RECOVERY_AUTODRIVE",
+    "MANAGERS_AUTH_MODE",
+    "MANAGERS_AUTH_JWKS_URL",
+    "MANAGERS_BRAND_NAME",
+    "MANAGERS_DRIVE_MODE",
+    "MANAGERS_MAX_SPAWN_DEPTH",
+    "MANAGERS_SELF_MCP",
+    "MANAGERS_SELF_MCP_WRITE",
+    "MANAGERS_HOOKS_MCP",
+    "MANAGERS_BROWSER_MCP",
+    "MANAGERS_SWEEP_MIN_INTERVAL_MS",
+    "MANAGERS_GIT_AUTHOR_NAME",
+    "MANAGERS_RECOVERY_SURFACE",
+    "MANAGERS_RECOVERY_AUTODRIVE",
     "LOG_LEVEL",
   ];
 
@@ -371,7 +371,7 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of FILE_ENV_KEYS) {
@@ -481,19 +481,19 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
     // Env shadows the file, same as its siblings.
     writeConfig(["selfMcpEnabled: true", "selfMcpWriteEnabled: true"].join("\n") + "\n");
     expect(loadPaddockConfig().selfMcpProjectsEnabled).toBe(false);
-    process.env.PADDOCK_SELF_MCP_PROJECTS = "1";
+    process.env.MANAGERS_SELF_MCP_PROJECTS = "1";
     expect(loadPaddockConfig().selfMcpProjectsEnabled).toBe(true);
   });
 
   it("env overrides a recovery file value (precedence file < env)", () => {
     writeConfig(["recovery:", "  surfaceKilledTask: false"].join("\n") + "\n");
-    process.env.PADDOCK_RECOVERY_SURFACE = "1";
+    process.env.MANAGERS_RECOVERY_SURFACE = "1";
     expect(loadPaddockConfig().recovery.surfaceKilledTask).toBe(true);
   });
 
   it("env overrides a file value (precedence file < env), file base still applies elsewhere", () => {
     writeConfig(["brand:", "  name: FromFile", "auth:", "  mode: jwt"].join("\n") + "\n");
-    process.env.PADDOCK_BRAND_NAME = "FromEnv";
+    process.env.MANAGERS_BRAND_NAME = "FromEnv";
     const cfg = loadPaddockConfig();
     // Env wins for the shadowed key…
     expect(cfg.brand.name).toBe("FromEnv");
@@ -501,30 +501,30 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
     expect(cfg.auth.mode).toBe("jwt");
   });
 
-  it("PADDOCK_BROWSER_MCP keeps literal-'1' env semantics over any file value", () => {
+  it("MANAGERS_BROWSER_MCP keeps literal-'1' env semantics over any file value", () => {
     writeConfig("browserMcp: true\n");
     // File alone enables it…
     expect(loadPaddockConfig().browserMcp).toBe(true);
     // …but a non-'1' env value explicitly disables it (unchanged env semantics).
-    process.env.PADDOCK_BROWSER_MCP = "true";
+    process.env.MANAGERS_BROWSER_MCP = "true";
     expect(loadPaddockConfig().browserMcp).toBe(false);
-    process.env.PADDOCK_BROWSER_MCP = "1";
+    process.env.MANAGERS_BROWSER_MCP = "1";
     expect(loadPaddockConfig().browserMcp).toBe(true);
   });
 
-  it("honours an explicit PADDOCK_CONFIG path outside the data dir", async () => {
+  it("honours an explicit MANAGERS_CONFIG path outside the data dir", async () => {
     const other = await makeTmpDir("paddock-config-explicit-");
     try {
       const p = writeConfig("brand:\n  name: Explicit\n", other);
-      process.env.PADDOCK_CONFIG = p;
+      process.env.MANAGERS_CONFIG = p;
       expect(loadPaddockConfig().brand.name).toBe("Explicit");
     } finally {
       await rmTmpDir(other);
     }
   });
 
-  it("throws a clear error when PADDOCK_CONFIG points at a missing file", () => {
-    process.env.PADDOCK_CONFIG = path.join(dataDir, "does-not-exist.yaml");
+  it("throws a clear error when MANAGERS_CONFIG points at a missing file", () => {
+    process.env.MANAGERS_CONFIG = path.join(dataDir, "does-not-exist.yaml");
     expect(() => loadPaddockConfig()).toThrow(/does not exist/);
   });
 
@@ -568,14 +568,14 @@ describe("loadPaddockConfig: YAML instance-config file (#270)", () => {
 });
 
 /**
- * Instance offered-models allow-list (issue #457 Step 2): env `PADDOCK_MODELS`
+ * Instance offered-models allow-list (issue #457 Step 2): env `MANAGERS_MODELS`
  * (comma-separated) over YAML `models:` (a string array) over the default
  * (undefined ⇒ offer the full catalog). Unknown ids are dropped; an all-unknown /
  * empty result falls back to undefined (the full catalog), so an instance is never
  * left offering zero models.
  */
 describe("loadPaddockConfig: models allow-list (#457)", () => {
-  const MODELS_ENV_KEYS = ["PADDOCK_DATA_DIR", "PADDOCK_CONFIG", "PADDOCK_MODELS"];
+  const MODELS_ENV_KEYS = ["MANAGERS_DATA_DIR", "MANAGERS_CONFIG", "MANAGERS_MODELS"];
   let dataDir: string;
   let saved: Record<string, string | undefined>;
 
@@ -592,7 +592,7 @@ describe("loadPaddockConfig: models allow-list (#457)", () => {
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of MODELS_ENV_KEYS) {
@@ -615,14 +615,14 @@ describe("loadPaddockConfig: models allow-list (#457)", () => {
     expect(loadPaddockConfig().models).toEqual(["claude-opus-5", "claude-sonnet-5"]);
   });
 
-  it("env `PADDOCK_MODELS` (comma-separated) overrides the YAML list", () => {
+  it("env `MANAGERS_MODELS` (comma-separated) overrides the YAML list", () => {
     writeConfig(["models:", "  - claude-opus-5"].join("\n") + "\n");
-    process.env.PADDOCK_MODELS = "claude-sonnet-5, claude-haiku-4-5-20251001";
+    process.env.MANAGERS_MODELS = "claude-sonnet-5, claude-haiku-4-5-20251001";
     expect(loadPaddockConfig().models).toEqual(["claude-sonnet-5", "claude-haiku-4-5-20251001"]);
   });
 
   it("falls back to undefined (full catalog) when every configured id is unknown", () => {
-    process.env.PADDOCK_MODELS = "gpt-4,gemini";
+    process.env.MANAGERS_MODELS = "gpt-4,gemini";
     expect(loadPaddockConfig().models).toBeUndefined();
   });
 });
@@ -630,7 +630,7 @@ describe("loadPaddockConfig: models allow-list (#457)", () => {
 /**
  * Retired settings must be IGNORED, never fatal (#549).
  *
- * `scratchDir` / `PADDOCK_SCRATCH_DIR` was deleted in #549. An operator upgrading
+ * `scratchDir` / `MANAGERS_SCRATCH_DIR` was deleted in #549. An operator upgrading
  * with a stale env file or an old `paddock.config.yaml` must still boot: config is
  * pull-based on both layers (env vars read by name, YAML parsed into a loose record
  * that is only ever read), so a deleted key is simply never looked at. These tests
@@ -638,7 +638,7 @@ describe("loadPaddockConfig: models allow-list (#457)", () => {
  * concrete case the issue asked us to decide.
  */
 describe("loadPaddockConfig: retired settings are ignored, not fatal (#549)", () => {
-  const ENV = ["PADDOCK_DATA_DIR", "PADDOCK_CONFIG", "PADDOCK_SCRATCH_DIR"];
+  const ENV = ["MANAGERS_DATA_DIR", "MANAGERS_CONFIG", "MANAGERS_SCRATCH_DIR"];
   let dataDir: string;
   let saved: Record<string, string | undefined>;
 
@@ -649,7 +649,7 @@ describe("loadPaddockConfig: retired settings are ignored, not fatal (#549)", ()
       saved[k] = process.env[k];
       delete process.env[k];
     }
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     for (const k of ENV) {
@@ -659,16 +659,16 @@ describe("loadPaddockConfig: retired settings are ignored, not fatal (#549)", ()
     await rmTmpDir(dataDir);
   });
 
-  it("boots with a stale PADDOCK_SCRATCH_DIR set, and carries no scratchDir", () => {
-    process.env.PADDOCK_SCRATCH_DIR = path.join(dataDir, "somewhere-else");
+  it("boots with a stale MANAGERS_SCRATCH_DIR set, and carries no scratchDir", () => {
+    process.env.MANAGERS_SCRATCH_DIR = path.join(dataDir, "somewhere-else");
     const cfg = loadPaddockConfig();
     expect(cfg.dataDir).toBeTruthy();
     expect("scratchDir" in cfg).toBe(false);
   });
 
-  it("does not create a scratch dir for a stale PADDOCK_SCRATCH_DIR", () => {
+  it("does not create a scratch dir for a stale MANAGERS_SCRATCH_DIR", () => {
     const stale = path.join(dataDir, "stale-scratch");
-    process.env.PADDOCK_SCRATCH_DIR = stale;
+    process.env.MANAGERS_SCRATCH_DIR = stale;
     loadPaddockConfig();
     expect(fs.existsSync(stale)).toBe(false);
   });
@@ -707,14 +707,14 @@ describe("loadPaddockConfig: retired settings are ignored, not fatal (#549)", ()
  */
 describe("loadPaddockConfig: the claude: block (#691)", () => {
   const KEYS = [
-    "PADDOCK_DATA_DIR",
-    "PADDOCK_CONFIG",
-    "PADDOCK_PROFILE",
-    "PADDOCK_CLAUDE_TRANSCRIPTS",
-    "PADDOCK_CLAUDE_CREDENTIALS",
-    "PADDOCK_CLAUDE_INSTRUCTIONS",
-    "PADDOCK_CLAUDE_HOOKS",
-    "PADDOCK_CLAUDE_MCP_SERVERS",
+    "MANAGERS_DATA_DIR",
+    "MANAGERS_CONFIG",
+    "MANAGERS_PROFILE",
+    "MANAGERS_CLAUDE_TRANSCRIPTS",
+    "MANAGERS_CLAUDE_CREDENTIALS",
+    "MANAGERS_CLAUDE_INSTRUCTIONS",
+    "MANAGERS_CLAUDE_HOOKS",
+    "MANAGERS_CLAUDE_MCP_SERVERS",
     "CLAUDE_HOME",
     "CLAUDE_CONFIG_DIR",
     "HOME",
@@ -735,7 +735,7 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
       delete process.env[k];
     }
     process.env.HOME = await makeTmpDir("paddock-claudecfg-home-");
-    process.env.PADDOCK_DATA_DIR = dataDir;
+    process.env.MANAGERS_DATA_DIR = dataDir;
   });
   afterEach(async () => {
     const home = process.env.HOME;
@@ -774,7 +774,7 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
   it("reads transcripts: host from the file, and env still wins over it", () => {
     writeConfig("claude:\n  transcripts: host\n");
     expect(loadPaddockConfig().claude.transcripts).toBe("host");
-    process.env.PADDOCK_CLAUDE_TRANSCRIPTS = "own";
+    process.env.MANAGERS_CLAUDE_TRANSCRIPTS = "own";
     expect(loadPaddockConfig().claude.transcripts).toBe("own");
   });
 
@@ -805,7 +805,7 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
   it("reads credentials: own from the file, and env still wins over it", () => {
     writeConfig("claude:\n  credentials: own\n");
     expect(loadPaddockConfig().claude.credentials).toBe("own");
-    process.env.PADDOCK_CLAUDE_CREDENTIALS = "host";
+    process.env.MANAGERS_CLAUDE_CREDENTIALS = "host";
     expect(loadPaddockConfig().claude.credentials).toBe("host");
   });
 
@@ -837,14 +837,14 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
   it("reads instructions: host from the file, and env still wins over it", () => {
     writeConfig("claude:\n  instructions: host\n");
     expect(loadPaddockConfig().claude.instructions).toBe("host");
-    process.env.PADDOCK_CLAUDE_INSTRUCTIONS = "own";
+    process.env.MANAGERS_CLAUDE_INSTRUCTIONS = "own";
     expect(loadPaddockConfig().claude.instructions).toBe("own");
   });
 
   it("reads hooks: host from the file, and env still wins over it", () => {
     writeConfig("claude:\n  hooks: host\n");
     expect(loadPaddockConfig().claude.hooks).toBe("host");
-    process.env.PADDOCK_CLAUDE_HOOKS = "own";
+    process.env.MANAGERS_CLAUDE_HOOKS = "own";
     expect(loadPaddockConfig().claude.hooks).toBe("own");
   });
 
@@ -875,7 +875,7 @@ describe("loadPaddockConfig: the claude: block (#691)", () => {
   it("reads mcpServers: host from the file, and env still wins over it", () => {
     writeConfig("claude:\n  mcpServers: host\n");
     expect(loadPaddockConfig().claude.mcpServers).toBe("host");
-    process.env.PADDOCK_CLAUDE_MCP_SERVERS = "own";
+    process.env.MANAGERS_CLAUDE_MCP_SERVERS = "own";
     expect(loadPaddockConfig().claude.mcpServers).toBe("own");
   });
 

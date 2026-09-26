@@ -155,7 +155,7 @@ export interface ProjectYaml {
    * How the keeper's chat turns are driven — `batch` (one-shot trigger) or
    * `session` (persistent managed openChatSession, enabling cross-turn autonomy;
    * Paddock#111). Optional on disk: absent inherits the global default
-   * (`PADDOCK_DRIVE_MODE`, else DEFAULT_DRIVE_MODE).
+   * (`MANAGERS_DRIVE_MODE`, else DEFAULT_DRIVE_MODE).
    */
   driveMode?: string;
   /**
@@ -163,7 +163,7 @@ export interface ProjectYaml {
    * children stop receiving the self-management MCP (issue #262 / DD-3). A spawned
    * turn at depth `d` gets the self-MCP (incl. `send_message`, so a child can
    * report back) iff `d <= maxSpawnDepth`. Optional on disk: absent inherits the
-   * instance default (`PADDOCK_MAX_SPAWN_DEPTH`, else DEFAULT_MAX_SPAWN_DEPTH = 1),
+   * instance default (`MANAGERS_MAX_SPAWN_DEPTH`, else DEFAULT_MAX_SPAWN_DEPTH = 1),
    * resolved at dispatch — the same inherit/override discipline as `driveMode`.
    */
   maxSpawnDepth?: number;
@@ -171,7 +171,7 @@ export interface ProjectYaml {
    * Per-project override for the hook-management MCP gate (Epic G / G5, GG-4) —
    * whether this project's turns get the `mcp__paddock_manage__{list,set,remove}_hook`
    * tools. Optional on disk: absent inherits the instance default
-   * (`PADDOCK_HOOKS_MCP`, else OFF), resolved at dispatch via
+   * (`MANAGERS_HOOKS_MCP`, else OFF), resolved at dispatch via
    * {@link import("./hook-config.js").resolveHooksMcpEnabled} — the same
    * inherit/override discipline as `driveMode`/`maxSpawnDepth`. `true` opts this
    * project agent in; `false` opts it out even when the instance default is on.
@@ -180,7 +180,7 @@ export interface ProjectYaml {
   /**
    * Per-project keeper-chat recovery override (issue #301). Every field optional;
    * an absent field inherits the instance default (`cfg.recovery`, itself
-   * `PADDOCK_RECOVERY_*` env / YAML), resolved at dispatch via
+   * `MANAGERS_RECOVERY_*` env / YAML), resolved at dispatch via
    * {@link import("./recovery-config.js").resolveRecoveryConfig} — the same
    * inherit/override discipline as `driveMode`/`maxSpawnDepth`. Absent ⇒ this
    * project inherits every recovery default. Persisted (and re-read) through
@@ -190,7 +190,7 @@ export interface ProjectYaml {
   /**
    * Per-project inbound-attachment override (issue #328). Every field optional;
    * an absent field inherits the instance default (`cfg.attachments`, itself
-   * `PADDOCK_ATTACHMENTS_*` env / YAML), resolved at request time via
+   * `MANAGERS_ATTACHMENTS_*` env / YAML), resolved at request time via
    * {@link import("./attachments-config.js").resolveAttachmentsConfig} — the same
    * inherit/override discipline as `recovery`. Absent ⇒ this project inherits
    * every attachment default. Persisted (and re-read) through
@@ -202,7 +202,7 @@ export interface ProjectYaml {
   /**
    * Per-project sweeper-curation budget override (issue #384). Every field
    * optional; an absent field inherits the instance default (`cfg.curation`,
-   * itself `PADDOCK_CURATION_*` env / YAML), resolved at sweep time via
+   * itself `MANAGERS_CURATION_*` env / YAML), resolved at sweep time via
    * {@link import("./curation-config.js").resolveCurationConfig} — the same
    * inherit/override discipline as `recovery`/`attachments`. Absent ⇒ this
    * project inherits every curation default. Persisted (and re-read) through

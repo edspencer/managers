@@ -182,7 +182,7 @@ describe.each(["light", "dark"] as const)("token contrast — %s mode", (mode) =
 
 describe("the runtime-brandable accent seam (#34)", () => {
   // packages/server/src/brand.ts injects `:root{--accent:R G B;--accent-600:…;
-  // --accent-700:…}` for PADDOCK_BRAND_ACCENT. Everything accent-flavoured must
+  // --accent-700:…}` for MANAGERS_BRAND_ACCENT. Everything accent-flavoured must
   // still resolve when it does — if a token stopped deriving from these three,
   // per-instance branding would silently stop applying to it.
   const BRANDED = { "--accent": "20 80 160", "--accent-600": "17 69 138", "--accent-700": "14 57 114" };

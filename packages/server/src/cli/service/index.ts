@@ -11,13 +11,13 @@
  *
  * Three things this deliberately does not do:
  *
- * - **It does not set `PADDOCK_DATA_DIR`.** With nothing named, the service and
+ * - **It does not set `MANAGERS_DATA_DIR`.** With nothing named, the service and
  *   a `paddock` typed into a terminal both land on `~/.paddock`: one instance,
  *   two ways to reach it.
  * - **It does not generate an auth token.** A service is up longer than an
  *   `npx` run, but not reachable by anything new: a local process that can
  *   reach the port could already read the same Claude login as the same user.
- *   Duration, not reach. `PADDOCK_AUTH_MODE` is there for anyone who wants one
+ *   Duration, not reach. `MANAGERS_AUTH_MODE` is there for anyone who wants one
  *   anyway, and the bind-safety guard (#435) still refuses a routable interface
  *   with auth off.
  * - **It does not claim to start at boot.** See `launchd.ts`.
@@ -56,7 +56,7 @@ export interface ServiceContext {
   /** The `findUp("package.json")` root, tested for an npx cache path. */
   packageRoot: string;
   homeDir: string;
-  /** `process.env.PADDOCK_DATA_DIR`, if the installing shell had one. */
+  /** `process.env.MANAGERS_DATA_DIR`, if the installing shell had one. */
   envDataDir?: string;
   /** `process.env.XDG_CONFIG_HOME`, if set — where the systemd user unit goes. */
   xdgConfigHome?: string;

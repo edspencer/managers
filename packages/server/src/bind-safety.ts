@@ -9,7 +9,7 @@
  *  2. This guard couples EXPOSURE to AUTH: if the resolved bind host is
  *     NON-loopback AND `auth.mode === "none"`, Paddock REFUSES to start — mirroring
  *     the jwt-without-JWKS fail-closed behavior in auth.ts — unless the operator
- *     sets `PADDOCK_DANGEROUSLY_ALLOW_OPEN` (accepts 1/true/yes), in which case it
+ *     sets `MANAGERS_DANGEROUSLY_ALLOW_OPEN` (accepts 1/true/yes), in which case it
  *     starts but logs a loud one-line warning.
  *
  * Binding non-loopback WITH a real auth mode (`trusted-header`/`jwt`) is fine and
@@ -29,7 +29,7 @@ export interface BindSafetyInput {
   host: string;
   /** The resolved auth mode (cfg.auth.mode). */
   authMode: AuthMode;
-  /** Whether PADDOCK_DANGEROUSLY_ALLOW_OPEN is set (truthy). */
+  /** Whether MANAGERS_DANGEROUSLY_ALLOW_OPEN is set (truthy). */
   dangerouslyAllowOpen: boolean;
 }
 
@@ -72,8 +72,8 @@ export function evaluateBindSafety(input: BindSafetyInput): BindSafetyDecision {
     return {
       action: "warn",
       message:
-        `SECURITY: binding ${host} with PADDOCK_AUTH_MODE=none and ` +
-        `PADDOCK_DANGEROUSLY_ALLOW_OPEN set — Paddock is OPEN and UNAUTHENTICATED ` +
+        `SECURITY: binding ${host} with MANAGERS_AUTH_MODE=none and ` +
+        `MANAGERS_DANGEROUSLY_ALLOW_OPEN set — Paddock is OPEN and UNAUTHENTICATED ` +
         `on a routable interface. Anyone who can reach this port can run code and ` +
         `spend Claude tokens as you. Put an auth mode / reverse proxy in front of it.`,
     };
@@ -83,11 +83,11 @@ export function evaluateBindSafety(input: BindSafetyInput): BindSafetyDecision {
     action: "refuse",
     message:
       `refusing to start: bind host "${host}" is not loopback and ` +
-      `PADDOCK_AUTH_MODE=none, which would expose an unauthenticated Paddock (it ` +
+      `MANAGERS_AUTH_MODE=none, which would expose an unauthenticated Paddock (it ` +
       `runs code and spends Claude tokens) on a routable interface. Choose one: ` +
-      `set an auth mode behind a reverse proxy (PADDOCK_AUTH_MODE=trusted-header|jwt); ` +
+      `set an auth mode behind a reverse proxy (MANAGERS_AUTH_MODE=trusted-header|jwt); ` +
       `bind loopback (HOST=127.0.0.1) and reach it via a proxy/sidecar; or — only ` +
       `if you TRULY intend an open, unauthenticated server — set ` +
-      `PADDOCK_DANGEROUSLY_ALLOW_OPEN=1.`,
+      `MANAGERS_DANGEROUSLY_ALLOW_OPEN=1.`,
   };
 }

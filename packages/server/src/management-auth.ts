@@ -5,7 +5,7 @@
  * Transport-agnostic: it takes a header value and returns a verdict, so the
  * `/mcp` route, a future REST surface (#465), and tests all share one path.
  *
- * ── This is INDEPENDENT of `PADDOCK_AUTH_MODE` and of any reverse proxy ─────
+ * ── This is INDEPENDENT of `MANAGERS_AUTH_MODE` and of any reverse proxy ─────
  * The non-negotiable invariant on the ticket: Paddock authenticates the
  * management surface ITSELF. It must be possible to run with no proxy at all —
  * even `auth.mode: none` — and still have a correctly authenticated `/mcp`. A

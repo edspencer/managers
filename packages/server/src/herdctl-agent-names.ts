@@ -239,7 +239,7 @@ export const DENIED_TOOLS: readonly string[] = [
  * The Playwright browser MCP server given to the keeper agents so
  * Claude Code can drive a headless Chromium (navigate / click / fill / snapshot
  * / screenshot). Returns `undefined` when `enabled` is false (sourced from
- * `cfg.browserMcp`, i.e. `PADDOCK_BROWSER_MCP=1` — issue #269), so a box WITHOUT
+ * `cfg.browserMcp`, i.e. `MANAGERS_BROWSER_MCP=1` — issue #269), so a box WITHOUT
  * the browser stack simply omits the server (no failed spawns) and enabling it
  * is a per-box env flip — no code change.
  *

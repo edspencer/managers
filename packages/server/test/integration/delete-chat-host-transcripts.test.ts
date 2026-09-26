@@ -68,7 +68,7 @@ describe("integration: deleting a chat under claude.transcripts: host (#689)", (
     // is that sharing no longer means moving it.
     userHome = await makeTmpDir("paddock-userhome-");
     t = await startTestApp({
-      env: { HOME: userHome, PADDOCK_CLAUDE_TRANSCRIPTS: "host" },
+      env: { HOME: userHome, MANAGERS_CLAUDE_TRANSCRIPTS: "host" },
     });
     const { port } = await listen(t.app);
     ws = await connectWs(port);

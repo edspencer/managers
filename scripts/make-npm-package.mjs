@@ -218,7 +218,7 @@ fs.copyFileSync(readme, path.join(outDir, "README.md"));
 fs.copyFileSync(licenseFile, path.join(outDir, "LICENSE"));
 
 const size = Number(
-  process.env.PADDOCK_SKIP_SIZE
+  process.env.MANAGERS_SKIP_SIZE
     ? 0
     : execSizeOf(outDir),
 );

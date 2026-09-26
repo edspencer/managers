@@ -57,7 +57,7 @@ function configWith(value: unknown, envOverridden = false): InstanceConfig {
             editable: true,
             sensitive: false,
             envOverridden,
-            ...(envOverridden ? { envVar: "PADDOCK_ENVIRONMENT_PROMPT" } : {}),
+            ...(envOverridden ? { envVar: "MANAGERS_ENVIRONMENT_PROMPT" } : {}),
           },
         ],
       },
@@ -145,11 +145,11 @@ describe("InstanceConfigForm — multi-line `text` field (#635)", () => {
     await screen.findByText("Environment prompt");
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.getByText("from the environment")).toBeInTheDocument();
-    expect(screen.getByText("PADDOCK_ENVIRONMENT_PROMPT")).toBeInTheDocument();
+    expect(screen.getByText("MANAGERS_ENVIRONMENT_PROMPT")).toBeInTheDocument();
   });
 
   it("says 'nothing appended' rather than '(not set)' for a shadowed empty value", async () => {
-    // A defined-but-blank PADDOCK_ENVIRONMENT_PROMPT is the env-level opt-out;
+    // A defined-but-blank MANAGERS_ENVIRONMENT_PROMPT is the env-level opt-out;
     // calling that "(not set)" would read as the opposite of what it does.
     getInstanceConfig.mockResolvedValue(configWith("", true));
     render(<InstanceConfigForm />);

@@ -166,11 +166,11 @@ describe("paddock CLI: the entrypoint is location-independent (#798)", () => {
   const source = fs.readFileSync(entry, "utf8");
   const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
 
-  it("never sets PADDOCK_PROJECTS_DIR", () => {
+  it("never sets MANAGERS_PROJECTS_DIR", () => {
     // The `--here` branch was the only place it was ever assigned, and assigning
     // it from cwd is what made which-instance-you-get depend on where you stood.
     // The server still READS the variable; the CLI must not write it.
-    expect(code).not.toContain("PADDOCK_PROJECTS_DIR");
+    expect(code).not.toContain("MANAGERS_PROJECTS_DIR");
   });
 
   it("never writes into the directory it was run from", () => {

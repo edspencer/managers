@@ -181,20 +181,20 @@ export interface Project {
   /**
    * How deep a spawn tree may grow before spawned children stop getting the
    * self-management MCP (issue #262). `undefined` = inherit the instance default
-   * (`PADDOCK_MAX_SPAWN_DEPTH`); a number is a per-project override. A depth-`d`
+   * (`MANAGERS_MAX_SPAWN_DEPTH`); a number is a per-project override. A depth-`d`
    * spawned child gets the write tools (report-back + spawn) iff `d <= maxSpawnDepth`.
    */
   maxSpawnDepth?: number;
   /**
    * Per-project keeper-chat recovery override (issue #301). `undefined` = inherit
-   * every instance default (`PADDOCK_RECOVERY_*`); a partial object overrides the
+   * every instance default (`MANAGERS_RECOVERY_*`); a partial object overrides the
    * fields it sets. Layer 2 (`surfaceKilledTask`) drives the "keeper is idle" +
    * Continue affordance; the rest configure the (follow-up) Layer 3 auto re-drive.
    */
   recovery?: RecoveryOverride;
   /**
    * Per-project inbound-attachment override (issue #328). `undefined` = inherit
-   * every instance default (`PADDOCK_ATTACHMENTS_*`); a partial object overrides
+   * every instance default (`MANAGERS_ATTACHMENTS_*`); a partial object overrides
    * the fields it sets. The composer resolves the effective config (this ??
    * instance default) to gate its picker + client-side size/type guards.
    * (Surfacing this in Settings is Phase 2; the field is wired now.)
@@ -202,7 +202,7 @@ export interface Project {
   attachments?: AttachmentsOverride;
   /**
    * Per-project sweeper-curation budget override (issue #384). `undefined` =
-   * inherit every instance default (`PADDOCK_CURATION_*`); a partial object
+   * inherit every instance default (`MANAGERS_CURATION_*`); a partial object
    * overrides the per-file token budgets it sets. Resolved against the instance
    * default at sweep time.
    */

@@ -131,7 +131,7 @@ describe("integration: own → host migration preview (#882)", () => {
 
   beforeEach(() => {
     resetMigrationProbeCache();
-    delete process.env.PADDOCK_CLAUDE_TRANSCRIPTS;
+    delete process.env.MANAGERS_CLAUDE_TRANSCRIPTS;
   });
 
   it("offers the migration, and answers the probe without reading a transcript", async () => {
@@ -217,13 +217,13 @@ describe("integration: own → host migration preview (#882)", () => {
     expect(acme.projects.map((p: { slug: string }) => p.slug)).toEqual(["acme"]);
   });
 
-  it("refuses with env-shadowed when PADDOCK_CLAUDE_TRANSCRIPTS is set", async () => {
-    process.env.PADDOCK_CLAUDE_TRANSCRIPTS = "own";
+  it("refuses with env-shadowed when MANAGERS_CLAUDE_TRANSCRIPTS is set", async () => {
+    process.env.MANAGERS_CLAUDE_TRANSCRIPTS = "own";
     const body = await probe();
     expect(body).toMatchObject({
       eligible: false,
       reason: "env-shadowed",
-      envVar: "PADDOCK_CLAUDE_TRANSCRIPTS",
+      envVar: "MANAGERS_CLAUDE_TRANSCRIPTS",
     });
     // The plan still renders — the user can see what WOULD move — but it says
     // out loud that the config write would be inert.

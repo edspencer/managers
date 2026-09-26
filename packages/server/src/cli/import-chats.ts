@@ -35,7 +35,7 @@
  *   --move             Move transcripts instead of copying them. DESTRUCTIVE:
  *                      the sessions disappear from the user's own history.
  *   --dry-run          Report what would happen and write nothing at all.
- *   --data-dir <dir>   Paddock data dir (same meaning as PADDOCK_DATA_DIR).
+ *   --data-dir <dir>   Paddock data dir (same meaning as MANAGERS_DATA_DIR).
  *                      Applied to the environment BEFORE the config is read.
  *   --json             Emit the raw result as JSON instead of prose.
  */
@@ -119,7 +119,7 @@ const USAGE = `Import existing Claude Code CLI chats into a Paddock workspace.
   --from <dir>       Import only this source working directory
   --move             Move transcripts instead of copying (DESTRUCTIVE)
   --dry-run          Report what would happen; write nothing
-  --data-dir <dir>   Paddock data dir (same as PADDOCK_DATA_DIR)
+  --data-dir <dir>   Paddock data dir (same as MANAGERS_DATA_DIR)
   --json             Emit raw JSON
 `;
 
@@ -136,7 +136,7 @@ async function main(): Promise<number> {
   }
   // Must land in the environment BEFORE the config is read — every other path
   // (projects root, state dir, herdctl config) is derived from it.
-  if (args.dataDir !== undefined) process.env.PADDOCK_DATA_DIR = args.dataDir;
+  if (args.dataDir !== undefined) process.env.MANAGERS_DATA_DIR = args.dataDir;
 
   const cfg = loadPaddockConfig();
   const projects = new ProjectStore(cfg.projectsRoot, cfg.dataDir);

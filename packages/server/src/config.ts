@@ -77,7 +77,7 @@ export type AuthMode = "none" | "trusted-header" | "jwt";
 /**
  * Resolved authentication configuration (provider-agnostic).
  *
- * Driven entirely by `PADDOCK_AUTH_*` env vars so paddock is not coupled to any
+ * Driven entirely by `MANAGERS_AUTH_*` env vars so paddock is not coupled to any
  * single proxy/IdP (Authentik, oauth2-proxy, Authelia, Cloudflare Access,
  * Keycloak, …). See AUTH.md for the modes and provider examples.
  */
@@ -112,7 +112,7 @@ export interface AuthConfig {
  * Homelab, House, …) be told apart at a glance. All optional; the defaults
  * preserve today's look (🐎 / "Paddock" / terracotta). Injected into index.html
  * at serve time (so there's no title/color flash) and read by the SPA from a
- * `window.__PADDOCK_CONFIG__` global.
+ * `window.__MANAGERS_CONFIG__` global.
  */
 export interface BrandConfig {
   /** Wordmark shown top-left and as the browser tab title. */
@@ -143,7 +143,7 @@ export interface ClaudeConfig {
    * each project's `.chats/`; `host` shares the user's real
    * `~/.claude/projects/<encoded-cwd>/` folder live, in both directions.
    *
-   * Driven by `PADDOCK_CLAUDE_TRANSCRIPTS`, then the `claude.transcripts:` key.
+   * Driven by `MANAGERS_CLAUDE_TRANSCRIPTS`, then the `claude.transcripts:` key.
    * See `transcripts.ts` for the mechanism and why it is not a repointed
    * `CLAUDE_CONFIG_DIR`.
    */
@@ -154,7 +154,7 @@ export interface ClaudeConfig {
    * macOS Keychain entry on darwin, the user's `~/.claude/.credentials.json`
    * elsewhere; `own` uses only what is inside paddock's own Claude home.
    *
-   * Driven by `PADDOCK_CLAUDE_CREDENTIALS`, then the `claude.credentials:` key.
+   * Driven by `MANAGERS_CLAUDE_CREDENTIALS`, then the `claude.credentials:` key.
    * See `claude-credentials.ts` for the mechanism, and for why sharing a login is
    * the safe default when everything else here isolates.
    */
@@ -165,7 +165,7 @@ export interface ClaudeConfig {
    * none of them; `host` symlinks them in, which is what every version before
    * this one did unconditionally.
    *
-   * Driven by `PADDOCK_CLAUDE_INSTRUCTIONS`, then the `claude.instructions:` key.
+   * Driven by `MANAGERS_CLAUDE_INSTRUCTIONS`, then the `claude.instructions:` key.
    * See `claude-instructions.ts` — including the case AGAINST this default,
    * which is real and is kept there rather than deleted.
    */
@@ -176,7 +176,7 @@ export interface ClaudeConfig {
    * `own` (default) writes paddock's own `settings.json` carrying every other key
    * of the user's with `hooks` dropped; `host` symlinks theirs in whole.
    *
-   * Driven by `PADDOCK_CLAUDE_HOOKS`, then the `claude.hooks:` key. The one lever
+   * Driven by `MANAGERS_CLAUDE_HOOKS`, then the `claude.hooks:` key. The one lever
    * here that governs code execution rather than data — see `claude-settings.ts`.
    */
   hooks: HooksMode;
@@ -186,7 +186,7 @@ export interface ClaudeConfig {
    * in the user's `~/.claude.json` — the top-level `mcpServers` plus any scoped
    * to a project's own working directory.
    *
-   * Driven by `PADDOCK_CLAUDE_MCP_SERVERS`, then the `claude.mcpServers:` key.
+   * Driven by `MANAGERS_CLAUDE_MCP_SERVERS`, then the `claude.mcpServers:` key.
    * The one lever whose source is NOT inside `~/.claude` — see `claude-mcp.ts`
    * for why that made it break silently and separately from the other four.
    */
@@ -220,7 +220,7 @@ export interface PaddockConfig {
   /**
    * Dangerously opt in to an OPEN, unauthenticated server: allow a non-loopback
    * bind while `auth.mode === "none"` (which the bind-safety guard otherwise
-   * refuses). Driven by `PADDOCK_DANGEROUSLY_ALLOW_OPEN`; accepts 1/true/yes.
+   * refuses). Driven by `MANAGERS_DANGEROUSLY_ALLOW_OPEN`; accepts 1/true/yes.
    */
   dangerouslyAllowOpen: boolean;
   /** Absolute (canonical) path to the data root. Holds state files (e.g. sweep). */
@@ -285,7 +285,7 @@ export interface PaddockConfig {
   /**
    * OpenAPI / Swagger-UI reference (the `/open-api` docs + `/open-api.json`
    * spec, derived from the route schemas). `enabled` mounts or omits the whole
-   * surface. Driven by `PADDOCK_OPENAPI_ENABLED` (1/true/yes/on enable);
+   * surface. Driven by `MANAGERS_OPENAPI_ENABLED` (1/true/yes/on enable);
    * default OFF (opt-in) — publishing the API surface map is a deliberate
    * choice. Gated by the instance auth mode like any other route when enabled.
    */
@@ -295,14 +295,14 @@ export interface PaddockConfig {
    * a project doesn't override `driveMode`. `session` by default (#316) — the
    * persistent `openChatSession` path, so cross-turn autonomy (ScheduleWakeup /
    * `/loop`) and SDK streaming work out of the box; set
-   * `PADDOCK_DRIVE_MODE=batch` for the legacy one-shot `trigger()` path.
+   * `MANAGERS_DRIVE_MODE=batch` for the legacy one-shot `trigger()` path.
    */
   driveMode: DriveMode;
   /**
    * The instance ALLOW-LIST of offered models (issue #457 Step 2), by catalog id
    * — which of the built-in {@link import("./models.js").MODELS} catalog the model
    * picker + per-project default offer. `undefined` (the default, when neither
-   * `PADDOCK_MODELS` nor a YAML `models:` list is set) means "offer every catalog
+   * `MANAGERS_MODELS` nor a YAML `models:` list is set) means "offer every catalog
    * model" — fully backward-compatible. When set it is a validated, de-duped subset
    * (unknown ids dropped; an empty result collapses back to the full catalog, so an
    * instance never offers zero models). The catalog itself stays the source of each
@@ -315,13 +315,13 @@ export interface PaddockConfig {
   /**
    * Whether keeper agents use the native Claude Code system prompt +
    * project CLAUDE.md hierarchy (true, the default) instead of a terse Paddock
-   * "replace" system prompt (false). Driven by `PADDOCK_NATIVE_PROMPT`.
+   * "replace" system prompt (false). Driven by `MANAGERS_NATIVE_PROMPT`.
    *
    * This is its own decision (issue #176) governing only which system prompt an
    * agent gets. When native (the default on every instance) Paddock sets NO
    * `system_prompt`, so 100% of an agent's standing instructions come from
    * Claude Code's own `CLAUDE.md` walk-up from its cwd — which is what makes the
-   * cwd load-bearing. Set `PADDOCK_NATIVE_PROMPT=false` to fall back to
+   * cwd load-bearing. Set `MANAGERS_NATIVE_PROMPT=false` to fall back to
    * the terse replace prompt (e.g. an instance with no CLAUDE.md files).
    *
    * **The canonical instance-wide `CLAUDE.md` is `<projectsRoot>/CLAUDE.md`**
@@ -337,7 +337,7 @@ export interface PaddockConfig {
   /**
    * The **environment** prompt appended to every keeper turn's system prompt
    * (issue #635) — the short note telling the agent it renders into a browser as
-   * GFM, not a terminal. Resolved from `PADDOCK_ENVIRONMENT_PROMPT` over the
+   * GFM, not a terminal. Resolved from `MANAGERS_ENVIRONMENT_PROMPT` over the
    * `environmentPrompt:` file key over
    * {@link import("./environment-prompt.js").DEFAULT_ENVIRONMENT_PROMPT}.
    *
@@ -357,7 +357,7 @@ export interface PaddockConfig {
    * Whether keeper turns are handed the read-only self-management MCP server
    * (issue #214 Phase 1) — the `mcp__paddock_manage__*` tools that let a keeper
    * enumerate projects/chats and read another chat's transcript. Driven by
-   * `PADDOCK_SELF_MCP`; default OFF (opt-in per instance). The write tools
+   * `MANAGERS_SELF_MCP`; default OFF (opt-in per instance). The write tools
    * (create/fork/message) are gated separately by
    * {@link selfMcpWriteEnabled}.
    */
@@ -365,7 +365,7 @@ export interface PaddockConfig {
   /**
    * Whether keepers additionally get the self-management MCP **write** tools
    * (issue #214 Phase 2) — `create_chat`, `fork_chat`, `send_message`,
-   * `fork_chat_batch` (fan-out). Driven by `PADDOCK_SELF_MCP_WRITE`; default OFF
+   * `fork_chat_batch` (fan-out). Driven by `MANAGERS_SELF_MCP_WRITE`; default OFF
    * and only honored when {@link selfMcpEnabled} is also on (write implies read).
    * Gated behind its own flag because these START real keeper turns — an instance
    * can offer read-only introspection without the write blast radius.
@@ -375,7 +375,7 @@ export interface PaddockConfig {
    * Whether keepers additionally get the self-management MCP **project** tools
    * (issue #467) — `create_project`, which provisions a whole new project
    * (directory + `project.yaml`, optionally a cloned repo-backed checkout) and
-   * registers its keeper agent. Driven by `PADDOCK_SELF_MCP_PROJECTS`; default OFF
+   * registers its keeper agent. Driven by `MANAGERS_SELF_MCP_PROJECTS`; default OFF
    * and only honored when {@link selfMcpWriteEnabled} is also on (the tool lives in
    * the write block).
    *
@@ -392,7 +392,7 @@ export interface PaddockConfig {
    * stop receiving the self-management MCP (issue #262 / DD-3). A spawned turn at
    * depth `d` gets the self-MCP (incl. write tools, so `send_message` exists and a
    * child can report back to its parent) iff `d <= maxSpawnDepth`. Driven by
-   * `PADDOCK_MAX_SPAWN_DEPTH`; default {@link DEFAULT_MAX_SPAWN_DEPTH} (`1` — a
+   * `MANAGERS_MAX_SPAWN_DEPTH`; default {@link DEFAULT_MAX_SPAWN_DEPTH} (`1` — a
    * manager's direct children work, grandchildren are blocked). `0` restores
    * today's behaviour (no spawned child gets it). A per-project `maxSpawnDepth`
    * overrides this at dispatch (the `driveMode` pattern). Only meaningful when
@@ -405,7 +405,7 @@ export interface PaddockConfig {
    * so herdctl's runtime schedule add/remove APIs (the
    * seam the D4 schedules UI calls) are permitted; OFF (default) makes them throw.
    * Declaring schedules statically in `project.yaml` is unaffected either way.
-   * Driven by `PADDOCK_SCHEDULE_MUTATION`; accepts 1/true/yes.
+   * Driven by `MANAGERS_SCHEDULE_MUTATION`; accepts 1/true/yes.
    */
   scheduleMutationEnabled: boolean;
   /**
@@ -456,7 +456,7 @@ export interface PaddockConfig {
    * A sibling of {@link selfMcpWriteEnabled}:
    * OFF by default (opt-in), and only surfaces when the self-MCP write tools are also
    * present (the trigger tools live on the same injected server, appended in the write
-   * block). Driven by `PADDOCK_HOOKS_MCP`; accepts 1/true/yes. A per-project
+   * block). Driven by `MANAGERS_HOOKS_MCP`; accepts 1/true/yes. A per-project
    * `hooksMcpEnabled` override wins at dispatch (resolved via
    * {@link import("./hook-config.js").resolveHooksMcpEnabled}), the same
    * inherit/override discipline as `maxSpawnDepth`. The gate is BINARY access to the
@@ -468,7 +468,7 @@ export interface PaddockConfig {
    * Keeper-chat recovery config (issue #301) — the two independently-toggleable
    * layers that unstick a keeper whose background task is killed at the turn
    * boundary (see recovery-config.ts / edspencer/herdctl#374). Instance defaults
-   * here (`PADDOCK_RECOVERY_*` env, YAML beneath); a per-project `recovery`
+   * here (`MANAGERS_RECOVERY_*` env, YAML beneath); a per-project `recovery`
    * override wins at dispatch via
    * {@link import("./recovery-config.js").resolveRecoveryConfig}. Layer 2
    * (`surfaceKilledTask`) defaults ON; Layer 3 (`autoReDrive`) defaults OFF.
@@ -477,7 +477,7 @@ export interface PaddockConfig {
   /**
    * Inbound composer-attachment config (issue #328) — whether users can upload
    * files/images into the composer, and the size/count/type caps. Instance
-   * defaults here (`PADDOCK_ATTACHMENTS_*` env, YAML beneath); a per-project
+   * defaults here (`MANAGERS_ATTACHMENTS_*` env, YAML beneath); a per-project
    * `attachments` override wins at request time via
    * {@link import("./attachments-config.js").resolveAttachmentsConfig}. Enabled +
    * allow-all by default.
@@ -496,7 +496,7 @@ export interface PaddockConfig {
    * pays for — CHANGELOG.md + OVERVIEW.md are injected into the project-context
    * preload, and CLAUDE.md auto-loads every turn. The sweeper is told each budget
    * (so it prunes/dedups to fit) and `SweepService` enforces it as a backstop.
-   * Instance defaults here (`PADDOCK_CURATION_*` env, YAML beneath).
+   * Instance defaults here (`MANAGERS_CURATION_*` env, YAML beneath).
    */
   curation: CurationConfig;
   /**
@@ -507,7 +507,7 @@ export interface PaddockConfig {
   /**
    * Whether keeper agents receive the Playwright browser MCP server
    * (headless Chromium) so Claude Code can drive a browser (navigate / click /
-   * snapshot / screenshot). Driven by `PADDOCK_BROWSER_MCP` (`1` enables);
+   * snapshot / screenshot). Driven by `MANAGERS_BROWSER_MCP` (`1` enables);
    * default false. Scoped PER INSTANCE — a box without the browser stack leaves
    * it off so there are no failed spawns, and enabling it is a per-box env flip.
    */
@@ -515,19 +515,19 @@ export interface PaddockConfig {
   /**
    * Minimum ms between post-turn curation sweeps for a single project, or
    * `undefined` to use the SweepService default (5 min). Driven by
-   * `PADDOCK_SWEEP_MIN_INTERVAL_MS`; a non-finite or negative value is ignored
+   * `MANAGERS_SWEEP_MIN_INTERVAL_MS`; a non-finite or negative value is ignored
    * (falls back to the default).
    */
   sweepMinIntervalMs?: number;
   /**
    * Git commit identity used when Paddock commits on a project's behalf, so no
-   * global git config is needed. Driven by `PADDOCK_GIT_AUTHOR_NAME` /
-   * `PADDOCK_GIT_AUTHOR_EMAIL`; defaults `Paddock` / `paddock@localhost`.
+   * global git config is needed. Driven by `MANAGERS_GIT_AUTHOR_NAME` /
+   * `MANAGERS_GIT_AUTHOR_EMAIL`; defaults `Paddock` / `paddock@localhost`.
    */
   gitAuthor: { name: string; email: string };
   /**
    * The GitHub OAuth/App client id for the git-backing-store device flow
-   * (github-auth.ts). Driven by `PADDOCK_GITHUB_CLIENT_ID`; `undefined` when
+   * (github-auth.ts). Driven by `MANAGERS_GITHUB_CLIENT_ID`; `undefined` when
    * unset, in which case the GitHub connect feature reports "not configured".
    */
   githubClientId?: string;
@@ -537,7 +537,7 @@ export interface PaddockConfig {
  * On-disk shape of the optional YAML instance-config file (issue #270 / DD-5).
  *
  * This is the BASE layer for {@link PaddockConfig}: every field is optional and
- * a matching `PADDOCK_*` env var still overrides it (precedence file < env), so
+ * a matching `MANAGERS_*` env var still overrides it (precedence file < env), so
  * an env-only deployment is unaffected when no file is present. Values mirror
  * the resolved config's structure; scalars accept their natural YAML type (and
  * also a string, since each value is coerced through the same env-parsing path).
@@ -556,7 +556,7 @@ export interface PaddockConfigFile {
    * Posture profile (#878): `paranoid` | `balanced` | `yolo`. Expands to
    * defaults for the `claude:` modes, `maxSpawnDepth` and the capability
    * toggles; any of those set explicitly here or in the env still wins.
-   * `PADDOCK_PROFILE` overrides this key. Absent ⇒ `balanced`.
+   * `MANAGERS_PROFILE` overrides this key. Absent ⇒ `balanced`.
    */
   profile?: string;
   port?: number | string;
@@ -570,7 +570,7 @@ export interface PaddockConfigFile {
   claudeHome?: string;
   /**
    * What this instance shares with the host's Claude Code (#691). Each key takes
-   * `own` or `host`; a matching `PADDOCK_CLAUDE_*` env var still overrides it
+   * `own` or `host`; a matching `MANAGERS_CLAUDE_*` env var still overrides it
    * (file < env). Absent ⇒ fully isolated.
    */
   claude?: {
@@ -616,7 +616,7 @@ export interface PaddockConfigFile {
   /**
    * Instance allow-list of offered models (issue #457 Step 2). A real array of
    * catalog ids (or a comma-separated string, coerced the same way); a matching
-   * `PADDOCK_MODELS` env var (comma-separated) still overrides it (file < env).
+   * `MANAGERS_MODELS` env var (comma-separated) still overrides it (file < env).
    * Absent ⇒ every catalog model is offered (unchanged behaviour).
    */
   models?: string[] | string;
@@ -643,7 +643,7 @@ export interface PaddockConfigFile {
   managementApi?: ManagementApiConfigFile;
   /**
    * Keeper-chat recovery config (issue #301). Every field optional; a matching
-   * `PADDOCK_RECOVERY_*` env var still overrides it (precedence file < env).
+   * `MANAGERS_RECOVERY_*` env var still overrides it (precedence file < env).
    */
   recovery?: {
     surfaceKilledTask?: boolean | string;
@@ -653,7 +653,7 @@ export interface PaddockConfigFile {
   };
   /**
    * Inbound composer-attachment config (issue #328). Every field optional; a
-   * matching `PADDOCK_ATTACHMENTS_*` env var still overrides it (file < env).
+   * matching `MANAGERS_ATTACHMENTS_*` env var still overrides it (file < env).
    * `allowedTypes` is a real array here (env is comma-separated).
    */
   attachments?: {
@@ -664,14 +664,14 @@ export interface PaddockConfigFile {
   };
   /**
    * Instance-level UI knobs (issue #914). Every field optional; a matching
-   * `PADDOCK_UI_*` env var still overrides it (file < env).
+   * `MANAGERS_UI_*` env var still overrides it (file < env).
    */
   ui?: {
     transcriptRenderLimit?: number | string;
   };
   /**
    * Per-file curation token budgets (issue #379). Every field optional; a
-   * matching `PADDOCK_CURATION_*` env var still overrides it (file < env).
+   * matching `MANAGERS_CURATION_*` env var still overrides it (file < env).
    */
   curation?: {
     overviewMaxTokens?: number | string;
@@ -688,7 +688,7 @@ export interface PaddockConfigFile {
 /**
  * Voice-dictation (Whisper) capability. Mirrors HushPod's whisper config so the
  * two can share a transcription backend (e.g. Ed's laptop whisper server). Driven
- * entirely by `PADDOCK_WHISPER_*` env so it is scoped PER INSTANCE and defaults
+ * entirely by `MANAGERS_WHISPER_*` env so it is scoped PER INSTANCE and defaults
  * to `off` — a plain instance advertises no mic button.
  *
  * - `off`    — dictation disabled (default). No mic button in the composer.
@@ -790,10 +790,10 @@ const DEFAULT_CONFIG_FILENAME = "paddock.config.yaml";
  * {@link PaddockConfig} (issue #270 / DD-5). Env vars still override every value
  * (precedence file < env).
  *
- * Path resolution: an explicit `PADDOCK_CONFIG` env var wins; otherwise
+ * Path resolution: an explicit `MANAGERS_CONFIG` env var wins; otherwise
  * `<dataDir>/paddock.config.yaml`. When no file exists at the default location
  * the result is an empty object, so an env-only deployment behaves exactly as
- * before — this is a no-op for existing installs. An explicit `PADDOCK_CONFIG`
+ * before — this is a no-op for existing installs. An explicit `MANAGERS_CONFIG`
  * that points at a missing file is treated as a misconfiguration (a clear error)
  * rather than silently ignored.
  *
@@ -802,7 +802,7 @@ const DEFAULT_CONFIG_FILENAME = "paddock.config.yaml";
  * half-empty config.
  */
 export function loadConfigFile(dataDir: string): PaddockConfigFile {
-  const explicit = envOpt("PADDOCK_CONFIG");
+  const explicit = envOpt("MANAGERS_CONFIG");
   const configPath = explicit ? abs(explicit) : path.join(dataDir, DEFAULT_CONFIG_FILENAME);
 
   let raw: string;
@@ -814,7 +814,7 @@ export function loadConfigFile(dataDir: string): PaddockConfigFile {
       // Missing default file → env-only, unchanged behaviour. A missing file
       // that was EXPLICITLY requested is an operator error worth surfacing.
       if (explicit) {
-        throw new Error(`PADDOCK_CONFIG points at a config file that does not exist: ${configPath}`);
+        throw new Error(`MANAGERS_CONFIG points at a config file that does not exist: ${configPath}`);
       }
       return {};
     }
@@ -861,39 +861,39 @@ export function loadConfigFile(dataDir: string): PaddockConfigFile {
 }
 
 /**
- * Resolve the provider-agnostic auth config from `PADDOCK_AUTH_*` env vars.
+ * Resolve the provider-agnostic auth config from `MANAGERS_AUTH_*` env vars.
  * Everything is optional; the default is `none` (fully open). Validation of
  * mode-specific requirements (e.g. a JWKS URL in jwt mode) happens in the auth
  * plugin so a misconfig surfaces as a clear startup error rather than a
  * silently-open server.
  */
 function loadAuthConfig(file: PaddockConfigFile["auth"] = {}): AuthConfig {
-  const rawMode = envOr("PADDOCK_AUTH_MODE", fileOr(file.mode, "none")).toLowerCase();
+  const rawMode = envOr("MANAGERS_AUTH_MODE", fileOr(file.mode, "none")).toLowerCase();
   const mode: AuthMode =
     rawMode === "trusted-header" || rawMode === "jwt" ? rawMode : "none";
 
   return {
     mode,
-    userHeader: envOr("PADDOCK_AUTH_USER_HEADER", fileOr(file.userHeader, "X-Forwarded-User")),
-    emailHeader: envOpt("PADDOCK_AUTH_EMAIL_HEADER") ?? fileOpt(file.emailHeader),
-    groupsHeader: envOpt("PADDOCK_AUTH_GROUPS_HEADER") ?? fileOpt(file.groupsHeader),
-    jwtHeader: envOr("PADDOCK_AUTH_JWT_HEADER", fileOr(file.jwtHeader, "Authorization")),
-    jwksUrl: envOpt("PADDOCK_AUTH_JWKS_URL") ?? fileOpt(file.jwksUrl),
-    jwtIssuer: envOpt("PADDOCK_AUTH_JWT_ISSUER") ?? fileOpt(file.jwtIssuer),
-    jwtAudience: envOpt("PADDOCK_AUTH_JWT_AUDIENCE") ?? fileOpt(file.jwtAudience),
-    usernameClaim: envOpt("PADDOCK_AUTH_USERNAME_CLAIM") ?? fileOpt(file.usernameClaim),
-    groupsClaim: envOr("PADDOCK_AUTH_GROUPS_CLAIM", fileOr(file.groupsClaim, "groups")),
+    userHeader: envOr("MANAGERS_AUTH_USER_HEADER", fileOr(file.userHeader, "X-Forwarded-User")),
+    emailHeader: envOpt("MANAGERS_AUTH_EMAIL_HEADER") ?? fileOpt(file.emailHeader),
+    groupsHeader: envOpt("MANAGERS_AUTH_GROUPS_HEADER") ?? fileOpt(file.groupsHeader),
+    jwtHeader: envOr("MANAGERS_AUTH_JWT_HEADER", fileOr(file.jwtHeader, "Authorization")),
+    jwksUrl: envOpt("MANAGERS_AUTH_JWKS_URL") ?? fileOpt(file.jwksUrl),
+    jwtIssuer: envOpt("MANAGERS_AUTH_JWT_ISSUER") ?? fileOpt(file.jwtIssuer),
+    jwtAudience: envOpt("MANAGERS_AUTH_JWT_AUDIENCE") ?? fileOpt(file.jwtAudience),
+    usernameClaim: envOpt("MANAGERS_AUTH_USERNAME_CLAIM") ?? fileOpt(file.usernameClaim),
+    groupsClaim: envOr("MANAGERS_AUTH_GROUPS_CLAIM", fileOr(file.groupsClaim, "groups")),
   };
 }
 
 /**
- * Resolve the dangerously-open opt-in from `PADDOCK_DANGEROUSLY_ALLOW_OPEN`
+ * Resolve the dangerously-open opt-in from `MANAGERS_DANGEROUSLY_ALLOW_OPEN`
  * (#435). Off by default; accepts the shared 1/true/yes truthy convention. When
  * set, the bind-safety guard downgrades its refusal (non-loopback + auth=none)
  * to a loud boot warning instead of failing closed.
  */
 function loadDangerouslyAllowOpen(): boolean {
-  const raw = envOr("PADDOCK_DANGEROUSLY_ALLOW_OPEN", "false").toLowerCase();
+  const raw = envOr("MANAGERS_DANGEROUSLY_ALLOW_OPEN", "false").toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
@@ -901,23 +901,23 @@ function loadDangerouslyAllowOpen(): boolean {
  * Resolve the voice-dictation (Whisper) capability from env. Defaults to `off`,
  * so a plain instance never shows a mic button. The mode defaults to `remote`
  * when an endpoint is configured (the common case — point it at a shared whisper
- * server), and can be forced with `PADDOCK_WHISPER_MODE`. Accepts local/remote/off.
+ * server), and can be forced with `MANAGERS_WHISPER_MODE`. Accepts local/remote/off.
  */
 function loadTranscriptionConfig(file: PaddockConfigFile["transcription"] = {}): TranscriptionConfig {
-  const endpoint = envOpt("PADDOCK_WHISPER_ENDPOINT") ?? fileOpt(file.endpoint);
+  const endpoint = envOpt("MANAGERS_WHISPER_ENDPOINT") ?? fileOpt(file.endpoint);
   const rawMode = envOr(
-    "PADDOCK_WHISPER_MODE",
+    "MANAGERS_WHISPER_MODE",
     fileOr(file.mode, endpoint ? "remote" : "off"),
   ).toLowerCase();
   const mode: WhisperMode = rawMode === "local" || rawMode === "remote" ? rawMode : "off";
   return {
     mode,
-    model: envOr("PADDOCK_WHISPER_MODEL", fileOr(file.model, "base")),
+    model: envOr("MANAGERS_WHISPER_MODEL", fileOr(file.model, "base")),
     endpoint,
-    apiKey: envOpt("PADDOCK_WHISPER_API_KEY") ?? fileOpt(file.apiKey),
-    language: envOpt("PADDOCK_WHISPER_LANGUAGE") ?? fileOpt(file.language),
+    apiKey: envOpt("MANAGERS_WHISPER_API_KEY") ?? fileOpt(file.apiKey),
+    language: envOpt("MANAGERS_WHISPER_LANGUAGE") ?? fileOpt(file.language),
     maxUploadBytes: Number(
-      envOr("PADDOCK_WHISPER_MAX_UPLOAD_BYTES", fileOr(file.maxUploadBytes, String(25 * 1024 * 1024))),
+      envOr("MANAGERS_WHISPER_MAX_UPLOAD_BYTES", fileOr(file.maxUploadBytes, String(25 * 1024 * 1024))),
     ),
   };
 }
@@ -925,13 +925,13 @@ function loadTranscriptionConfig(file: PaddockConfigFile["transcription"] = {}):
 /**
  * Resolve per-instance branding from env. Defaults preserve today's look, so a
  * plain instance is unchanged; an operator running several instances from one
- * image sets `PADDOCK_BRAND_*` in each instance's env to tell them apart.
+ * image sets `MANAGERS_BRAND_*` in each instance's env to tell them apart.
  */
 function loadBrandConfig(file: PaddockConfigFile["brand"] = {}): BrandConfig {
   return {
-    name: envOr("PADDOCK_BRAND_NAME", fileOr(file.name, "Paddock")),
-    logo: envOr("PADDOCK_BRAND_LOGO", fileOr(file.logo, "🐎")),
-    accent: envOr("PADDOCK_BRAND_ACCENT", fileOr(file.accent, "#c2603c")),
+    name: envOr("MANAGERS_BRAND_NAME", fileOr(file.name, "Paddock")),
+    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "🐎")),
+    accent: envOr("MANAGERS_BRAND_ACCENT", fileOr(file.accent, "#c2603c")),
   };
 }
 
@@ -939,7 +939,7 @@ function loadBrandConfig(file: PaddockConfigFile["brand"] = {}): BrandConfig {
  * Default location of the built web SPA, resolved RELATIVE TO THIS MODULE:
  * `packages/server/{src,dist}/config.js` -> `packages/web/dist`. The same hop
  * works from both the `tsx src/` and `node dist/` layouts, so neither needs a
- * `PADDOCK_WEB_DIST` override.
+ * `MANAGERS_WEB_DIST` override.
  *
  * Takes the module URL as a parameter purely so a test can exercise install
  * paths this repo's own checkout does not have.
@@ -980,12 +980,12 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
   // override it (precedence file < env). The file is located under the data dir,
   // so resolve a BOOTSTRAP data dir from env/default first to find it — the file
   // may then re-base the data dir for the resolved config below.
-  const bootstrapDataDir = abs(envOr("PADDOCK_DATA_DIR", "./data"));
+  const bootstrapDataDir = abs(envOr("MANAGERS_DATA_DIR", "./data"));
   const file = loadConfigFile(bootstrapDataDir);
 
   // Ensure the data root exists first so symlinks (e.g. /tmp -> /private/tmp on
   // macOS) resolve consistently for every derived path below.
-  const dataRoot = abs(envOr("PADDOCK_DATA_DIR", fileOr(file.dataDir, "./data")));
+  const dataRoot = abs(envOr("MANAGERS_DATA_DIR", fileOr(file.dataDir, "./data")));
   if (opts.createDataDir !== false) {
     try {
       fs.mkdirSync(dataRoot, { recursive: true });
@@ -997,13 +997,13 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
   // (which encodes the real path) can find Claude transcripts.
   const dataDir = canonical(dataRoot);
   const projectsRoot = canonical(
-    envOr("PADDOCK_PROJECTS_DIR", fileOr(file.projectsRoot, path.join(dataRoot, "projects"))),
+    envOr("MANAGERS_PROJECTS_DIR", fileOr(file.projectsRoot, path.join(dataRoot, "projects"))),
   );
   const stateDir = canonical(
-    envOr("PADDOCK_STATE_DIR", fileOr(file.stateDir, path.join(dataRoot, ".herdctl"))),
+    envOr("MANAGERS_STATE_DIR", fileOr(file.stateDir, path.join(dataRoot, ".herdctl"))),
   );
   const herdctlConfigPath = canonical(
-    envOr("PADDOCK_HERDCTL_CONFIG", fileOr(file.herdctlConfigPath, path.join(dataRoot, "herdctl.yaml"))),
+    envOr("MANAGERS_HERDCTL_CONFIG", fileOr(file.herdctlConfigPath, path.join(dataRoot, "herdctl.yaml"))),
   );
   // The ONE Claude home for this process (#588): paddock's transcript symlinks,
   // the engine's session discovery and session adoption all resolve against this
@@ -1018,7 +1018,7 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
   // for. It is not a config layer of its own: `p` is handed to each posture
   // loader as the fallback that used to be a hardcoded literal, so an individual
   // file key or env var still wins over it. See `profiles.ts` for why an
-  // individual FILE key deliberately beats `PADDOCK_PROFILE` in the env.
+  // individual FILE key deliberately beats `MANAGERS_PROFILE` in the env.
   const profile = resolveProfileName(file.profile);
   const p = postureFor(profile);
 
@@ -1028,16 +1028,16 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
     // Safe by default (#435): bind loopback unless explicitly told otherwise, so
     // a fresh source/tarball run is network-closed. Non-loopback + no auth is then
     // gated by the bind-safety guard (see bind-safety.ts). Existing deployments
-    // that set HOST/PADDOCK_HOST are unaffected — only the DEFAULT changed from
+    // that set HOST/MANAGERS_HOST are unaffected — only the DEFAULT changed from
     // 0.0.0.0. (The container image keeps ENV HOST=0.0.0.0: the network namespace
     // is its boundary and Docker can't reach 127.0.0.1 inside the container.)
-    host: envOr("HOST", envOr("PADDOCK_HOST", fileOr(file.host, "127.0.0.1"))),
+    host: envOr("HOST", envOr("MANAGERS_HOST", fileOr(file.host, "127.0.0.1"))),
     dangerouslyAllowOpen: loadDangerouslyAllowOpen(),
     dataDir,
     projectsRoot,
     stateDir,
     herdctlConfigPath,
-    webDist: abs(envOr("PADDOCK_WEB_DIST", fileOr(file.webDist, defaultWebDist))),
+    webDist: abs(envOr("MANAGERS_WEB_DIST", fileOr(file.webDist, defaultWebDist))),
     claudeHome: resolvedClaudeHome,
     legacyClaudeHome,
     claude: loadClaudeConfig(file.claude, p),
@@ -1092,10 +1092,10 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
     openapi: loadOpenApiConfig(file.openapi),
     sweepMinIntervalMs: loadSweepMinIntervalMs(file.sweepMinIntervalMs),
     gitAuthor: {
-      name: envOr("PADDOCK_GIT_AUTHOR_NAME", fileOr(file.gitAuthor?.name, "Paddock")),
-      email: envOr("PADDOCK_GIT_AUTHOR_EMAIL", fileOr(file.gitAuthor?.email, "paddock@localhost")),
+      name: envOr("MANAGERS_GIT_AUTHOR_NAME", fileOr(file.gitAuthor?.name, "Paddock")),
+      email: envOr("MANAGERS_GIT_AUTHOR_EMAIL", fileOr(file.gitAuthor?.email, "paddock@localhost")),
     },
-    githubClientId: envOpt("PADDOCK_GITHUB_CLIENT_ID") ?? fileOpt(file.githubClientId),
+    githubClientId: envOpt("MANAGERS_GITHUB_CLIENT_ID") ?? fileOpt(file.githubClientId),
   });
 }
 
@@ -1118,17 +1118,17 @@ function loadCurationNum(
 function loadCurationConfig(file?: PaddockConfigFile["curation"]): CurationConfig {
   return {
     overviewMaxTokens: loadCurationNum(
-      "PADDOCK_CURATION_OVERVIEW_MAX_TOKENS",
+      "MANAGERS_CURATION_OVERVIEW_MAX_TOKENS",
       file?.overviewMaxTokens,
       DEFAULT_CURATION.overviewMaxTokens,
     ),
     changelogMaxTokens: loadCurationNum(
-      "PADDOCK_CURATION_CHANGELOG_MAX_TOKENS",
+      "MANAGERS_CURATION_CHANGELOG_MAX_TOKENS",
       file?.changelogMaxTokens,
       DEFAULT_CURATION.changelogMaxTokens,
     ),
     claudeMaxTokens: loadCurationNum(
-      "PADDOCK_CURATION_CLAUDEMD_MAX_TOKENS",
+      "MANAGERS_CURATION_CLAUDEMD_MAX_TOKENS",
       file?.claudeMaxTokens,
       DEFAULT_CURATION.claudeMaxTokens,
     ),
@@ -1137,12 +1137,12 @@ function loadCurationConfig(file?: PaddockConfigFile["curation"]): CurationConfi
 
 /**
  * Resolve the post-turn sweep's minimum interval from
- * `PADDOCK_SWEEP_MIN_INTERVAL_MS` (issue #269 fold). Returns `undefined` when
+ * `MANAGERS_SWEEP_MIN_INTERVAL_MS` (issue #269 fold). Returns `undefined` when
  * unset or invalid (non-finite / negative) so the SweepService default (5 min)
  * applies — preserving the pre-fold `envIntervalMs()` semantics exactly.
  */
 function loadSweepMinIntervalMs(file?: PaddockConfigFile["sweepMinIntervalMs"]): number | undefined {
-  const raw = envOpt("PADDOCK_SWEEP_MIN_INTERVAL_MS") ?? fileOpt(file);
+  const raw = envOpt("MANAGERS_SWEEP_MIN_INTERVAL_MS") ?? fileOpt(file);
   if (raw === undefined) return undefined;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : undefined;
@@ -1156,7 +1156,7 @@ function loadSweepMinIntervalMs(file?: PaddockConfigFile["sweepMinIntervalMs"]):
  * base, using the 1/true/yes convention shared by the other boolean knobs.
  */
 function loadBrowserMcp(file: PaddockConfigFile["browserMcp"], fallback: boolean): boolean {
-  const env = process.env.PADDOCK_BROWSER_MCP;
+  const env = process.env.MANAGERS_BROWSER_MCP;
   if (env !== undefined) return env === "1";
   const raw = fileOpt(file)?.toLowerCase();
   if (raw === undefined) return fallback;
@@ -1166,19 +1166,19 @@ function loadBrowserMcp(file: PaddockConfigFile["browserMcp"], fallback: boolean
 /**
  * Resolve the OpenAPI reference config. `enabled` defaults OFF (opt-in):
  * publishing the API surface is a deliberate choice, so it only mounts when
- * `PADDOCK_OPENAPI_ENABLED` / YAML is a truthy value (1/true/yes/on). `path`
+ * `MANAGERS_OPENAPI_ENABLED` / YAML is a truthy value (1/true/yes/on). `path`
  * (the UI route prefix) defaults `/open-api`; it is normalized to a leading
  * slash with no trailing slash.
  */
 function loadOpenApiConfig(file?: PaddockConfigFile["openapi"]): OpenApiConfig {
   const rawEnabled = (
-    process.env.PADDOCK_OPENAPI_ENABLED ??
+    process.env.MANAGERS_OPENAPI_ENABLED ??
     (file?.enabled === undefined ? undefined : String(file.enabled))
   )?.toLowerCase();
   const enabled =
     rawEnabled === "1" || rawEnabled === "true" || rawEnabled === "yes" || rawEnabled === "on";
 
-  let path = envOpt("PADDOCK_OPENAPI_PATH") ?? fileOpt(file?.path) ?? "/open-api";
+  let path = envOpt("MANAGERS_OPENAPI_PATH") ?? fileOpt(file?.path) ?? "/open-api";
   if (!path.startsWith("/")) path = "/" + path;
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
 
@@ -1186,13 +1186,13 @@ function loadOpenApiConfig(file?: PaddockConfigFile["openapi"]): OpenApiConfig {
 }
 
 /**
- * Resolve the instance-default max spawn depth from `PADDOCK_MAX_SPAWN_DEPTH`
+ * Resolve the instance-default max spawn depth from `MANAGERS_MAX_SPAWN_DEPTH`
  * (issue #262). Defaults to {@link DEFAULT_MAX_SPAWN_DEPTH} (`1`); a
  * missing/blank/out-of-range value falls back to the default rather than failing
  * startup. A per-project override still wins at dispatch.
  */
 function loadMaxSpawnDepth(file: PaddockConfigFile["maxSpawnDepth"], fallback: number): number {
-  const raw = envOpt("PADDOCK_MAX_SPAWN_DEPTH") ?? fileOpt(file);
+  const raw = envOpt("MANAGERS_MAX_SPAWN_DEPTH") ?? fileOpt(file);
   if (raw === undefined) return fallback;
   const n = Number(raw);
   return isValidMaxSpawnDepth(n) ? n : fallback;
@@ -1231,22 +1231,22 @@ function loadRecoveryConfig(file?: PaddockConfigFile["recovery"]): RecoveryConfi
   const f = file ?? {};
   return {
     surfaceKilledTask: loadRecoveryBool(
-      "PADDOCK_RECOVERY_SURFACE",
+      "MANAGERS_RECOVERY_SURFACE",
       f.surfaceKilledTask,
       DEFAULT_RECOVERY.surfaceKilledTask,
     ),
     autoReDrive: loadRecoveryBool(
-      "PADDOCK_RECOVERY_AUTODRIVE",
+      "MANAGERS_RECOVERY_AUTODRIVE",
       f.autoReDrive,
       DEFAULT_RECOVERY.autoReDrive,
     ),
     debounceMs: loadRecoveryInt(
-      "PADDOCK_RECOVERY_DEBOUNCE_MS",
+      "MANAGERS_RECOVERY_DEBOUNCE_MS",
       f.debounceMs,
       DEFAULT_RECOVERY.debounceMs,
     ),
     maxRetries: loadRecoveryInt(
-      "PADDOCK_RECOVERY_MAX_RETRIES",
+      "MANAGERS_RECOVERY_MAX_RETRIES",
       f.maxRetries,
       DEFAULT_RECOVERY.maxRetries,
     ),
@@ -1267,12 +1267,12 @@ function loadAttachmentsInt(env: string, file: unknown, fallback: number): numbe
 
 /**
  * Resolve the `allowedTypes` list (issue #328). The env var is comma-separated
- * (`PADDOCK_ATTACHMENTS_ALLOWED_TYPES=image/*,.pdf`); the YAML file takes a real
+ * (`MANAGERS_ATTACHMENTS_ALLOWED_TYPES=image/*,.pdf`); the YAML file takes a real
  * array (or a comma-separated string, coerced the same way). An empty/invalid
  * value falls back to the default (allow-all) — never "deny all".
  */
 function loadAllowedTypes(file: string[] | string | undefined, fallback: string[]): string[] {
-  const env = envOpt("PADDOCK_ATTACHMENTS_ALLOWED_TYPES");
+  const env = envOpt("MANAGERS_ATTACHMENTS_ALLOWED_TYPES");
   const raw: unknown =
     env !== undefined ? env.split(",") : Array.isArray(file) ? file : typeof file === "string" ? file.split(",") : undefined;
   return sanitizeAllowedTypes(raw) ?? fallback;
@@ -1287,18 +1287,18 @@ function loadAllowedTypes(file: string[] | string | undefined, fallback: string[
 function loadAttachmentsConfig(file?: PaddockConfigFile["attachments"]): AttachmentsConfig {
   const f = file ?? {};
   const enabledRaw = envOr(
-    "PADDOCK_ATTACHMENTS_ENABLED",
+    "MANAGERS_ATTACHMENTS_ENABLED",
     fileOr(f.enabled, String(DEFAULT_ATTACHMENTS.enabled)),
   ).toLowerCase();
   return {
     enabled: enabledRaw === "1" || enabledRaw === "true" || enabledRaw === "yes",
     maxFileSizeMb: loadAttachmentsInt(
-      "PADDOCK_ATTACHMENTS_MAX_FILE_SIZE_MB",
+      "MANAGERS_ATTACHMENTS_MAX_FILE_SIZE_MB",
       f.maxFileSizeMb,
       DEFAULT_ATTACHMENTS.maxFileSizeMb,
     ),
     maxFilesPerMessage: loadAttachmentsInt(
-      "PADDOCK_ATTACHMENTS_MAX_FILES_PER_MESSAGE",
+      "MANAGERS_ATTACHMENTS_MAX_FILES_PER_MESSAGE",
       f.maxFilesPerMessage,
       DEFAULT_ATTACHMENTS.maxFilesPerMessage,
     ),
@@ -1315,7 +1315,7 @@ function loadAttachmentsConfig(file?: PaddockConfigFile["attachments"]): Attachm
  * than failing startup, like every other loader here.
  */
 function loadUiConfig(file?: PaddockConfigFile["ui"]): UiConfig {
-  const raw = envOpt("PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT") ?? fileOpt(file?.transcriptRenderLimit);
+  const raw = envOpt("MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT") ?? fileOpt(file?.transcriptRenderLimit);
   if (raw === undefined) return { ...DEFAULT_UI };
   const n = Number(raw);
   return {
@@ -1327,14 +1327,14 @@ function loadUiConfig(file?: PaddockConfigFile["ui"]): UiConfig {
 /**
  * Resolve the per-deployment schedule-mutation gate (issue #265 / DD-7). Defaults
  * OFF so a plain instance can't have its schedules mutated programmatically; an
- * operator opts in with `PADDOCK_SCHEDULE_MUTATION=1` (or the config file). Accepts
+ * operator opts in with `MANAGERS_SCHEDULE_MUTATION=1` (or the config file). Accepts
  * 1/true/yes. Static `project.yaml` schedules are armed regardless of this flag.
  */
 function loadScheduleMutationEnabled(
   file: PaddockConfigFile["scheduleMutationEnabled"],
   fallback: boolean,
 ): boolean {
-  const raw = envOr("PADDOCK_SCHEDULE_MUTATION", fileOr(file, String(fallback))).toLowerCase();
+  const raw = envOr("MANAGERS_SCHEDULE_MUTATION", fileOr(file, String(fallback))).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
@@ -1342,7 +1342,7 @@ function loadScheduleMutationEnabled(
 /**
  * Resolve the instance-default hook-management MCP gate (Epic G / G5, GG-4).
  * Defaults OFF so a plain instance never advertises the hook tools; opt in with
- * `PADDOCK_HOOKS_MCP=1` (or the config file), and a per-project `hooksMcpEnabled`
+ * `MANAGERS_HOOKS_MCP=1` (or the config file), and a per-project `hooksMcpEnabled`
  * override still wins at dispatch. Accepts 1/true/yes. Only meaningful when the
  * self-MCP write tools are also enabled (the hook tools live on that server).
  */
@@ -1350,13 +1350,13 @@ function loadHooksMcpEnabled(
   file: PaddockConfigFile["hooksMcpEnabled"],
   fallback: boolean,
 ): boolean {
-  const raw = envOr("PADDOCK_HOOKS_MCP", fileOr(file, String(fallback))).toLowerCase();
+  const raw = envOr("MANAGERS_HOOKS_MCP", fileOr(file, String(fallback))).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
 /**
  * Resolve whether keepers additionally get the self-management MCP WRITE tools
- * (issue #214 Phase 2). Defaults OFF; only takes effect when `PADDOCK_SELF_MCP`
+ * (issue #214 Phase 2). Defaults OFF; only takes effect when `MANAGERS_SELF_MCP`
  * is also on (write implies read — enforced at the call site above). Accepts
  * 1/true/yes.
  */
@@ -1364,34 +1364,34 @@ function loadSelfMcpWriteEnabled(
   file: PaddockConfigFile["selfMcpWriteEnabled"],
   fallback: boolean,
 ): boolean {
-  const raw = envOr("PADDOCK_SELF_MCP_WRITE", fileOr(file, String(fallback))).toLowerCase();
+  const raw = envOr("MANAGERS_SELF_MCP_WRITE", fileOr(file, String(fallback))).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
 /**
  * Resolve whether keepers additionally get the self-management MCP PROJECT tools
  * (issue #467 — `create_project`). Defaults OFF; only takes effect when
- * `PADDOCK_SELF_MCP` and `PADDOCK_SELF_MCP_WRITE` are also on (enforced at the call
+ * `MANAGERS_SELF_MCP` and `MANAGERS_SELF_MCP_WRITE` are also on (enforced at the call
  * site above). Accepts 1/true/yes.
  */
 function loadSelfMcpProjectsEnabled(
   file: PaddockConfigFile["selfMcpProjectsEnabled"],
   fallback: boolean,
 ): boolean {
-  const raw = envOr("PADDOCK_SELF_MCP_PROJECTS", fileOr(file, String(fallback))).toLowerCase();
+  const raw = envOr("MANAGERS_SELF_MCP_PROJECTS", fileOr(file, String(fallback))).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
 /**
  * Resolve whether keepers get the read-only self-management MCP (issue #214).
  * Defaults to OFF so a plain instance never advertises it; opt in per instance
- * with `PADDOCK_SELF_MCP=1`. Accepts 1/true/yes.
+ * with `MANAGERS_SELF_MCP=1`. Accepts 1/true/yes.
  */
 function loadSelfMcpEnabled(
   file: PaddockConfigFile["selfMcpEnabled"],
   fallback: boolean,
 ): boolean {
-  const raw = envOr("PADDOCK_SELF_MCP", fileOr(file, String(fallback))).toLowerCase();
+  const raw = envOr("MANAGERS_SELF_MCP", fileOr(file, String(fallback))).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
@@ -1399,26 +1399,26 @@ function loadSelfMcpEnabled(
  * Resolve whether keeper agents use the native system prompt + CLAUDE.md
  * hierarchy (issue #176). Defaults to `true` (native) on every instance so a
  * seeded instance-wide + per-project `CLAUDE.md` is auto-loaded; set
- * `PADDOCK_NATIVE_PROMPT` to 0/false/no to fall back to the terse replace
+ * `MANAGERS_NATIVE_PROMPT` to 0/false/no to fall back to the terse replace
  * prompt.
  */
 function loadNativeSystemPrompt(file?: PaddockConfigFile["nativeSystemPrompt"]): boolean {
-  const raw = envOr("PADDOCK_NATIVE_PROMPT", fileOr(file, "true")).toLowerCase();
+  const raw = envOr("MANAGERS_NATIVE_PROMPT", fileOr(file, "true")).toLowerCase();
   return !(raw === "0" || raw === "false" || raw === "no");
 }
 
 /**
  * Resolve the environment system prompt (issue #635): env
- * `PADDOCK_ENVIRONMENT_PROMPT` over the `environmentPrompt:` file key over the
+ * `MANAGERS_ENVIRONMENT_PROMPT` over the `environmentPrompt:` file key over the
  * built-in {@link DEFAULT_ENVIRONMENT_PROMPT}.
  *
  * Deliberately does NOT use `envOr`/`fileOr`. Those fold a blank value to the
  * fallback, which would make opting out impossible — blank is the opt-out here,
  * so precedence is decided on *definedness*, not on emptiness:
  *
- *  - `PADDOCK_ENVIRONMENT_PROMPT` **defined at all** (even empty) wins outright.
+ *  - `MANAGERS_ENVIRONMENT_PROMPT` **defined at all** (even empty) wins outright.
  *    That is why the field is declared `envShadowWhenDefined` in
- *    instance-config.ts — same rule as `PADDOCK_BROWSER_MCP` — so the Settings
+ *    instance-config.ts — same rule as `MANAGERS_BROWSER_MCP` — so the Settings
  *    screen renders it read-only in exactly the cases where it really is.
  *  - Otherwise a `string` file value wins, empty included. A non-string (a YAML
  *    number, a mapping, `null` from a bare `environmentPrompt:`) is ignored
@@ -1430,7 +1430,7 @@ function loadNativeSystemPrompt(file?: PaddockConfigFile["nativeSystemPrompt"]):
  * text is going into a prompt where whitespace is content.
  */
 function loadEnvironmentPrompt(file?: PaddockConfigFile["environmentPrompt"]): string {
-  const env = process.env.PADDOCK_ENVIRONMENT_PROMPT;
+  const env = process.env.MANAGERS_ENVIRONMENT_PROMPT;
   if (env !== undefined) return env;
   if (typeof file === "string") return file;
   return DEFAULT_ENVIRONMENT_PROMPT;
@@ -1438,7 +1438,7 @@ function loadEnvironmentPrompt(file?: PaddockConfigFile["environmentPrompt"]): s
 
 /**
  * Resolve the instance model allow-list (issue #457 Step 2), precedence
- * env `PADDOCK_MODELS` (comma-separated ids) over YAML `models:` (a string array,
+ * env `MANAGERS_MODELS` (comma-separated ids) over YAML `models:` (a string array,
  * or a comma-separated string coerced the same way) over the default (undefined ⇒
  * every catalog model is offered). Each id is validated against the catalog with
  * {@link isKnownModel}; unknown/blank/duplicate ids are dropped. If nothing valid
@@ -1447,7 +1447,7 @@ function loadEnvironmentPrompt(file?: PaddockConfigFile["environmentPrompt"]): s
  * so an instance is never left with zero models.
  */
 function loadModels(file?: PaddockConfigFile["models"]): string[] | undefined {
-  const env = envOpt("PADDOCK_MODELS");
+  const env = envOpt("MANAGERS_MODELS");
   const raw: string[] | undefined =
     env !== undefined
       ? env.split(",")
@@ -1470,13 +1470,13 @@ function loadModels(file?: PaddockConfigFile["models"]): string[] | undefined {
 }
 
 /**
- * Resolve the global keeper drive mode from `PADDOCK_DRIVE_MODE`. Defaults
+ * Resolve the global keeper drive mode from `MANAGERS_DRIVE_MODE`. Defaults
  * to `session` (DEFAULT_DRIVE_MODE, #316); an unrecognized value falls back
  * to the default rather than failing startup. A per-project `driveMode` still
  * overrides this at dispatch.
  */
 function loadDriveMode(file?: PaddockConfigFile["driveMode"]): DriveMode {
-  const raw = (envOpt("PADDOCK_DRIVE_MODE") ?? fileOpt(file))?.toLowerCase();
+  const raw = (envOpt("MANAGERS_DRIVE_MODE") ?? fileOpt(file))?.toLowerCase();
   return raw && isKnownDriveMode(raw) ? raw : DEFAULT_DRIVE_MODE;
 }
 
@@ -1504,7 +1504,7 @@ export function userClaudeHome(): string {
  * login risks no file of the user's. See `claude-credentials.ts`.
  *
  * `hooks` is the one where falling back on a typo is load-bearing in the other
- * direction: `PADDOCK_CLAUDE_HOOKS=hots` isolates rather than executing the
+ * direction: `MANAGERS_CLAUDE_HOOKS=hots` isolates rather than executing the
  * host's shell commands, which is the only acceptable way for a security lever
  * to misread its input. `mcpServers` follows the same direction for a weaker
  * reason — an MCP server is a process paddock spawns, so a typo that attaches
@@ -1512,17 +1512,17 @@ export function userClaudeHome(): string {
  */
 function loadClaudeConfig(file: PaddockConfigFile["claude"] = {}, p: Posture): ClaudeConfig {
   const transcripts = (
-    envOpt("PADDOCK_CLAUDE_TRANSCRIPTS") ?? fileOpt(file.transcripts)
+    envOpt("MANAGERS_CLAUDE_TRANSCRIPTS") ?? fileOpt(file.transcripts)
   )?.toLowerCase();
   const credentials = (
-    envOpt("PADDOCK_CLAUDE_CREDENTIALS") ?? fileOpt(file.credentials)
+    envOpt("MANAGERS_CLAUDE_CREDENTIALS") ?? fileOpt(file.credentials)
   )?.toLowerCase();
   const instructions = (
-    envOpt("PADDOCK_CLAUDE_INSTRUCTIONS") ?? fileOpt(file.instructions)
+    envOpt("MANAGERS_CLAUDE_INSTRUCTIONS") ?? fileOpt(file.instructions)
   )?.toLowerCase();
-  const hooks = (envOpt("PADDOCK_CLAUDE_HOOKS") ?? fileOpt(file.hooks))?.toLowerCase();
+  const hooks = (envOpt("MANAGERS_CLAUDE_HOOKS") ?? fileOpt(file.hooks))?.toLowerCase();
   const mcpServers = (
-    envOpt("PADDOCK_CLAUDE_MCP_SERVERS") ?? fileOpt(file.mcpServers)
+    envOpt("MANAGERS_CLAUDE_MCP_SERVERS") ?? fileOpt(file.mcpServers)
   )?.toLowerCase();
   return {
     transcripts:
@@ -1618,7 +1618,7 @@ export function claudeHomeRefusal(
       : `The \`claudeHome:\` key in paddock.config.yaml points it there: remove it, or name a ` +
         `directory of paddock's own. `) +
     `To SHARE your Claude Code transcripts, set \`claude: { transcripts: host }\` (or ` +
-    `PADDOCK_CLAUDE_TRANSCRIPTS=host) — that shares the files themselves and keeps ` +
+    `MANAGERS_CLAUDE_TRANSCRIPTS=host) — that shares the files themselves and keeps ` +
     `paddock's home where it belongs.`
   );
 }

@@ -233,21 +233,21 @@ export const api = {
   async getModels(): Promise<{
     models: ModelInfo[];
     defaultModel: string;
-    /** Box-wide default drive mode (PADDOCK_DRIVE_MODE) a project inherits
+    /** Box-wide default drive mode (MANAGERS_DRIVE_MODE) a project inherits
      *  when its own `driveMode` is unset; shown as the effective value in the
      *  project Settings tab (issue #122). */
     driveModeDefault: "batch" | "session";
-    /** Box-wide default max spawn depth (PADDOCK_MAX_SPAWN_DEPTH) a project
+    /** Box-wide default max spawn depth (MANAGERS_MAX_SPAWN_DEPTH) a project
      *  inherits when its own `maxSpawnDepth` is unset; shown as the effective
      *  value in Settings (issue #262). */
     maxSpawnDepthDefault: number;
-    /** Box-wide keeper-chat recovery defaults (PADDOCK_RECOVERY_*) a project
+    /** Box-wide keeper-chat recovery defaults (MANAGERS_RECOVERY_*) a project
      *  inherits when its own `recovery` fields are unset (issue #301). */
     recoveryDefault: RecoveryConfig;
-    /** Box-wide inbound-attachment defaults (PADDOCK_ATTACHMENTS_*) a project
+    /** Box-wide inbound-attachment defaults (MANAGERS_ATTACHMENTS_*) a project
      *  inherits when its own `attachments` fields are unset (issue #328). */
     attachmentsDefault: AttachmentsConfig;
-    /** Box-wide sweeper-curation budgets (PADDOCK_CURATION_*) a project inherits
+    /** Box-wide sweeper-curation budgets (MANAGERS_CURATION_*) a project inherits
      *  when its own `curation` fields are unset (issue #384). */
     curationDefault: CurationConfig;
     /** Instance-level UI knobs (issue #914). No per-project override. */

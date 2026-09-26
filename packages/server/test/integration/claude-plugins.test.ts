@@ -54,7 +54,7 @@ describe("integration: host Claude Code plugins reach the runtime (#700)", () =>
   // Was "the default levers" until #878 made `instructions: host` the default
   // from `balanced` up — and that lever IS the plugin gate. Named explicitly.
   it("attaches nothing under instructions: own, with a plugin sitting right there", async () => {
-    t = await startTestApp({ hostPlugins: PLUGINS, env: { PADDOCK_PROFILE: "paranoid" } });
+    t = await startTestApp({ hostPlugins: PLUGINS, env: { MANAGERS_PROFILE: "paranoid" } });
     expect(t.cfg.claude.instructions).toBe("own");
     const keeper = keeperConfigFor(t, "/nonexistent/demo");
     expect(keeper.plugins).toBeUndefined();
@@ -64,7 +64,7 @@ describe("integration: host Claude Code plugins reach the runtime (#700)", () =>
   it("passes the plugin and its server's tool pattern under both host levers", async () => {
     t = await startTestApp({
       hostPlugins: PLUGINS,
-      env: { PADDOCK_CLAUDE_INSTRUCTIONS: "host", PADDOCK_CLAUDE_MCP_SERVERS: "host" },
+      env: { MANAGERS_CLAUDE_INSTRUCTIONS: "host", MANAGERS_CLAUDE_MCP_SERVERS: "host" },
     });
     const keeper = keeperConfigFor(t, "/nonexistent/demo");
     expect(keeper.plugins).toEqual([
@@ -87,7 +87,7 @@ describe("integration: host Claude Code plugins reach the runtime (#700)", () =>
       hostPlugins: PLUGINS,
       // `mcpServers: own` is the subject of this test, so it is set rather than
       // inherited from a default that #878 moved to `host`.
-      env: { PADDOCK_CLAUDE_INSTRUCTIONS: "host", PADDOCK_CLAUDE_MCP_SERVERS: "own" },
+      env: { MANAGERS_CLAUDE_INSTRUCTIONS: "host", MANAGERS_CLAUDE_MCP_SERVERS: "own" },
     });
     expect(t.cfg.claude.mcpServers).toBe("own");
     const keeper = keeperConfigFor(t, "/nonexistent/demo");
@@ -109,7 +109,7 @@ describe("integration: host Claude Code plugins reach the runtime (#700)", () =>
   it("survives AgentConfigSchema — the key is still there after addAgent", async () => {
     t = await startTestApp({
       hostPlugins: PLUGINS,
-      env: { PADDOCK_CLAUDE_INSTRUCTIONS: "host", PADDOCK_CLAUDE_MCP_SERVERS: "host" },
+      env: { MANAGERS_CLAUDE_INSTRUCTIONS: "host", MANAGERS_CLAUDE_MCP_SERVERS: "host" },
       gitRepo: true,
     });
     await t.app.inject({

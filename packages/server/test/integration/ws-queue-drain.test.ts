@@ -128,7 +128,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
 
   it("completion-drain: a queue set WHILE a turn runs is auto-sent once the turn ends", async () => {
     // Hold the first turn open with an in-flight tool so we can queue during it.
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "1200";
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "1200";
     try {
       const m1 = ws.mark();
       ws.send({ type: "chat:send", payload: { projectSlug: SLUG, sessionId: null, message: "start turn" } });
@@ -152,7 +152,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
 
       expect((await userMessages(sessionId)).filter((m) => m === "after slow")).toHaveLength(1);
     } finally {
-      delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
+      delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
     }
   });
 
@@ -162,7 +162,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
     // `chat:queued_flushed` clear, which is broadcast un-buffered — re-asserts the
     // same ts with LONGER text. Deduping on the ts alone made the server broadcast a
     // text-less clear and drop the appended text on the floor.
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "1200";
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "1200";
     try {
       const m1 = ws.mark();
       ws.send({ type: "chat:send", payload: { projectSlug: SLUG, sessionId: null, message: "start turn" } });
@@ -199,7 +199,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
       await ws.waitFor((e) => isComplete(e) && e.payload?.sessionId === sessionId, { from: m5 });
       expect((await userMessages(sessionId)).filter((m) => m === "alpha\nbravo")).toHaveLength(1);
     } finally {
-      delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
+      delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
     }
   });
 
@@ -238,7 +238,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
   });
 
   it("a second client's queue MERGES into the one slot instead of destroying the first's (#629)", async () => {
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "1500";
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "1500";
     const wsB = await connectWs(port);
     try {
       const m1 = ws.mark();
@@ -301,7 +301,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
       expect(await userMessages(sessionId)).toContain("from tab A\nfrom tab B");
     } finally {
       wsB.close();
-      delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
+      delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
     }
   });
 
@@ -311,7 +311,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
     // only its `ts`, and even a current one can append faster than the broadcast
     // round trip. Merging that as a second contribution would queue "line
     // one\nline one\nline two".
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "1500";
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "1500";
     try {
       const m1 = ws.mark();
       ws.send({ type: "chat:send", payload: { projectSlug: SLUG, sessionId: null, message: "start turn" } });
@@ -342,7 +342,7 @@ describe("integration: server-authoritative queued-message drain (#245)", () => 
       });
       expect((await userMessages(sessionId)).filter((m) => m === "line one\nline two")).toHaveLength(1);
     } finally {
-      delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
+      delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
     }
   });
 
@@ -403,7 +403,7 @@ describe("integration: every turn-ending path drains the queue (#627)", () => {
   });
 
   it("a TRIGGER turn drains the message queued while it ran", async () => {
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "2500";
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "2500";
     try {
       await t.app.inject({
         method: "PUT",
@@ -445,7 +445,7 @@ describe("integration: every turn-ending path drains the queue (#627)", () => {
       );
       expect(flushed.payload?.text).toBe("queued during a trigger");
     } finally {
-      delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
+      delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
     }
   });
 

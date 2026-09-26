@@ -5,7 +5,7 @@
  * the user approves a short code at github.com/login/device, paddock exchanges
  * it for a scoped token and stores it (0600, under the data dir — never in the
  * repo). Requires a registered OAuth/GitHub App client id in
- * `PADDOCK_GITHUB_CLIENT_ID`; without it the feature reports "not configured".
+ * `MANAGERS_GITHUB_CLIENT_ID`; without it the feature reports "not configured".
  *
  * The push target itself (Option B = a bare repo on the NAS over SSH) does not
  * need this — it's for when GitHub is a remote. The stored token is exposed via
@@ -27,7 +27,7 @@ export interface DeviceFlowStart {
 }
 
 export interface GithubStatus {
-  /** A client id is configured (PADDOCK_GITHUB_CLIENT_ID). */
+  /** A client id is configured (MANAGERS_GITHUB_CLIENT_ID). */
   configured: boolean;
   /** A token is stored (the user has connected). */
   connected: boolean;
@@ -66,7 +66,7 @@ export class GithubAuth {
   /**
    * @param tokenFile Path to the on-disk stored-token file (0600, under the data dir).
    * @param clientId The OAuth/App client id, folded into PaddockConfig from
-   *   `PADDOCK_GITHUB_CLIENT_ID` (issue #269). Trimmed here; a blank value is
+   *   `MANAGERS_GITHUB_CLIENT_ID` (issue #269). Trimmed here; a blank value is
    *   treated as unset so the feature reports "not configured".
    */
   constructor(
@@ -89,7 +89,7 @@ export class GithubAuth {
   /** Begin the device flow — returns the code + URL to show the user. */
   async startDeviceFlow(): Promise<DeviceFlowStart> {
     const client_id = this.clientId();
-    if (!client_id) throw new Error("GitHub not configured (set PADDOCK_GITHUB_CLIENT_ID)");
+    if (!client_id) throw new Error("GitHub not configured (set MANAGERS_GITHUB_CLIENT_ID)");
     const res = await fetch(DEVICE_CODE_URL, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },

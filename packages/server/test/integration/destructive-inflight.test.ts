@@ -14,7 +14,7 @@
  * These tests drive that exact window server-side — no browser needed, this is
  * entirely lifecycle — using the fake `claude`'s existing directives:
  *   - `[[SLOWTOOL]]` writes a `tool_use`, holds it in flight for
- *     PADDOCK_FAKE_SLOWTOOL_MS, then writes the paired `tool_result`. The hold is
+ *     MANAGERS_FAKE_SLOWTOOL_MS, then writes the paired `tool_result`. The hold is
  *     the window a destructive op has to land inside, and the write AFTER it is
  *     what resurrects a deleted chat.
  *   - `[[HANG]]` never completes at all — the hung-turn case, where "refuse
@@ -59,7 +59,7 @@ describe("integration: destructive ops vs an in-flight turn (#731)", () => {
     t = await startTestApp({
       // The curation sweep would otherwise start its own turns mid-test.
       sweepIntervalMs: 600_000,
-      env: { PADDOCK_FAKE_SLOWTOOL_MS: String(SLOWTOOL_MS) },
+      env: { MANAGERS_FAKE_SLOWTOOL_MS: String(SLOWTOOL_MS) },
     });
     ({ port } = await listen(t.app));
     ws = await connectWs(port);

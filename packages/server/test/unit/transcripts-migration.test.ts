@@ -507,7 +507,7 @@ describe("own → host migration preview (#882)", () => {
       expect(await probeMigration(input([p], { envShadowed: true }))).toMatchObject({
         eligible: false,
         reason: "env-shadowed",
-        envVar: "PADDOCK_CLAUDE_TRANSCRIPTS",
+        envVar: "MANAGERS_CLAUDE_TRANSCRIPTS",
       });
       expect(await probeMigration(input([p], { profile: "paranoid" }))).toMatchObject({
         eligible: false,

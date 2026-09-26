@@ -12,7 +12,7 @@
  *
  * So the check is deliberately end-to-end: an HTTP request to the URL a human
  * would open, not a pid lookup. `/api/health` is the probe because it is in
- * `ALWAYS_PUBLIC_PATHS` (`auth.ts`) — it answers whatever `PADDOCK_AUTH_MODE`
+ * `ALWAYS_PUBLIC_PATHS` (`auth.ts`) — it answers whatever `MANAGERS_AUTH_MODE`
  * the installed unit runs with, so this does not quietly stop working for the
  * people who configured a credential.
  *

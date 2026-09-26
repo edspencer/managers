@@ -67,7 +67,7 @@ const LOADING_DEFAULT = "loading…";
  * route (which re-registers the keeper server-side).
  *
  * `driveMode` (Paddock#111) is the inherit-vs-override case: an empty override
- * inherits the box-wide global default (`PADDOCK_DRIVE_MODE`), and the UI
+ * inherits the box-wide global default (`MANAGERS_DRIVE_MODE`), and the UI
  * surfaces that effective value so "Global default" isn't opaque.
  */
 export function SettingsPane({

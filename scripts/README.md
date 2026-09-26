@@ -70,7 +70,7 @@ Since #793 armed the orphan watchdog inside the fixture itself, a fresh leak
 should be rare; this is for leftovers predating that fix and for the census.
 
 **Identification is by `/proc`, never by pattern.** A process is a candidate only
-if its own `/proc/<pid>/environ` sets `PADDOCK_DATA_DIR` to a path resolving
+if its own `/proc/<pid>/environ` sets `MANAGERS_DATA_DIR` to a path resolving
 inside the OS temp dir under the fixture's `paddock-e2e-` prefix. A real
 instance's data dir is `~/.paddock` or `/var/lib/paddock/…` and can never match,
 whatever its command line looks like. This matters more than it sounds: a dev box

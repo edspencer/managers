@@ -344,7 +344,7 @@ describe("integration: project CRUD over REST (real fleet, fake claude)", () => 
 
 /**
  * A separate app whose instance offered-models allow-list is NARROWED via
- * `PADDOCK_MODELS` (issue #457 Step 2): `/api/models` reflects the allow-list +
+ * `MANAGERS_MODELS` (issue #457 Step 2): `/api/models` reflects the allow-list +
  * the effective keeper default, and a per-project override may only subset it.
  */
 describe("integration: instance models allow-list (#457)", () => {

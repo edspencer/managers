@@ -9,15 +9,15 @@
  * Two things about the environment are load-bearing and easy to get wrong:
  *
  *  1. **The environment must be scrubbed, not merely overridden.** A devbox that
- *     already runs Paddock exports ~20 `PADDOCK_*` vars. Several silently change
- *     what the camera sees — `PADDOCK_BRAND_NAME` / `PADDOCK_BRAND_LOGO` rebrand
- *     the sidebar, `PADDOCK_AUTH_*` 401s every request — and `PADDOCK_DATA_DIR`
+ *     already runs Paddock exports ~20 `MANAGERS_*` vars. Several silently change
+ *     what the camera sees — `MANAGERS_BRAND_NAME` / `MANAGERS_BRAND_LOGO` rebrand
+ *     the sidebar, `MANAGERS_AUTH_*` 401s every request — and `MANAGERS_DATA_DIR`
  *     would point the demo at production data. So we build the child env from a
- *     whitelist instead of inheriting: anything `PADDOCK_*` not set below is
+ *     whitelist instead of inheriting: anything `MANAGERS_*` not set below is
  *     deleted.
  *
  *  2. **The fake `claude` binary must win on PATH.** `test/bin/claude` is the
- *     deterministic stand-in used by the E2E suite. With `PADDOCK_DRIVE_MODE=batch`
+ *     deterministic stand-in used by the E2E suite. With `MANAGERS_DRIVE_MODE=batch`
  *     herdctl spawns `claude` from PATH, so prepending `test/bin` is what keeps
  *     the shoot free of real Anthropic calls. We also delete
  *     `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`: if a future change ever
@@ -38,7 +38,7 @@ export function demoEnv({ dataDir, port, home, fakeScript }) {
 
   // Drop every inherited Paddock var — we set the ones we want below.
   for (const key of Object.keys(env)) {
-    if (key.startsWith("PADDOCK_")) delete env[key];
+    if (key.startsWith("MANAGERS_")) delete env[key];
   }
   // Credentials: absent on purpose, so an accidental real-runtime call fails
   // loudly instead of spending money. Do not "helpfully" restore these.
@@ -52,17 +52,17 @@ export function demoEnv({ dataDir, port, home, fakeScript }) {
   env.PATH = `${path.join(REPO_ROOT, "test", "bin")}${path.delimiter}${env.PATH}`;
   env.PORT = String(port);
   env.HOST = "127.0.0.1";
-  env.PADDOCK_DATA_DIR = dataDir;
-  env.PADDOCK_PROJECTS_DIR = path.join(dataDir, "projects");
-  env.PADDOCK_WEB_DIST = path.join(REPO_ROOT, "packages", "web", "dist");
+  env.MANAGERS_DATA_DIR = dataDir;
+  env.MANAGERS_PROJECTS_DIR = path.join(dataDir, "projects");
+  env.MANAGERS_WEB_DIST = path.join(REPO_ROOT, "packages", "web", "dist");
   // batch drive-mode → herdctl spawns the fake `claude` from PATH.
-  env.PADDOCK_DRIVE_MODE = "batch";
-  env.PADDOCK_AUTH_MODE = "none";
-  env.PADDOCK_DANGEROUSLY_ALLOW_OPEN = "1";
+  env.MANAGERS_DRIVE_MODE = "batch";
+  env.MANAGERS_AUTH_MODE = "none";
+  env.MANAGERS_DANGEROUSLY_ALLOW_OPEN = "1";
   // The sweeper would rewrite the seeded OVERVIEW.md/CHANGELOG.md mid-shoot.
-  env.PADDOCK_SWEEP_MIN_INTERVAL_MS = "999999999";
+  env.MANAGERS_SWEEP_MIN_INTERVAL_MS = "999999999";
   env.LOG_LEVEL = "warn";
-  if (fakeScript) env.PADDOCK_FAKE_SCRIPT = fakeScript;
+  if (fakeScript) env.MANAGERS_FAKE_SCRIPT = fakeScript;
 
   return env;
 }
@@ -160,7 +160,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // server still holding the port — and because the next run's health check is
   // answered by that orphan, it looks like a successful boot while quietly
   // serving stale data. (Recovering from that means hunting the process by its
-  // PADDOCK_DATA_DIR in /proc; never by pattern-matching the node command line,
+  // MANAGERS_DATA_DIR in /proc; never by pattern-matching the node command line,
   // which matches every other Paddock on the box.)
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {

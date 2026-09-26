@@ -2,11 +2,11 @@
  * Per-instance branding injection (issue #34).
  *
  * The SPA's look (wordmark, logo glyph, accent color) is configured per
- * instance via `PADDOCK_BRAND_*` env (see config.ts `BrandConfig`). Rather than
+ * instance via `MANAGERS_BRAND_*` env (see config.ts `BrandConfig`). Rather than
  * bake it in at build time — which would force one image per instance — we
  * inject it into `index.html` at serve time:
  *
- *  - a `window.__PADDOCK_CONFIG__` global the SPA reads for name + logo, and
+ *  - a `window.__MANAGERS_CONFIG__` global the SPA reads for name + logo, and
  *  - a `:root` `<style>` overriding the `--accent*` CSS channels the buttons and
  *    logo chip use.
  *
@@ -76,7 +76,7 @@ function safeJson(value: unknown): string {
 /**
  * Inject branding into the built `index.html`:
  *  - replace the <title> with the configured name,
- *  - add a `window.__PADDOCK_CONFIG__` script (name + logo for the SPA),
+ *  - add a `window.__MANAGERS_CONFIG__` script (name + logo for the SPA),
  *  - add a `:root` accent override <style> (only when non-default).
  *
  * Everything is inserted just before `</head>` so it wins over the linked
@@ -102,7 +102,7 @@ export function renderIndexHtml(
   });
   const accentStyle = accentRootStyle(brand.accent);
   const injection =
-    `<script>window.__PADDOCK_CONFIG__=${config};</script>` +
+    `<script>window.__MANAGERS_CONFIG__=${config};</script>` +
     (accentStyle ? `<style>${accentStyle}</style>` : "");
 
   if (/<\/head>/i.test(html)) {

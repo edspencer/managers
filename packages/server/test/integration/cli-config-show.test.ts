@@ -3,13 +3,13 @@
  *
  * The unit tests cover parsing, provenance and rendering separately. What only a
  * spawn can cover is the wiring between them: the verb reaching its handler, the
- * data dir being resolved into `PADDOCK_DATA_DIR` BEFORE the loader is imported,
+ * data dir being resolved into `MANAGERS_DATA_DIR` BEFORE the loader is imported,
  * and a config file that does not parse exiting non-zero instead of printing a
  * half-report.
  *
  * Each case runs with a **constructed** environment rather than an inherited
  * one. That is not tidiness: this box, and any developer machine that runs
- * Paddock, exports `PADDOCK_*` variables that would legitimately relabel these
+ * Paddock, exports `MANAGERS_*` variables that would legitimately relabel these
  * rows `env` and turn every assertion below into a false failure.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -31,7 +31,7 @@ let tmp: string;
 const cleanEnv = (dataDir: string): NodeJS.ProcessEnv => ({
   PATH: process.env.PATH ?? "",
   HOME: tmp,
-  PADDOCK_DATA_DIR: dataDir,
+  MANAGERS_DATA_DIR: dataDir,
 });
 
 beforeAll(async () => {
@@ -55,7 +55,7 @@ describe("paddock config show (#878)", () => {
 
     const { stdout } = await run(tsx, [entry, "config", "show", "--resolved"], {
       timeout: 60_000,
-      env: { ...cleanEnv(dataDir), PADDOCK_BRAND_NAME: "From The Env" },
+      env: { ...cleanEnv(dataDir), MANAGERS_BRAND_NAME: "From The Env" },
     });
 
     expect(stdout).toContain("Profile      yolo  (config file)");
@@ -65,7 +65,7 @@ describe("paddock config show (#878)", () => {
     // file — and specifically a file key BEATING the profile, which says `host`.
     expect(stdout).toMatch(/claude\.hooks\s+own\s+file/);
     // env
-    expect(stdout).toMatch(/brand\.name\s+From The Env\s+env PADDOCK_BRAND_NAME/);
+    expect(stdout).toMatch(/brand\.name\s+From The Env\s+env MANAGERS_BRAND_NAME/);
     // default — an operational key, which no profile has an opinion about.
     expect(stdout).toMatch(/recovery\.maxRetries\s+1\s+default/);
     // A secret-shaped value is not printed by a command whose output gets pasted.

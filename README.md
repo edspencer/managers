@@ -122,7 +122,7 @@ The full flag set — they parse the same after a subcommand as without one, and
 |---|---|
 | `-p`, `--port <n>` | Listen port. Overrides `PORT` and `port:`. Use this when 7233 is taken. |
 | `--host <addr>` | Bind address. Overrides `HOST`. |
-| `-d`, `--data-dir <dir>` | Data root. Overrides `PADDOCK_DATA_DIR`. The only flag that picks *which instance* you get. |
+| `-d`, `--data-dir <dir>` | Data root. Overrides `MANAGERS_DATA_DIR`. The only flag that picks *which instance* you get. |
 | `-o`, `--open` | Open a browser once the server is listening. |
 | `--verbose` | Restore normal logging; the CLI is quiet by default. |
 | `-h`, `--help` / `-v`, `--version` | Usage / version. |
@@ -157,13 +157,13 @@ volume, and give it a Claude token:
 ```bash
 docker run -d --name paddock -p 127.0.0.1:7233:7233 \
   -e CLAUDE_CODE_OAUTH_TOKEN=…       `# Claude Max/Pro plan (OAuth)` \
-  -e PADDOCK_DATA_DIR=/data \
-  -e PADDOCK_DANGEROUSLY_ALLOW_OPEN=1 `# see below — required inside a container` \
+  -e MANAGERS_DATA_DIR=/data \
+  -e MANAGERS_DANGEROUSLY_ALLOW_OPEN=1 `# see below — required inside a container` \
   -v paddock-data:/data \
   ghcr.io/edspencer/paddock:latest
 ```
 
-`PADDOCK_DANGEROUSLY_ALLOW_OPEN=1` is **required** here and the container will
+`MANAGERS_DANGEROUSLY_ALLOW_OPEN=1` is **required** here and the container will
 refuse to start without it. The image binds `0.0.0.0` (it has to, to be reachable
 from outside the container) and Paddock's default auth mode is `none`, and
 Paddock will not bind a routable interface unauthenticated without being told to.
@@ -194,8 +194,8 @@ services:
       - "127.0.0.1:7233:7233"
     environment:
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN} # Claude Max/Pro (OAuth); or ANTHROPIC_API_KEY for API-key billing
-      PADDOCK_DATA_DIR: /data
-      PADDOCK_DANGEROUSLY_ALLOW_OPEN: "1"                 # required in a container; safe because the port is published on loopback
+      MANAGERS_DATA_DIR: /data
+      MANAGERS_DANGEROUSLY_ALLOW_OPEN: "1"                 # required in a container; safe because the port is published on loopback
     volumes:
       - paddock-data:/data
 volumes:
@@ -207,8 +207,8 @@ volumes:
 > layer you trust (see [AUTH.md](AUTH.md)). Paddock reads credentials from the
 > environment and from files the host provides; it never stores secrets itself.
 > It also fails closed: an `npx`, source or tarball run binds loopback by default,
-> and refuses to start on a routable interface with `PADDOCK_AUTH_MODE=none` unless
-> you explicitly set `PADDOCK_DANGEROUSLY_ALLOW_OPEN`. None of that is a concern for
+> and refuses to start on a routable interface with `MANAGERS_AUTH_MODE=none` unless
+> you explicitly set `MANAGERS_DANGEROUSLY_ALLOW_OPEN`. None of that is a concern for
 > a local `npx` run, which is reachable only from your own machine. (The
 > [Management API](#drive-it-from-outside) is the one surface that authenticates
 > itself rather than delegating to your proxy.)
@@ -267,14 +267,14 @@ managementApi:
   clients:
     my-laptop:
       auth:
-        ref: env:PADDOCK_MCP_TOKEN_MY_LAPTOP   # value lives in the environment
+        ref: env:MANAGERS_MCP_TOKEN_MY_LAPTOP   # value lives in the environment
       # no scope ⇒ read-only, across all projects
 ```
 
 ```sh
 claude mcp add --transport http --scope user paddock \
   https://paddock.example.com/mcp \
-  --header "Authorization: Bearer $PADDOCK_MCP_TOKEN_MY_LAPTOP"
+  --header "Authorization: Bearer $MANAGERS_MCP_TOKEN_MY_LAPTOP"
 ```
 
 A few things worth knowing before you widen that scope:
@@ -292,7 +292,7 @@ A few things worth knowing before you widen that scope:
   authorization server is configured, but there is no OAuth path to configure one
   against yet, so mint a token and use it.
 - **It authenticates itself.** `/mcp` is credential-gated independently of
-  `PADDOCK_AUTH_MODE` and of any reverse proxy, so it stays closed even on an
+  `MANAGERS_AUTH_MODE` and of any reverse proxy, so it stays closed even on an
   instance running `auth.mode: none`, and a bad token gets a `401` rather than a
   login redirect no MCP client could follow.
 - **It fails closed.** The endpoint `404`s entirely until you've configured both
@@ -307,12 +307,12 @@ Full setup, the scope grammar, and the per-tool reference:
 
 An instance is configured by a single **`paddock.config.yaml`**, with per-project
 overrides in each project's `project.yaml`. The file lives at
-**`<PADDOCK_DATA_DIR>/paddock.config.yaml`** (or wherever `PADDOCK_CONFIG` points),
+**`<MANAGERS_DATA_DIR>/paddock.config.yaml`** (or wherever `MANAGERS_CONFIG` points),
 and it is entirely optional — every key has a built-in default, so an instance
 with no file at all is a working instance.
 
 ```yaml
-# <PADDOCK_DATA_DIR>/paddock.config.yaml — every key below is optional.
+# <MANAGERS_DATA_DIR>/paddock.config.yaml — every key below is optional.
 schemaVersion: 1              # the version of THIS format the file is written in
 
 # --- Core ---
@@ -374,7 +374,7 @@ Paddock itself.
 
 **Environment variables override the file.** Resolution is
 **built-in default < `paddock.config.yaml` < environment**, so every key above has
-a matching `PADDOCK_*` variable that wins over it — deliberate, so a container can
+a matching `MANAGERS_*` variable that wins over it — deliberate, so a container can
 pin one value at run time without rewriting a mounted file. The complete list is
 the **[environment reference](https://paddock.edspencer.net/configuration/environment/)**;
 [`.env.example`](.env.example) is a runnable starting point.
@@ -384,9 +384,9 @@ all of these, and some have no file equivalent at all:
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `PADDOCK_DATA_DIR` | `./data` | Data root — holds `projects/`, `.herdctl/` state, the generated `herdctl.yaml`, and the config file itself. Setting it cascades all derived paths. (There *is* a `dataDir:` key, but the file is located *under* the data dir, so it can only re-base the derived paths — not say where to find itself.) |
-| `PADDOCK_CONFIG` | — | Explicit path to the config file, instead of the default location. Pointing it at a missing file is a startup error, not a silent fallback. |
-| `PADDOCK_DANGEROUSLY_ALLOW_OPEN` | — | Required to bind a routable interface with `auth.mode: none`. Without it Paddock refuses to start — it runs code and spends your Claude tokens. **No file equivalent by design**: it is an explicit act at deploy time, not a stored setting. |
+| `MANAGERS_DATA_DIR` | `./data` | Data root — holds `projects/`, `.herdctl/` state, the generated `herdctl.yaml`, and the config file itself. Setting it cascades all derived paths. (There *is* a `dataDir:` key, but the file is located *under* the data dir, so it can only re-base the derived paths — not say where to find itself.) |
+| `MANAGERS_CONFIG` | — | Explicit path to the config file, instead of the default location. Pointing it at a missing file is a startup error, not a silent fallback. |
+| `MANAGERS_DANGEROUSLY_ALLOW_OPEN` | — | Required to bind a routable interface with `auth.mode: none`. Without it Paddock refuses to start — it runs code and spends your Claude tokens. **No file equivalent by design**: it is an explicit act at deploy time, not a stored setting. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | Claude auth — Max/Pro plan (OAuth). Credentials are read from the environment and never written to the config file. |
 | `ANTHROPIC_API_KEY` | — | Claude auth — API-key billing. Same. |
 | `PORT` / `HOST` | `7233` / `127.0.0.1` | Also settable as `port:` / `host:`. For `PORT` the precedence is `--port` flag, then `PORT`, then the file. |
@@ -429,7 +429,7 @@ the Management API carries its own credentials, [documented separately](https://
 
 Paddock is one process per data root + port. To run several (e.g. one per area —
 open-source / house / homelab), start one process each with its own
-`PADDOCK_DATA_DIR` and `PORT`, and front them with a reverse proxy that maps a
+`MANAGERS_DATA_DIR` and `PORT`, and front them with a reverse proxy that maps a
 hostname to each port. Nothing is shared between instances except the host.
 
 ## How it works
@@ -471,7 +471,7 @@ repo:
   and [the sweeper](https://paddock.edspencer.net/concepts/sweeper/).
 - **[REST + WebSocket API](https://paddock.edspencer.net/reference/api/)** — every
   REST route carries a schema, so a live OpenAPI 3 document and a Swagger UI are
-  available at `/open-api` when `PADDOCK_OPENAPI_ENABLED` is set.
+  available at `/open-api` when `MANAGERS_OPENAPI_ENABLED` is set.
 - **[herdctl integration](https://paddock.edspencer.net/architecture/herdctl-integration/)**
   — the exact public `@herdctl/core` API contract Paddock depends on.
 
@@ -496,7 +496,7 @@ npm run dev:web             # Vite dev server, proxies /api + /ws to :7233
 
 The E2E suite drives the **real** server, FleetManager, and CLI runtime; only the
 LLM is swapped for a fake `claude` on PATH (zero Anthropic calls). Opt into a
-real-Claude run with `npm run test:e2e:live` (`PADDOCK_TEST_LIVE=1`). More detail
+real-Claude run with `npm run test:e2e:live` (`MANAGERS_TEST_LIVE=1`). More detail
 in **[DEV.md](DEV.md)** and
 **[Testing](https://paddock.edspencer.net/contributing/testing/)**.
 

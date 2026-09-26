@@ -428,7 +428,7 @@ export async function loadHostPlugins(cfg: {
           "`claude.mcpServers: host` does not reach MCP servers provided by a Claude Code " +
           "plugin: a plugin is mostly commands, agents and skills, so loading one is a " +
           "`claude.instructions` decision. Set `claude.instructions: host` (or " +
-          "PADDOCK_CLAUDE_INSTRUCTIONS=host) as well to inherit your plugins.",
+          "MANAGERS_CLAUDE_INSTRUCTIONS=host) as well to inherit your plugins.",
       });
     }
     return { source: EMPTY_HOST_PLUGINS, notices };

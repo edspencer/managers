@@ -35,7 +35,7 @@
  * every child stamped by a tool-equipped parent is one hop deeper.
  *
  * ── Config (DD-5, the `driveMode` pattern) ───────────────────────────────────
- * `maxSpawnDepth` is an instance default (`PADDOCK_MAX_SPAWN_DEPTH`, YAML later
+ * `maxSpawnDepth` is an instance default (`MANAGERS_MAX_SPAWN_DEPTH`, YAML later
  * per #270) with a per-project override (`project.yaml` → Settings). An absent /
  * invalid override inherits the instance default, resolved at dispatch by
  * {@link resolveMaxSpawnDepth} — never baked into the DTO (mirrors how `driveMode`

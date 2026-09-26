@@ -14,7 +14,7 @@
  *     its frozen config. Every field is `restart` in effect — the UI shows a
  *     persistent "takes effect after restart" banner.
  *  2. **Env precedence.** `env > file > default`. A field also set by a
- *     `PADDOCK_*` env var is SHADOWED — writing it to the file has no effect
+ *     `MANAGERS_*` env var is SHADOWED — writing it to the file has no effect
  *     while the env var is set. {@link buildInstanceConfig} reports `envOverridden`
  *     per field so the UI renders those read-only.
  *  3. **Comment-preserving write.** {@link writeInstanceConfig} round-trips the
@@ -105,10 +105,10 @@ interface FieldSpec {
    * non-blank value, matching `envOr`/`envOpt` in config.ts. Set `true` for the
    * fields whose loaders key on `env !== undefined` instead, so a defined-but-
    * blank var is still authoritative and must render read-only here too:
-   *  - `browserMcp` (`loadBrowserMcp`) — a blank `PADDOCK_BROWSER_MCP` forces
+   *  - `browserMcp` (`loadBrowserMcp`) — a blank `MANAGERS_BROWSER_MCP` forces
    *    `false`;
    *  - `environmentPrompt` (`loadEnvironmentPrompt`, #635) — a blank
-   *    `PADDOCK_ENVIRONMENT_PROMPT` IS the opt-out.
+   *    `MANAGERS_ENVIRONMENT_PROMPT` IS the opt-out.
    */
   envShadowWhenDefined?: boolean;
   /** Built-in default (what you get with neither env nor file). `null` ⇒ unset. */
@@ -314,60 +314,60 @@ const LOG_LEVELS = ["trace", "debug", "info", "warn", "error", "fatal", "silent"
  */
 export const FIELDS: readonly FieldSpec[] = [
   // Curation — the motivating knobs (issue #379).
-  { key: "curation.overviewMaxTokens", group: "curation", label: "OVERVIEW.md max tokens", type: "number", envVars: ["PADDOCK_CURATION_OVERVIEW_MAX_TOKENS"], default: DEFAULT_CURATION.overviewMaxTokens, editable: true, coerce: posInt },
-  { key: "curation.changelogMaxTokens", group: "curation", label: "CHANGELOG.md max tokens", type: "number", envVars: ["PADDOCK_CURATION_CHANGELOG_MAX_TOKENS"], default: DEFAULT_CURATION.changelogMaxTokens, editable: true, coerce: posInt },
-  { key: "curation.claudeMaxTokens", group: "curation", label: "CLAUDE.md max tokens", type: "number", envVars: ["PADDOCK_CURATION_CLAUDEMD_MAX_TOKENS"], default: DEFAULT_CURATION.claudeMaxTokens, editable: true, coerce: posInt },
+  { key: "curation.overviewMaxTokens", group: "curation", label: "OVERVIEW.md max tokens", type: "number", envVars: ["MANAGERS_CURATION_OVERVIEW_MAX_TOKENS"], default: DEFAULT_CURATION.overviewMaxTokens, editable: true, coerce: posInt },
+  { key: "curation.changelogMaxTokens", group: "curation", label: "CHANGELOG.md max tokens", type: "number", envVars: ["MANAGERS_CURATION_CHANGELOG_MAX_TOKENS"], default: DEFAULT_CURATION.changelogMaxTokens, editable: true, coerce: posInt },
+  { key: "curation.claudeMaxTokens", group: "curation", label: "CLAUDE.md max tokens", type: "number", envVars: ["MANAGERS_CURATION_CLAUDEMD_MAX_TOKENS"], default: DEFAULT_CURATION.claudeMaxTokens, editable: true, coerce: posInt },
 
   // Sweeper.
-  { key: "sweepMinIntervalMs", group: "sweeper", label: "Min sweep interval (ms)", help: "Minimum ms between post-turn sweeps for one project. Blank = default (5 min).", type: "number", envVars: ["PADDOCK_SWEEP_MIN_INTERVAL_MS"], default: null, editable: true, coerce: optNonNegNumber },
+  { key: "sweepMinIntervalMs", group: "sweeper", label: "Min sweep interval (ms)", help: "Minimum ms between post-turn sweeps for one project. Blank = default (5 min).", type: "number", envVars: ["MANAGERS_SWEEP_MIN_INTERVAL_MS"], default: null, editable: true, coerce: optNonNegNumber },
 
   // Capabilities.
-  { key: "driveMode", group: "capabilities", label: "Keeper drive mode", help: "session = persistent (streaming + cross-turn autonomy); batch = legacy one-shot.", type: "enum", enumValues: DRIVE_MODES, envVars: ["PADDOCK_DRIVE_MODE"], default: DEFAULT_DRIVE_MODE, editable: true, coerce: oneOf(DRIVE_MODES) },
-  { key: "models", group: "capabilities", label: "Offered models", help: "Which built-in catalog models the picker offers, by id (e.g. claude-opus-5-5, claude-sonnet-5). Blank = offer all catalog models.", type: "string-list", envVars: ["PADDOCK_MODELS"], default: MODELS.map((m) => m.id), editable: true, coerce: modelList },
-  { key: "nativeSystemPrompt", group: "capabilities", label: "Native system prompt", help: "Use Claude Code's native prompt + CLAUDE.md hierarchy (recommended).", type: "boolean", envVars: ["PADDOCK_NATIVE_PROMPT"], default: true, editable: true, coerce: asBool },
+  { key: "driveMode", group: "capabilities", label: "Keeper drive mode", help: "session = persistent (streaming + cross-turn autonomy); batch = legacy one-shot.", type: "enum", enumValues: DRIVE_MODES, envVars: ["MANAGERS_DRIVE_MODE"], default: DEFAULT_DRIVE_MODE, editable: true, coerce: oneOf(DRIVE_MODES) },
+  { key: "models", group: "capabilities", label: "Offered models", help: "Which built-in catalog models the picker offers, by id (e.g. claude-opus-5-5, claude-sonnet-5). Blank = offer all catalog models.", type: "string-list", envVars: ["MANAGERS_MODELS"], default: MODELS.map((m) => m.id), editable: true, coerce: modelList },
+  { key: "nativeSystemPrompt", group: "capabilities", label: "Native system prompt", help: "Use Claude Code's native prompt + CLAUDE.md hierarchy (recommended).", type: "boolean", envVars: ["MANAGERS_NATIVE_PROMPT"], default: true, editable: true, coerce: asBool },
   // Issue #635. `envShadowWhenDefined` because loadEnvironmentPrompt keys on
-  // definedness, not emptiness — a defined-but-empty PADDOCK_ENVIRONMENT_PROMPT
+  // definedness, not emptiness — a defined-but-empty MANAGERS_ENVIRONMENT_PROMPT
   // IS the env-level opt-out, so it genuinely shadows the file and must render
   // read-only. `default` carries the built-in text so the UI can offer a
   // one-click restore (a `null` PUT deletes the key) without duplicating it.
-  { key: "environmentPrompt", group: "capabilities", label: "Environment prompt", help: "Appended to every keeper turn's system prompt: what the agent should know about rendering into Paddock rather than a terminal. Clear it to append nothing.", type: "text", envVars: ["PADDOCK_ENVIRONMENT_PROMPT"], envShadowWhenDefined: true, default: DEFAULT_ENVIRONMENT_PROMPT, editable: true, coerce: promptText },
-  { key: "selfMcpEnabled", group: "capabilities", label: "Self-management MCP (read)", help: "Let keepers list/read projects and other chats.", type: "boolean", envVars: ["PADDOCK_SELF_MCP"], default: false, editable: true, coerce: asBool },
-  { key: "selfMcpWriteEnabled", group: "capabilities", label: "Self-management MCP (write)", help: "Let keepers create/fork/message chats (needs read enabled too).", type: "boolean", envVars: ["PADDOCK_SELF_MCP_WRITE"], default: false, editable: true, coerce: asBool },
-  { key: "selfMcpProjectsEnabled", group: "capabilities", label: "Self-management MCP (projects)", help: "Let keepers create new projects and promote existing ones — including a git clone of a repo URL the agent supplies (needs self-MCP write).", type: "boolean", envVars: ["PADDOCK_SELF_MCP_PROJECTS"], default: false, editable: true, coerce: asBool },
-  { key: "maxSpawnDepth", group: "capabilities", label: "Max spawn depth", help: "How deep a spawn tree may grow before children lose the self-MCP.", type: "number", envVars: ["PADDOCK_MAX_SPAWN_DEPTH"], default: DEFAULT_MAX_SPAWN_DEPTH, editable: true, coerce: spawnDepth },
-  { key: "scheduleMutationEnabled", group: "capabilities", label: "Schedule mutation", help: "Allow programmatic schedule add/remove at runtime.", type: "boolean", envVars: ["PADDOCK_SCHEDULE_MUTATION"], default: false, editable: true, coerce: asBool },
-  { key: "hooksMcpEnabled", group: "capabilities", label: "Hooks MCP", help: "Let agents declare/edit their own event hooks (needs self-MCP write).", type: "boolean", envVars: ["PADDOCK_HOOKS_MCP"], default: false, editable: true, coerce: asBool },
-  { key: "browserMcp", group: "capabilities", label: "Browser MCP (Playwright)", help: "Give agents a headless Chromium browser MCP.", type: "boolean", envVars: ["PADDOCK_BROWSER_MCP"], envShadowWhenDefined: true, default: false, editable: true, coerce: asBool },
+  { key: "environmentPrompt", group: "capabilities", label: "Environment prompt", help: "Appended to every keeper turn's system prompt: what the agent should know about rendering into Paddock rather than a terminal. Clear it to append nothing.", type: "text", envVars: ["MANAGERS_ENVIRONMENT_PROMPT"], envShadowWhenDefined: true, default: DEFAULT_ENVIRONMENT_PROMPT, editable: true, coerce: promptText },
+  { key: "selfMcpEnabled", group: "capabilities", label: "Self-management MCP (read)", help: "Let keepers list/read projects and other chats.", type: "boolean", envVars: ["MANAGERS_SELF_MCP"], default: false, editable: true, coerce: asBool },
+  { key: "selfMcpWriteEnabled", group: "capabilities", label: "Self-management MCP (write)", help: "Let keepers create/fork/message chats (needs read enabled too).", type: "boolean", envVars: ["MANAGERS_SELF_MCP_WRITE"], default: false, editable: true, coerce: asBool },
+  { key: "selfMcpProjectsEnabled", group: "capabilities", label: "Self-management MCP (projects)", help: "Let keepers create new projects and promote existing ones — including a git clone of a repo URL the agent supplies (needs self-MCP write).", type: "boolean", envVars: ["MANAGERS_SELF_MCP_PROJECTS"], default: false, editable: true, coerce: asBool },
+  { key: "maxSpawnDepth", group: "capabilities", label: "Max spawn depth", help: "How deep a spawn tree may grow before children lose the self-MCP.", type: "number", envVars: ["MANAGERS_MAX_SPAWN_DEPTH"], default: DEFAULT_MAX_SPAWN_DEPTH, editable: true, coerce: spawnDepth },
+  { key: "scheduleMutationEnabled", group: "capabilities", label: "Schedule mutation", help: "Allow programmatic schedule add/remove at runtime.", type: "boolean", envVars: ["MANAGERS_SCHEDULE_MUTATION"], default: false, editable: true, coerce: asBool },
+  { key: "hooksMcpEnabled", group: "capabilities", label: "Hooks MCP", help: "Let agents declare/edit their own event hooks (needs self-MCP write).", type: "boolean", envVars: ["MANAGERS_HOOKS_MCP"], default: false, editable: true, coerce: asBool },
+  { key: "browserMcp", group: "capabilities", label: "Browser MCP (Playwright)", help: "Give agents a headless Chromium browser MCP.", type: "boolean", envVars: ["MANAGERS_BROWSER_MCP"], envShadowWhenDefined: true, default: false, editable: true, coerce: asBool },
 
   // Recovery (issue #301).
-  { key: "recovery.surfaceKilledTask", group: "recovery", label: "Surface killed task", type: "boolean", envVars: ["PADDOCK_RECOVERY_SURFACE"], default: DEFAULT_RECOVERY.surfaceKilledTask, editable: true, coerce: asBool },
-  { key: "recovery.autoReDrive", group: "recovery", label: "Auto re-drive", type: "boolean", envVars: ["PADDOCK_RECOVERY_AUTODRIVE"], default: DEFAULT_RECOVERY.autoReDrive, editable: true, coerce: asBool },
-  { key: "recovery.debounceMs", group: "recovery", label: "Debounce (ms)", type: "number", envVars: ["PADDOCK_RECOVERY_DEBOUNCE_MS"], default: DEFAULT_RECOVERY.debounceMs, editable: true, coerce: nonNegInt },
-  { key: "recovery.maxRetries", group: "recovery", label: "Max retries", type: "number", envVars: ["PADDOCK_RECOVERY_MAX_RETRIES"], default: DEFAULT_RECOVERY.maxRetries, editable: true, coerce: nonNegInt },
+  { key: "recovery.surfaceKilledTask", group: "recovery", label: "Surface killed task", type: "boolean", envVars: ["MANAGERS_RECOVERY_SURFACE"], default: DEFAULT_RECOVERY.surfaceKilledTask, editable: true, coerce: asBool },
+  { key: "recovery.autoReDrive", group: "recovery", label: "Auto re-drive", type: "boolean", envVars: ["MANAGERS_RECOVERY_AUTODRIVE"], default: DEFAULT_RECOVERY.autoReDrive, editable: true, coerce: asBool },
+  { key: "recovery.debounceMs", group: "recovery", label: "Debounce (ms)", type: "number", envVars: ["MANAGERS_RECOVERY_DEBOUNCE_MS"], default: DEFAULT_RECOVERY.debounceMs, editable: true, coerce: nonNegInt },
+  { key: "recovery.maxRetries", group: "recovery", label: "Max retries", type: "number", envVars: ["MANAGERS_RECOVERY_MAX_RETRIES"], default: DEFAULT_RECOVERY.maxRetries, editable: true, coerce: nonNegInt },
 
   // Attachments (issue #328).
-  { key: "attachments.enabled", group: "attachments", label: "Enabled", type: "boolean", envVars: ["PADDOCK_ATTACHMENTS_ENABLED"], default: DEFAULT_ATTACHMENTS.enabled, editable: true, coerce: asBool },
-  { key: "attachments.maxFileSizeMb", group: "attachments", label: "Max file size (MB)", type: "number", envVars: ["PADDOCK_ATTACHMENTS_MAX_FILE_SIZE_MB"], default: DEFAULT_ATTACHMENTS.maxFileSizeMb, editable: true, coerce: posInt },
-  { key: "attachments.maxFilesPerMessage", group: "attachments", label: "Max files / message", type: "number", envVars: ["PADDOCK_ATTACHMENTS_MAX_FILES_PER_MESSAGE"], default: DEFAULT_ATTACHMENTS.maxFilesPerMessage, editable: true, coerce: posInt },
-  { key: "attachments.allowedTypes", group: "attachments", label: "Allowed types", help: "MIME types / extensions (e.g. image/*, .pdf). * = allow all.", type: "string-list", envVars: ["PADDOCK_ATTACHMENTS_ALLOWED_TYPES"], default: [...DEFAULT_ATTACHMENTS.allowedTypes], editable: true, coerce: stringList },
+  { key: "attachments.enabled", group: "attachments", label: "Enabled", type: "boolean", envVars: ["MANAGERS_ATTACHMENTS_ENABLED"], default: DEFAULT_ATTACHMENTS.enabled, editable: true, coerce: asBool },
+  { key: "attachments.maxFileSizeMb", group: "attachments", label: "Max file size (MB)", type: "number", envVars: ["MANAGERS_ATTACHMENTS_MAX_FILE_SIZE_MB"], default: DEFAULT_ATTACHMENTS.maxFileSizeMb, editable: true, coerce: posInt },
+  { key: "attachments.maxFilesPerMessage", group: "attachments", label: "Max files / message", type: "number", envVars: ["MANAGERS_ATTACHMENTS_MAX_FILES_PER_MESSAGE"], default: DEFAULT_ATTACHMENTS.maxFilesPerMessage, editable: true, coerce: posInt },
+  { key: "attachments.allowedTypes", group: "attachments", label: "Allowed types", help: "MIME types / extensions (e.g. image/*, .pdf). * = allow all.", type: "string-list", envVars: ["MANAGERS_ATTACHMENTS_ALLOWED_TYPES"], default: [...DEFAULT_ATTACHMENTS.allowedTypes], editable: true, coerce: stringList },
 
   // Interface (issue #914). `nonNegInt`, not `posInt`: 0 means "render everything".
-  { key: "ui.transcriptRenderLimit", group: "ui", label: "Transcript render limit", help: "How many recent messages a chat renders on open. 0 = no limit. Older messages stay on disk and are not deleted.", type: "number", envVars: ["PADDOCK_UI_TRANSCRIPT_RENDER_LIMIT"], default: DEFAULT_UI.transcriptRenderLimit, editable: true, coerce: nonNegInt },
+  { key: "ui.transcriptRenderLimit", group: "ui", label: "Transcript render limit", help: "How many recent messages a chat renders on open. 0 = no limit. Older messages stay on disk and are not deleted.", type: "number", envVars: ["MANAGERS_UI_TRANSCRIPT_RENDER_LIMIT"], default: DEFAULT_UI.transcriptRenderLimit, editable: true, coerce: nonNegInt },
 
   // Branding (issue #34).
-  { key: "brand.name", group: "branding", label: "Name", type: "string", envVars: ["PADDOCK_BRAND_NAME"], default: "Paddock", editable: true, coerce: nonEmptyString },
-  { key: "brand.logo", group: "branding", label: "Logo", help: "An emoji/glyph, or a URL/path to an image.", type: "string", envVars: ["PADDOCK_BRAND_LOGO"], default: "🐎", editable: true, coerce: nonEmptyString },
-  { key: "brand.accent", group: "branding", label: "Accent color", type: "string", envVars: ["PADDOCK_BRAND_ACCENT"], default: "#c2603c", editable: true, coerce: hexColor },
+  { key: "brand.name", group: "branding", label: "Name", type: "string", envVars: ["MANAGERS_BRAND_NAME"], default: "Paddock", editable: true, coerce: nonEmptyString },
+  { key: "brand.logo", group: "branding", label: "Logo", help: "An emoji/glyph, or a URL/path to an image.", type: "string", envVars: ["MANAGERS_BRAND_LOGO"], default: "🐎", editable: true, coerce: nonEmptyString },
+  { key: "brand.accent", group: "branding", label: "Accent color", type: "string", envVars: ["MANAGERS_BRAND_ACCENT"], default: "#c2603c", editable: true, coerce: hexColor },
 
   // Transcription (voice dictation). endpoint is semi-sensitive; apiKey is a
   // secret and deliberately NOT surfaced here.
-  { key: "transcription.mode", group: "transcription", label: "Mode", type: "enum", enumValues: ["off", "local", "remote"], envVars: ["PADDOCK_WHISPER_MODE"], default: "off", editable: true, coerce: oneOf(["off", "local", "remote"]) },
-  { key: "transcription.model", group: "transcription", label: "Model", type: "string", envVars: ["PADDOCK_WHISPER_MODEL"], default: "base", editable: true, coerce: nonEmptyString },
-  { key: "transcription.endpoint", group: "transcription", label: "Endpoint", help: "remote mode: OpenAI-compatible base URL.", type: "string", envVars: ["PADDOCK_WHISPER_ENDPOINT"], default: null, editable: true, sensitive: true, coerce: optString },
+  { key: "transcription.mode", group: "transcription", label: "Mode", type: "enum", enumValues: ["off", "local", "remote"], envVars: ["MANAGERS_WHISPER_MODE"], default: "off", editable: true, coerce: oneOf(["off", "local", "remote"]) },
+  { key: "transcription.model", group: "transcription", label: "Model", type: "string", envVars: ["MANAGERS_WHISPER_MODEL"], default: "base", editable: true, coerce: nonEmptyString },
+  { key: "transcription.endpoint", group: "transcription", label: "Endpoint", help: "remote mode: OpenAI-compatible base URL.", type: "string", envVars: ["MANAGERS_WHISPER_ENDPOINT"], default: null, editable: true, sensitive: true, coerce: optString },
 
   // Git identity.
-  { key: "gitAuthor.name", group: "git", label: "Author name", type: "string", envVars: ["PADDOCK_GIT_AUTHOR_NAME"], default: "Paddock", editable: true, coerce: nonEmptyString },
-  { key: "gitAuthor.email", group: "git", label: "Author email", type: "string", envVars: ["PADDOCK_GIT_AUTHOR_EMAIL"], default: "paddock@localhost", editable: true, coerce: nonEmptyString },
+  { key: "gitAuthor.name", group: "git", label: "Author name", type: "string", envVars: ["MANAGERS_GIT_AUTHOR_NAME"], default: "Paddock", editable: true, coerce: nonEmptyString },
+  { key: "gitAuthor.email", group: "git", label: "Author email", type: "string", envVars: ["MANAGERS_GIT_AUTHOR_EMAIL"], default: "paddock@localhost", editable: true, coerce: nonEmptyString },
 
   // Logging.
   { key: "logLevel", group: "logging", label: "Log level", type: "enum", enumValues: LOG_LEVELS, envVars: ["LOG_LEVEL"], default: "info", editable: true, coerce: oneOf(LOG_LEVELS) },
@@ -386,32 +386,32 @@ export const FIELDS: readonly FieldSpec[] = [
   // a live toggle silently does nothing until the next boot. Making the profile
   // editable would reintroduce that through the back door, and worse: one
   // control that no-ops five levers at once. Change it in `paddock.config.yaml`
-  // or `PADDOCK_PROFILE` and restart, which is what the value here reflects.
-  { key: "profile", group: "advanced", label: "Posture profile", help: "The named security/capability posture this instance resolved at boot. It sets the default for the Claude sharing modes below and most of the Capabilities toggles; anything set explicitly in this file or the environment still wins over it.", type: "enum", enumValues: PROFILE_NAMES, envVars: ["PADDOCK_PROFILE"], default: DEFAULT_PROFILE, editable: false },
+  // or `MANAGERS_PROFILE` and restart, which is what the value here reflects.
+  { key: "profile", group: "advanced", label: "Posture profile", help: "The named security/capability posture this instance resolved at boot. It sets the default for the Claude sharing modes below and most of the Capabilities toggles; anything set explicitly in this file or the environment still wins over it.", type: "enum", enumValues: PROFILE_NAMES, envVars: ["MANAGERS_PROFILE"], default: DEFAULT_PROFILE, editable: false },
   { key: "port", group: "advanced", label: "Port", type: "number", envVars: ["PORT"], default: 7233, editable: false },
-  { key: "host", group: "advanced", label: "Host", type: "string", envVars: ["HOST", "PADDOCK_HOST"], default: "127.0.0.1", editable: false },
-  { key: "dataDir", group: "advanced", label: "Data dir", type: "string", envVars: ["PADDOCK_DATA_DIR"], default: null, editable: false },
-  { key: "projectsRoot", group: "advanced", label: "Projects root", type: "string", envVars: ["PADDOCK_PROJECTS_DIR"], default: null, editable: false },
-  { key: "stateDir", group: "advanced", label: "State dir", type: "string", envVars: ["PADDOCK_STATE_DIR"], default: null, editable: false },
-  { key: "herdctlConfigPath", group: "advanced", label: "herdctl config path", type: "string", envVars: ["PADDOCK_HERDCTL_CONFIG"], default: null, editable: false },
-  { key: "webDist", group: "advanced", label: "Web dist", type: "string", envVars: ["PADDOCK_WEB_DIST"], default: null, editable: false },
+  { key: "host", group: "advanced", label: "Host", type: "string", envVars: ["HOST", "MANAGERS_HOST"], default: "127.0.0.1", editable: false },
+  { key: "dataDir", group: "advanced", label: "Data dir", type: "string", envVars: ["MANAGERS_DATA_DIR"], default: null, editable: false },
+  { key: "projectsRoot", group: "advanced", label: "Projects root", type: "string", envVars: ["MANAGERS_PROJECTS_DIR"], default: null, editable: false },
+  { key: "stateDir", group: "advanced", label: "State dir", type: "string", envVars: ["MANAGERS_STATE_DIR"], default: null, editable: false },
+  { key: "herdctlConfigPath", group: "advanced", label: "herdctl config path", type: "string", envVars: ["MANAGERS_HERDCTL_CONFIG"], default: null, editable: false },
+  { key: "webDist", group: "advanced", label: "Web dist", type: "string", envVars: ["MANAGERS_WEB_DIST"], default: null, editable: false },
   // What this instance shares with the host's Claude Code (#691). READ-ONLY on
   // purpose: `host` means paddock writes to the user's real transcript files,
   // and the symlinks that implement it are planted at agent-registration time —
   // a toggle that silently does nothing until the next boot would be worse than
   // no toggle. It is surfaced because "what is this instance sharing?" should be
   // answerable without reading a YAML file.
-  { key: "claude.transcripts", group: "advanced", label: "Transcripts", help: "own = Paddock's own, in each project's .chats/; host = your ~/.claude transcripts, shared live.", type: "string", envVars: ["PADDOCK_CLAUDE_TRANSCRIPTS"], default: DEFAULT_TRANSCRIPTS_MODE, editable: false },
+  { key: "claude.transcripts", group: "advanced", label: "Transcripts", help: "own = Paddock's own, in each project's .chats/; host = your ~/.claude transcripts, shared live.", type: "string", envVars: ["MANAGERS_CLAUDE_TRANSCRIPTS"], default: DEFAULT_TRANSCRIPTS_MODE, editable: false },
   // Read-only for the same reason, plus one of its own: the secure-storage
   // variable it sets is read by Claude Code when a turn's process starts, so a
   // live toggle would apply to some turns and not others.
-  { key: "claude.credentials", group: "advanced", label: "Credentials", help: "host = this machine's Claude Code login (macOS Keychain, or your ~/.claude/.credentials.json); own = only a login of this instance's.", type: "string", envVars: ["PADDOCK_CLAUDE_CREDENTIALS"], default: DEFAULT_CREDENTIALS_MODE, editable: false },
+  { key: "claude.credentials", group: "advanced", label: "Credentials", help: "host = this machine's Claude Code login (macOS Keychain, or your ~/.claude/.credentials.json); own = only a login of this instance's.", type: "string", envVars: ["MANAGERS_CLAUDE_CREDENTIALS"], default: DEFAULT_CREDENTIALS_MODE, editable: false },
   // Read-only for the same reasons. `hooks` is the one worth finding here even
   // though it cannot be changed here: "does this instance run the shell commands
   // my ~/.claude/settings.json binds to tool use?" is a question with a security
   // answer, and it should be readable without opening a YAML file.
-  { key: "claude.instructions", group: "advanced", label: "Instructions", help: "own = this instance's own only; host = your ~/.claude CLAUDE.md, agents/, commands/ and plugins/ as well.", type: "string", envVars: ["PADDOCK_CLAUDE_INSTRUCTIONS"], default: DEFAULT_INSTRUCTIONS_MODE, editable: false },
-  { key: "claude.hooks", group: "advanced", label: "Hooks", help: "own = your ~/.claude/settings.json hooks do NOT run here (its other keys still apply); host = they do.", type: "string", envVars: ["PADDOCK_CLAUDE_HOOKS"], default: DEFAULT_HOOKS_MODE, editable: false },
+  { key: "claude.instructions", group: "advanced", label: "Instructions", help: "own = this instance's own only; host = your ~/.claude CLAUDE.md, agents/, commands/ and plugins/ as well.", type: "string", envVars: ["MANAGERS_CLAUDE_INSTRUCTIONS"], default: DEFAULT_INSTRUCTIONS_MODE, editable: false },
+  { key: "claude.hooks", group: "advanced", label: "Hooks", help: "own = your ~/.claude/settings.json hooks do NOT run here (its other keys still apply); host = they do.", type: "string", envVars: ["MANAGERS_CLAUDE_HOOKS"], default: DEFAULT_HOOKS_MODE, editable: false },
   // The fifth lever, which step 5 shipped without surfacing here. Read-only like
   // its four siblings, and worth the row for the same reason `hooks` is: an MCP
   // server is a process this instance spawns, so "is this instance running my
@@ -425,12 +425,12 @@ export const FIELDS: readonly FieldSpec[] = [
   // user. There is no redacting variant of `FieldSpec`, and inventing one to
   // display a server list is not worth the leak surface: the boot log already
   // names every declared server, secret-free, via `describeServer`.
-  { key: "claude.mcpServers", group: "advanced", label: "MCP servers", help: "own = only the servers Paddock provides itself; host = the ones declared in your ~/.claude.json as well.", type: "string", envVars: ["PADDOCK_CLAUDE_MCP_SERVERS"], default: DEFAULT_MCP_SERVERS_MODE, editable: false },
+  { key: "claude.mcpServers", group: "advanced", label: "MCP servers", help: "own = only the servers Paddock provides itself; host = the ones declared in your ~/.claude.json as well.", type: "string", envVars: ["MANAGERS_CLAUDE_MCP_SERVERS"], default: DEFAULT_MCP_SERVERS_MODE, editable: false },
   // Auth: read-only in v1 (misconfig can lock everyone out — issue #385). Only
   // the mode is surfaced; JWT/JWKS internals stay out of the API.
-  { key: "auth.mode", group: "advanced", label: "Auth mode", type: "string", envVars: ["PADDOCK_AUTH_MODE"], default: "none", editable: false, sensitive: true },
+  { key: "auth.mode", group: "advanced", label: "Auth mode", type: "string", envVars: ["MANAGERS_AUTH_MODE"], default: "none", editable: false, sensitive: true },
   // GitHub client id: not a secret, but semi-sensitive — read-only display.
-  { key: "githubClientId", group: "advanced", label: "GitHub client id", type: "string", envVars: ["PADDOCK_GITHUB_CLIENT_ID"], default: null, editable: false, sensitive: true },
+  { key: "githubClientId", group: "advanced", label: "GitHub client id", type: "string", envVars: ["MANAGERS_GITHUB_CLIENT_ID"], default: null, editable: false, sensitive: true },
 ];
 
 /** Fast lookup + editable allowlist for the PUT path. */
@@ -587,7 +587,7 @@ export function instanceConfigVersion(configPath: string): string | null {
  * second POST arrives: without this the idempotency check would see `own`,
  * decide nothing had happened, and re-run a migration that already had.
  *
- * The environment is deliberately not consulted. `PADDOCK_CLAUDE_TRANSCRIPTS`
+ * The environment is deliberately not consulted. `MANAGERS_CLAUDE_TRANSCRIPTS`
  * beats the file, so when it is set the true answer to "what would a restart
  * resolve" is the env var — but a caller in that situation is already refusing
  * with `env_shadowed`, and folding it in here would make a shadowed instance
@@ -620,12 +620,12 @@ function valuesEqual(a: unknown, b: unknown): boolean {
 const DEFAULT_CONFIG_FILENAME = "paddock.config.yaml";
 
 /**
- * Resolve the path a PUT writes to: an explicit `PADDOCK_CONFIG` env var wins
+ * Resolve the path a PUT writes to: an explicit `MANAGERS_CONFIG` env var wins
  * (the same rule {@link import("./config.js").loadConfigFile} reads it back
  * from), else `<dataDir>/paddock.config.yaml`.
  */
 export function instanceConfigPath(cfg: PaddockConfig): string {
-  const explicit = process.env.PADDOCK_CONFIG;
+  const explicit = process.env.MANAGERS_CONFIG;
   if (explicit && explicit.trim().length > 0) {
     const p = explicit.trim();
     return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
@@ -693,7 +693,7 @@ function postureKeyOf(f: FieldSpec): keyof Posture | null {
  * set themselves is worse than a row that says nothing:
  *
  *  - **not a posture key** — the profile is silent on port, auth, models, …
- *  - **not env-shadowed** — `PADDOCK_CLAUDE_INSTRUCTIONS=own` under
+ *  - **not env-shadowed** — `MANAGERS_CLAUDE_INSTRUCTIONS=own` under
  *    `profile: balanced` resolves `own`, and the profile wanted `host`. The env
  *    var beat it; the existing `env` chip is the honest label for that row.
  *  - **not set in the file** — an explicit `claude: {hooks: host}` beats the
@@ -1044,7 +1044,7 @@ function fileValueTookEffect(written: unknown, effective: unknown): boolean {
 
 /**
  * Where the profile NAME came from. Mirrors `resolveProfileName`'s precedence
- * exactly — a non-blank `PADDOCK_PROFILE` wins outright, and notably does NOT
+ * exactly — a non-blank `MANAGERS_PROFILE` wins outright, and notably does NOT
  * fall through to the file when it names something unrecognised.
  */
 function resolveProfileProvenance(
@@ -1052,13 +1052,13 @@ function resolveProfileProvenance(
   fileData: Record<string, unknown> | null,
   configPath: string,
 ): ResolvedProfileInfo {
-  const envRaw = process.env.PADDOCK_PROFILE?.trim();
+  const envRaw = process.env.MANAGERS_PROFILE?.trim();
   const fileVal = fileData?.profile;
   const fileRaw = fileVal === undefined || fileVal === null ? "" : String(fileVal).trim();
 
   const raw = envRaw || fileRaw;
   if (!raw) return { name, source: "default" };
-  const origin = envRaw ? "PADDOCK_PROFILE" : configPath;
+  const origin = envRaw ? "MANAGERS_PROFILE" : configPath;
   if (isKnownProfile(raw.toLowerCase())) {
     return { name, source: envRaw ? "env" : "file", origin };
   }

@@ -40,7 +40,7 @@
  * success. The first line is NEVER isSidechain:true (so discovery keeps it).
  *
  * ── Determinism / continuity ────────────────────────────────────────────────
- * Replies are scripted by prompt via a fixture map (PADDOCK_FAKE_SCRIPT, a JSON
+ * Replies are scripted by prompt via a fixture map (MANAGERS_FAKE_SCRIPT, a JSON
  * file path, or the built-in rules below). On --resume the fake reads the prior
  * transcript so it can answer continuity questions (e.g. "what was the
  * codeword?" → the value set in an earlier turn) — this is what makes resume
@@ -60,7 +60,7 @@
  *                     result line, leaving the turn "running" until the process
  *                     is killed. Lets a test exercise cancel/interrupt (Stop).
  *   • [[SLOWTOOL]]  → emit a Task-shaped tool_use, hold it IN FLIGHT for an
- *                     observable window (PADDOCK_FAKE_SLOWTOOL_MS, default 5000ms),
+ *                     observable window (MANAGERS_FAKE_SLOWTOOL_MS, default 5000ms),
  *                     then write the paired result. Exercises the #175 in-flight
  *                     tool ("running…") row + its reconciliation on completion.
  *   • [[HANGTOOL]]  → emit a Task-shaped tool_use and then block WITHOUT ever
@@ -99,7 +99,7 @@
  *                     Task tool_use is paired with its tool_result IMMEDIATELY, so
  *                     the parent turn reaches its terminal `result` while sidechain
  *                     steps are STILL arriving — they keep landing for
- *                     PADDOCK_FAKE_BGSUBAGENT_MS (default 3000ms) after the turn
+ *                     MANAGERS_FAKE_BGSUBAGENT_MS (default 3000ms) after the turn
  *                     ends. This is the ONLY directive that produces a sub-agent
  *                     still running with no live parent turn holding it open, which
  *                     is the exact state #725 needs: a nav-away/nav-back test built
@@ -112,15 +112,15 @@
  *   • [[BGTASK]]    → the SDK's task-lifecycle system messages (#604) for work that
  *                     OUTLIVES the turn: a background shell and a Monitor go live
  *                     via `background_tasks_changed`, tick `task_progress` for
- *                     PADDOCK_FAKE_BGTASK_MS (default 3000ms) after the terminal
+ *                     MANAGERS_FAKE_BGTASK_MS (default 3000ms) after the terminal
  *                     result, then the shell completes and the level shrinks to
  *                     just the monitor. Drives the running-work bar end to end.
  *                     `task_type` carries the CLI's REAL internal discriminants
  *                     (`local_bash` / `monitor_mcp`), not the friendly names
  *                     nothing on the wire ever sends — see #846.
- *                     PADDOCK_FAKE_BGTASK_SHELLS (default 1) widens the fan-out
+ *                     MANAGERS_FAKE_BGTASK_SHELLS (default 1) widens the fan-out
  *                     to reproduce #847's fifteen-row wall, and
- *                     PADDOCK_FAKE_BGTASK_MONITOR=0 drops the monitor for a
+ *                     MANAGERS_FAKE_BGTASK_MONITOR=0 drops the monitor for a
  *                     HOMOGENEOUS bar. Both are overridable per-prompt as
  *                     `[[BGTASK:15]]` / `[[BGTASK:15:solo]]`.
  *                     Each shell is preceded by its REAL launching `Bash`
@@ -136,7 +136,7 @@
  * prompt (contains the literal "<<<OVERVIEW>>>" marker request), the fake emits a
  * marker-shaped reply (<<<OVERVIEW>>> … <<<CHANGELOG>>> … <<<END>>>) so
  * SweepService can parse it and write OVERVIEW.md/CHANGELOG.md. The exact text is
- * overridable via PADDOCK_FAKE_SWEEP (a file path whose contents become the
+ * overridable via MANAGERS_FAKE_SWEEP (a file path whose contents become the
  * sweeper reply).
  */
 import fs from "node:fs";
@@ -210,7 +210,7 @@ function sessionDirFor(cwd) {
 
 // ── scripted replies ────────────────────────────────────────────────────────
 function loadScript() {
-  const p = process.env.PADDOCK_FAKE_SCRIPT;
+  const p = process.env.MANAGERS_FAKE_SCRIPT;
   if (!p) return {};
   try {
     return JSON.parse(fs.readFileSync(p, "utf8"));
@@ -221,7 +221,7 @@ function loadScript() {
 
 /**
  * Decide the assistant reply for a prompt.
- *  1. Exact match in the JSON script (PADDOCK_FAKE_SCRIPT).
+ *  1. Exact match in the JSON script (MANAGERS_FAKE_SCRIPT).
  *  2. Built-in rules: codeword set/recall (continuity), default echo.
  * `priorText` is the concatenated text of all prior transcript turns (used for
  * resume continuity).
@@ -234,7 +234,7 @@ function replyFor(prompt, script, priorText) {
 
   // Sweeper curation prompt → emit a marker-shaped reply SweepService can parse.
   // Detected by the literal "<<<OVERVIEW>>>" the sweeper system/user prompt asks
-  // for. Overridable via PADDOCK_FAKE_SWEEP (a file whose contents are the reply).
+  // for. Overridable via MANAGERS_FAKE_SWEEP (a file whose contents are the reply).
   if (trimmed.includes("<<<OVERVIEW>>>") || trimmed.includes("curating two files")) {
     return sweeperReply(trimmed);
   }
@@ -263,11 +263,11 @@ function replyFor(prompt, script, priorText) {
 
 /**
  * Build the sweeper's marker-shaped reply (the two sections SweepService parses).
- * Overridable wholesale via PADDOCK_FAKE_SWEEP (a file path). The default echoes
+ * Overridable wholesale via MANAGERS_FAKE_SWEEP (a file path). The default echoes
  * a tiny, deterministic OVERVIEW + one changelog line.
  */
 function sweeperReply(prompt) {
-  const override = process.env.PADDOCK_FAKE_SWEEP;
+  const override = process.env.MANAGERS_FAKE_SWEEP;
   if (override) {
     try {
       return fs.readFileSync(override, "utf8");
@@ -355,7 +355,7 @@ function sleep(ms) {
 }
 
 /**
- * Opt-in invocation recorder (#635). When PADDOCK_FAKE_INVOCATION_LOG names a
+ * Opt-in invocation recorder (#635). When MANAGERS_FAKE_INVOCATION_LOG names a
  * file, append one JSON line per spawn describing the flags herdctl actually
  * built. This is how a test proves a system-prompt append reaches the spawned
  * process's argv rather than merely reaching a config object — the CLI runtime
@@ -365,7 +365,7 @@ function sleep(ms) {
  * A no-op when the env var is unset, so existing tests are unaffected.
  */
 function recordInvocation(flags, prompt) {
-  const logPath = process.env.PADDOCK_FAKE_INVOCATION_LOG;
+  const logPath = process.env.MANAGERS_FAKE_INVOCATION_LOG;
   if (!logPath) return;
   try {
     fs.appendFileSync(
@@ -785,7 +785,7 @@ function main() {
     }
     // Hold the tool in flight for an observable window (busy-spin so the watcher
     // reads the tool_use line well before the result), then complete it.
-    sleep(Number(process.env.PADDOCK_FAKE_SLOWTOOL_MS || "5000"));
+    sleep(Number(process.env.MANAGERS_FAKE_SLOWTOOL_MS || "5000"));
     append({
       parentUuid: null,
       isSidechain: false,
@@ -808,7 +808,7 @@ function main() {
   // pairing. Unlike [[SUBAGENT]], the Task tool_result is written IMMEDIATELY, so
   // nothing holds the parent turn open — it runs on to its terminal `result` while
   // the sidechain is still producing steps. Those steps are appended AFTER the
-  // result, below, for PADDOCK_FAKE_BGSUBAGENT_MS.
+  // result, below, for MANAGERS_FAKE_BGSUBAGENT_MS.
   //
   // Why this shape and not [[SUBAGENT]] with a delay: sub-agent progress is polled
   // over REST, not streamed, and a live parent turn is exactly what keeps the poll
@@ -1062,7 +1062,7 @@ function main() {
   // edges in between, so a test can assert REPLACE semantics rather than edge
   // pairing: the shell leaves via a terminal edge AND a shrunken level.
   if (/\[\[BGTASK(?::|\]\])/.test(prompt || "")) {
-    const windowMs = Number(process.env.PADDOCK_FAKE_BGTASK_MS || "3000");
+    const windowMs = Number(process.env.MANAGERS_FAKE_BGTASK_MS || "3000");
     // Fan-out width (#847). One shell by default, which is the two-task set the
     // #604 tests assert against; raise it to reproduce the fifteen-row wall that
     // motivated the collapse toggle, and set the monitor knob to 0 for a
@@ -1073,10 +1073,10 @@ function main() {
     const spec = /\[\[BGTASK(?::(\d+))?(?::(solo))?\]\]/.exec(prompt || "");
     const shellCount = Math.max(
       1,
-      Number(spec?.[1] ?? process.env.PADDOCK_FAKE_BGTASK_SHELLS ?? "1"),
+      Number(spec?.[1] ?? process.env.MANAGERS_FAKE_BGTASK_SHELLS ?? "1"),
     );
     const withMonitor =
-      spec?.[2] === "solo" ? false : process.env.PADDOCK_FAKE_BGTASK_MONITOR !== "0";
+      spec?.[2] === "solo" ? false : process.env.MANAGERS_FAKE_BGTASK_MONITOR !== "0";
     const shellIds = Array.from(
       { length: shellCount },
       () => `bg_${crypto.randomBytes(4).toString("hex")}`,
@@ -1265,7 +1265,7 @@ function main() {
   // The `end_turn` is written only when the window closes, so a test can choose
   // how long the sub-agent stays live.
   if (bgSubagentTaskId) {
-    const windowMs = Number(process.env.PADDOCK_FAKE_BGSUBAGENT_MS || "3000");
+    const windowMs = Number(process.env.MANAGERS_FAKE_BGSUBAGENT_MS || "3000");
     const stepMs = 300;
     const deadline = Date.now() + windowMs;
     /** Append one line to the sub-agent's own transcript (best-effort). */

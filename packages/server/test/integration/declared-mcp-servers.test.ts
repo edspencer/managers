@@ -27,7 +27,7 @@ import { declaredMcpNotices } from "../../src/mcp-servers.js";
  * makes the leak assertions exact rather than approximate.
  */
 const SECRET = "ntn_totally-fake-secret-9f3a2b";
-const SECRET_VAR = "PADDOCK_TEST_FAKE_NOTION_TOKEN";
+const SECRET_VAR = "MANAGERS_TEST_FAKE_NOTION_TOKEN";
 
 /** The block a user would write, with the credential kept out of the file. */
 const DECLARED = {
@@ -97,7 +97,7 @@ describe("integration: instance-declared MCP servers (#691 step 6)", () => {
     t = await startTestApp({
       configFile: { mcpServers: { notion: { command: "mine-not-real" } } },
       hostClaudeJson: { mcpServers: { notion: { command: "theirs-not-real" } } },
-      env: { PADDOCK_CLAUDE_MCP_SERVERS: "host" },
+      env: { MANAGERS_CLAUDE_MCP_SERVERS: "host" },
     });
     const servers = keeperConfigFor(t, "/nonexistent/a").mcp_servers as Record<
       string,

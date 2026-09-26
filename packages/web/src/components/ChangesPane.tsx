@@ -765,7 +765,7 @@ function GithubAffordance({
     return (
       <span
         className="hidden items-center gap-1.5 text-2xs text-fg-subtle sm:inline-flex"
-        title="Set PADDOCK_GITHUB_CLIENT_ID on the server to enable in-app GitHub auth."
+        title="Set MANAGERS_GITHUB_CLIENT_ID on the server to enable in-app GitHub auth."
       >
         <GithubIcon width={13} height={13} />
         GitHub not configured

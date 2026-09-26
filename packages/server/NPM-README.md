@@ -119,7 +119,7 @@ start over. Where you run `paddock` from has no effect on which instance you get
 
 Paddock binds **loopback only** with authentication disabled, which is the right
 default for a laptop. It **refuses to start** if you bind a routable interface
-while auth is off — to expose it on a network, configure `PADDOCK_AUTH_MODE`
+while auth is off — to expose it on a network, configure `MANAGERS_AUTH_MODE`
 first. See [AUTH.md](https://github.com/edspencer/paddock/blob/main/AUTH.md).
 
 ## Requirements
@@ -134,11 +134,11 @@ fit for a server deployment:
 ```sh
 docker run -d -p 127.0.0.1:7233:7233 -v /srv/paddock-data:/data \
   -e CLAUDE_CODE_OAUTH_TOKEN=… \
-  -e PADDOCK_DANGEROUSLY_ALLOW_OPEN=1 \
+  -e MANAGERS_DANGEROUSLY_ALLOW_OPEN=1 \
   ghcr.io/edspencer/paddock:latest
 ```
 
-`PADDOCK_DANGEROUSLY_ALLOW_OPEN=1` is required: the image binds `0.0.0.0` and the
+`MANAGERS_DANGEROUSLY_ALLOW_OPEN=1` is required: the image binds `0.0.0.0` and the
 default auth mode is `none`, and Paddock refuses to bind a routable interface
 unauthenticated unless told to. Publishing on `127.0.0.1:` is what makes that
 safe — Paddock runs code and spends Claude tokens, so put an auth mode or a

@@ -188,8 +188,8 @@ describe("paddock service: the spec", () => {
   it("names no data dir by default", () => {
     const spec = buildSpec(BASE);
     expect(spec.args).not.toContain("--data-dir");
-    expect(renderPlist(spec)).not.toContain("PADDOCK_DATA_DIR");
-    expect(renderUnit(spec)).not.toContain("PADDOCK_DATA_DIR");
+    expect(renderPlist(spec)).not.toContain("MANAGERS_DATA_DIR");
+    expect(renderUnit(spec)).not.toContain("MANAGERS_DATA_DIR");
   });
 
   it("forwards a data dir only when one was asked for", () => {

@@ -26,7 +26,7 @@ calling Anthropic. It:
   translator consume,
 - mints a UUID for a new session, or appends to `<id>.jsonl` on `--resume`
   (reading the prior transcript so continuity — "what was the codeword?" — works),
-- replies deterministically: `PADDOCK_FAKE_SCRIPT` (a JSON prompt→reply map),
+- replies deterministically: `MANAGERS_FAKE_SCRIPT` (a JSON prompt→reply map),
   built-in codeword rules, else `Acknowledged: <prompt>`.
 
 ### What works vs. what's stubbed

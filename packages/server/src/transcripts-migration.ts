@@ -82,7 +82,7 @@ export type MigrationWarningCode =
   | "unexpected-entries";
 
 /** The env var that shadows `claude.transcripts` — see `config.ts:1481`. */
-export const TRANSCRIPTS_ENV_VAR = "PADDOCK_CLAUDE_TRANSCRIPTS";
+export const TRANSCRIPTS_ENV_VAR = "MANAGERS_CLAUDE_TRANSCRIPTS";
 
 /**
  * Where unchecked chats are preserved: a SIBLING of `.chats/`, not a child.
@@ -253,7 +253,7 @@ export interface MigrationInput {
   mode: TranscriptsMode;
   /** The resolved posture profile — `paranoid` suppresses the banner (§10.4). */
   profile: string;
-  /** True when `PADDOCK_CLAUDE_TRANSCRIPTS` is set: the config write is inert. */
+  /** True when `MANAGERS_CLAUDE_TRANSCRIPTS` is set: the config write is inert. */
   envShadowed: boolean;
   projects: MigrationProjectRef[];
   /** The USER's own `~/.claude` — the destination store's root. */

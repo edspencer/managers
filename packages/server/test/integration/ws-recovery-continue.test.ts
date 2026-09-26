@@ -93,7 +93,7 @@ describe("integration: recovery re-drive double-dispatch guard (#352)", () => {
 
   it("a Continue fired while a turn is RUNNING is refused (no swallowed double-dispatch)", async () => {
     // Hold a turn open with an in-flight slow tool so the session is provably busy.
-    process.env.PADDOCK_FAKE_SLOWTOOL_MS = "1200";
+    process.env.MANAGERS_FAKE_SLOWTOOL_MS = "1200";
     try {
       const m1 = ws.mark();
       ws.send({ type: "chat:send", payload: { projectSlug: SLUG, sessionId: null, message: "start turn" } });
@@ -125,7 +125,7 @@ describe("integration: recovery re-drive double-dispatch guard (#352)", () => {
       // The refused Continue injected NO recovery nudge.
       expect((await userMessages(sessionId)).filter(isNudge)).toHaveLength(0);
     } finally {
-      delete process.env.PADDOCK_FAKE_SLOWTOOL_MS;
+      delete process.env.MANAGERS_FAKE_SLOWTOOL_MS;
     }
   });
 });
