@@ -1,8 +1,8 @@
 {
-  "name": "@paddock/web",
-  "version": "0.74.1",
+  "name": "@managers/web",
+  "version": "0.1.0",
   "private": true,
-  "description": "Paddock project-first web SPA (Vite + React + Tailwind).",
+  "description": "Managers web SPA (Vite + React + Tailwind).",
   "license": "MIT",
   "type": "module",
   "scripts": {

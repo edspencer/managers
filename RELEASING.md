@@ -1,3 +1,5 @@
+> **Not applicable to Managers.** This is Paddock's release runbook, kept for reference. Managers has no release pipeline: `.changeset/` and `.github/workflows/release.yml` were removed in M1, and nothing is published or pushed.
+
 # Releasing Paddock
 
 Paddock is an **application**, not a set of published libraries. We use

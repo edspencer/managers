@@ -1,3 +1,5 @@
+> **This is Managers, a fork of Paddock (forked at v0.74.1).** The README below is still largely Paddock's: read `paddock` as `managers`, `PADDOCK_*` as `MANAGERS_*`, `~/.paddock` as `~/.managers` and port 7233 as 7234. Managers is not published to npm or Docker; see `CLAUDE.md` for how to build and run it.
+
 <h1 align="center">🐎 Paddock</h1>
 
 <p align="center">
@@ -75,7 +77,7 @@ you visit, more a service your other tools talk to.
 - 🧩 **Two project types** — notebook (data-repo subdir) or repo-backed (clone an external repo as cwd)
 - 📱 **Works from your phone** — the same launchpad, fully responsive
 - 🔀 **Chat ergonomics** — star to pin, mark unread, fork or rewind from any message, queue-while-streaming, stop, search, archive; spawned chats nest under the chat that created them
-- 🎛️ **Settings, per project and per instance** — model, permission mode, curation budgets and more per project; an instance-wide **Config** screen edits `paddock.config.yaml` from the UI
+- 🎛️ **Settings, per project and per instance** — model, permission mode, curation budgets and more per project; an instance-wide **Config** screen edits `managers.config.yaml` from the UI
 - 🧠 **Claude Opus 5.5 by default** — with Opus 5, Opus 4.8, Fable 5.1, Fable 5, Sonnet 5 and Haiku 4.5 selectable, and an allow-list if you'd rather offer fewer
 - 📈 **Token & cost tracking** — per-chat context meter and estimated API cost, live
 - 🎙️ **Voice dictation & slash commands** — mic-to-text in the composer, `/`-autocomplete for skills
@@ -90,7 +92,7 @@ npx @edspencer/paddock -o
 ```
 
 That starts the server on **http://127.0.0.1:7233** and opens a browser at it. Data
-lives in `~/.paddock`; the directory you run it from makes no difference.
+lives in `~/.managers`; the directory you run it from makes no difference.
 
 **A new instance opens on Discover.** It reads your Claude Code history, works out
 which directories on this machine you have actually been using `claude` in, and
@@ -99,9 +101,9 @@ so you can tell them apart. Tick the ones you want, press Import, and instead of
 empty instance you are looking at your own work, resumable. It stays in the sidebar
 afterwards.
 
-**Nothing is written into your directories.** No `.paddock/`, no `.chats/`, no
+**Nothing is written into your directories.** No `.managers/`, no `.chats/`, no
 `.gitignore` edit, no `CLAUDE.md` — the project record and the copied transcripts
-both live in `~/.paddock`, and the project just points at the path. Your `~/.claude`
+both live in `~/.managers`, and the project just points at the path. Your `~/.claude`
 transcripts are *copied*, never moved or deleted, so your terminal `claude` keeps
 working exactly as before.
 
@@ -133,7 +135,7 @@ loud — Paddock names the port and the flag and exits.)
 
 ### Always-on: your own laptop
 
-`npx` is a terminal tab. To keep the same `~/.paddock` instance running in the
+`npx` is a terminal tab. To keep the same `~/.managers` instance running in the
 background instead:
 
 ```bash
@@ -256,7 +258,7 @@ projects, read chats, and, if you grant it, start turns. External callers get
 the *same* toolset Claude receives in-process, so the two surfaces can't
 drift.
 
-Clients are declared in `paddock.config.yaml`, and their tokens are
+Clients are declared in `managers.config.yaml`, and their tokens are
 **referenced, never inlined** — a literal secret in the config file is a hard
 error:
 
@@ -305,14 +307,14 @@ Full setup, the scope grammar, and the per-tool reference:
 
 ## Configuration
 
-An instance is configured by a single **`paddock.config.yaml`**, with per-project
+An instance is configured by a single **`managers.config.yaml`**, with per-project
 overrides in each project's `project.yaml`. The file lives at
-**`<MANAGERS_DATA_DIR>/paddock.config.yaml`** (or wherever `MANAGERS_CONFIG` points),
+**`<MANAGERS_DATA_DIR>/managers.config.yaml`** (or wherever `MANAGERS_CONFIG` points),
 and it is entirely optional — every key has a built-in default, so an instance
 with no file at all is a working instance.
 
 ```yaml
-# <MANAGERS_DATA_DIR>/paddock.config.yaml — every key below is optional.
+# <MANAGERS_DATA_DIR>/managers.config.yaml — every key below is optional.
 schemaVersion: 1              # the version of THIS format the file is written in
 
 # --- Core ---
@@ -373,7 +375,7 @@ borrows from the machine), and a sibling `mcpServers:` declaring MCP servers to
 Paddock itself.
 
 **Environment variables override the file.** Resolution is
-**built-in default < `paddock.config.yaml` < environment**, so every key above has
+**built-in default < `managers.config.yaml` < environment**, so every key above has
 a matching `MANAGERS_*` variable that wins over it — deliberate, so a container can
 pin one value at run time without rewriting a mounted file. The complete list is
 the **[environment reference](https://paddock.edspencer.net/configuration/environment/)**;
@@ -391,7 +393,7 @@ all of these, and some have no file equivalent at all:
 | `ANTHROPIC_API_KEY` | — | Claude auth — API-key billing. Same. |
 | `PORT` / `HOST` | `7233` / `127.0.0.1` | Also settable as `port:` / `host:`. For `PORT` the precedence is `--port` flag, then `PORT`, then the file. |
 
-The instance **Config** screen (at `/config`) edits `paddock.config.yaml` from the
+The instance **Config** screen (at `/config`) edits `managers.config.yaml` from the
 UI: it writes the file while preserving your comments, shows which fields an
 environment variable has pinned — those render read-only, because writing them
 would change nothing — and flags when a saved value needs a restart to take
@@ -401,7 +403,7 @@ effect.
 
 Paddock always keeps its **own** Claude home at `<data-dir>/claude-home`, and
 refuses to start if that resolves to your `~/.claude`. What it borrows from the
-machine is five independent keys in `paddock.config.yaml` — each `own`
+machine is five independent keys in `managers.config.yaml` — each `own`
 (Paddock's, isolated) or `host` (this machine's):
 
 ```yaml

@@ -1,4 +1,4 @@
-# Paddock application image.
+# Managers application image (a fork of Paddock; identity renamed in M1, not yet built or published).
 #
 # Paddock is an APP (server + built web SPA), not a library — this image is the
 # unit of deployment. It bundles the Fastify server, the built React SPA, and the
@@ -58,13 +58,13 @@ COPY . .
 RUN npm run build
 
 # ---- base runtime stage ---------------------------------------------------
-# The lean, publishable runtime image (ghcr.io/edspencer/paddock:<version> /
-# :latest). Everything a stock Paddock instance needs and nothing more.
+# The lean, publishable runtime image (ghcr.io/edspencer/managers:<version> /
+# :latest). Everything a stock Managers instance needs and nothing more.
 FROM node:22-slim AS base
 WORKDIR /app
 
 ENV NODE_ENV=production \
-    PORT=7233 \
+    PORT=7234 \
     HOST=0.0.0.0 \
     MANAGERS_DATA_DIR=/data \
     HOME=/data
@@ -106,7 +106,7 @@ RUN printf '#!/bin/sh\nif [ -n "$GITHUB_TOKEN" ]; then\n  git config --global ur
     && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 VOLUME ["/data"]
-EXPOSE 7233
+EXPOSE 7234
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${PORT}/api/health" || exit 1
@@ -145,7 +145,7 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "packages/server/dist/index.js"]
 
 # ---- devbox stage ---------------------------------------------------------
-# base + the coding-agent toolbox (ghcr.io/edspencer/paddock:<version>-devbox /
+# base + the coding-agent toolbox (ghcr.io/edspencer/managers:<version>-devbox /
 # :devbox). This is the heavy image: the Playwright Chromium layer alone is
 # ~1 GB. It inherits base's ENV / VOLUME / EXPOSE / HEALTHCHECK / ENTRYPOINT /
 # CMD unchanged — HOST=0.0.0.0 stays (the container namespace is the security

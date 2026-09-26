@@ -1,23 +1,36 @@
-# Paddock
+# Managers
 
-Paddock is a **project-first launchpad** on top of [`@herdctl/core`](https://github.com/edspencer/herdctl):
-server-hosted, persistent, resumable **Claude Code sessions organized by project**.
-A *project* is a directory + `project.yaml`, and what it **is** to a user is the
-collection of **chats** in it — a *chat* being one resumable Claude Code session
-whose working directory is that project's directory — plus two generated files,
-`OVERVIEW.md` and `CHANGELOG.md`, which a tool-less **sweeper** quietly curates
-after each of your turns. **A project is not "an agent", and nothing user-facing
-should describe it as one.** Underneath, herdctl does register a long-lived
-`keeper-<slug>` and `sweeper-<slug>` per project — plus one `trigger-<slug>-<name>`
-per *configured* event trigger, so the count is two or more, never one
-(`herdctl.ts` — `init()` at boot, `ensureProjectAgent()` on create/update, both
-via `fleet.addAgent`, then `registerTriggerAgents`). That is plumbing, not the
-definition.
-herdctl runs the actual agents and owns session discovery — Paddock is the thin,
-opinionated layer on top. Chats run on herdctl's **Claude Agent SDK** streaming
-runtime by default; the sweeper always shells out to a one-shot `claude -p` CLI
-subprocess, and triggers and chat turns join it there only on `driveMode: batch`
-(see the drive-mode note below).
+**Managers** is a fork of [Paddock](https://github.com/edspencer/paddock) (forked
+at v0.74.1) that turns it into a set of scheduled, per-project **manager agents**
+which track Ed's long-running objectives. The plan lives outside this repo, in the
+Managers notes project (`IMPLEMENTATION-PLAN.md`); this file covers how to work in
+the code.
+
+What changed from Paddock, and what did not:
+
+- **Everything user- or environment-facing is renamed.** The env prefix is
+  `MANAGERS_*` (never `PADDOCK_*`), the CLI is `managers`, the default data dir is
+  `~/.managers`, the config file is `managers.config.yaml`, the default port is
+  **7234** (so it runs beside Paddock's 7233), the in-project config dir is
+  `.managers/`, and the in-process MCP servers are `managers` (self-management +
+  state tools) and `managers_files` (send_file). The name `paddock` is left free on
+  purpose: it becomes a per-project MCP *connection* to Ed's real Paddock.
+- **Boot isolation.** `start.ts` calls `env-scrub.ts` first, which deletes every
+  inherited `PADDOCK_*` variable from `process.env` (logging the count only), so
+  none reaches a keeper, sweeper or trigger child. `test/unit/no-paddock-env.test.ts`
+  fails the build if any `packages/*/src` file spells `PADDOCK_` outside that file.
+- **Data-dir guard** (`data-dir-guard.ts`, applied in `loadPaddockConfig`): a
+  projects root that already holds `*/project.yaml` but no `.managers-data` marker
+  is **refused** unless `MANAGERS_ADOPT_DATA_DIR=1`. A fresh root is claimed (the
+  marker is written). This is what stops a rig from ever touching real data.
+- **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
+  `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
+  herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
+  the CSS palette names. `website/` and `docs/` are **frozen upstream Paddock
+  reference** — not maintained, and their env names are Paddock's.
+
+Everything below this point is inherited from Paddock and still accurate for the
+code, with the renames above applied; where it says "Paddock", read "Managers".
 
 ## Monorepo layout
 
@@ -26,12 +39,12 @@ Paddock version"). Neither is published under its own name — releases synthesi
 a single public **`@edspencer/paddock`** package from their built output
 (`scripts/make-npm-package.mjs`), so the workspace manifests stay `private`:
 
-- **`packages/server`** (`@paddock/server`) — **Fastify 4 + `@fastify/websocket`**
+- **`packages/server`** (`@managers/server`) — **Fastify 4 + `@fastify/websocket`**
   backend. Wraps herdctl's `FleetManager`, the Project layer, sidecar stores, the
   `/ws` streaming transport, in-process MCP tools, and the auth boundary; serves
   the built SPA in production. Entry: `index.ts` (lifecycle only) → `app.ts`
   `buildApp()` (all DI/wiring).
-- **`packages/web`** (`@paddock/web`) — **React + Vite + Tailwind** SPA (Chat /
+- **`packages/web`** (`@managers/web`) — **React + Vite + Tailwind** SPA (Chat /
   Files / Changes / Settings), a PWA with a versioned service worker.
 
 ## Architecture pointers
@@ -68,7 +81,7 @@ never by line number). The essentials:
   so **chats and triggers normally run on the SDK, not `claude -p`**.
 
 Config resolves **env > YAML file > default** (`config.ts`; the file is
-`<dataDir>/paddock.config.yaml`) — see
+`<dataDir>/managers.config.yaml`) — see
 [`environment.md`](website/src/content/docs/configuration/environment.md) for every
 variable and [`config-file.md`](website/src/content/docs/configuration/config-file.md)
 for the file. The `claude:` block there says what an instance shares with the host's
@@ -136,61 +149,45 @@ there is no `tailwind.config.js` and no PostCSS config; do not reintroduce them.
 
 ## Dev conventions
 
-Full guide: [`CONTRIBUTING.md`](CONTRIBUTING.md); run modes: [`DEV.md`](DEV.md).
-Node 22+, a `CLAUDE_CODE_OAUTH_TOKEN` in env (never print or commit it), and a
-`claude` CLI on `PATH` **for the sweeper (always), and for triggers/turns on
-`driveMode: batch`** — on the default `session` mode chats *and* triggers
-resolve the SDK's own bundled binary and never consult `PATH`.
+Runbooks inherited from Paddock: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEV.md`](DEV.md)
+(read `PADDOCK_` there as `MANAGERS_`). Node 22+.
 
-```bash
-npm install                 # all workspaces
-npm run dev                 # server on :7233 (API + WS)      — terminal 1
-npm run dev:web             # Vite dev server, proxies to :7233 — terminal 2
-npm run typecheck           # tsc on both packages
-npm test                    # server (unit+integration) + web (component)
-npm run test:e2e            # Playwright vs real server + a fake `claude` on PATH
-```
+- **Run everything through `scripts/clean-env.sh`.** It strips every inherited
+  `PADDOCK_*`/`MANAGERS_*` var, `NODE_ENV`, `CLAUDE_CODE_OAUTH_TOKEN`,
+  `ANTHROPIC_API_KEY` and `CLAUDE_CONFIG_DIR` before exec'ing the command. The dev
+  box exports production Paddock's config and a real Claude credential into every
+  shell; either one reaching a test false-fails it, and reaching a server can
+  point it at production data or spend real API credit.
 
-- **`NODE_ENV=production` gotcha** (bites everyone once). A shell that exports it
-  silently prunes dev deps (`tsc`/`vitest`/Playwright vanish) and breaks React
-  `act()`. Install with `NODE_ENV=development npm install --include=dev`; run with
-  the var unset: `env -u NODE_ENV npm test` / `env -u NODE_ENV npm run build`.
-- **Branch for every non-trivial change; never force-push.** Conventional Commits
-  (`type(scope): summary`). Open PRs against `main`; keep them small; CI (typecheck
-  + tests + E2E) must be green.
-- **Changesets** — add one in the same PR for user-facing changes (`npm run
-  changeset`). Not needed for pure-internal or **docs-only** changes. Release flow
-  (Docker image + tarball, no npm publish): [`RELEASING.md`](RELEASING.md).
-- **A PR that changes the UI ships visual evidence — this is not optional.**
-  Anything touching `packages/web/src` that a user could *see* needs a **before and
-  after** in the PR body, plus a **control** (a neighbouring case that should NOT
-  change) so a reviewer can tell a fix from a blanking. An animated GIF beats
-  stills for anything with motion or a sequence of states. Rigs already exist:
-  `tools/docs-media/` for stills, `scripts/demo-gif/` for GIFs.
-  - **How to get an image into a PR body.** GitHub's drag-and-drop uploader has no
-    API, so `gh` cannot reach it. Push captures to a **`qa-assets-<pr>` branch** —
-    one commit on top of `main`, files under `qa/<pr>/<pr>-NN-slug.png`, **never
-    merged, no PR opened** — and embed
-    `https://raw.githubusercontent.com/edspencer/paddock/<branch>/<path>`.
-    Precedent: `qa-assets-744`. Verify each URL returns 200 *before* embedding.
-  - **PNG and GIF render over raw URLs; MP4 does not** — inline video needs the
-    uploader we can't reach, so ship a GIF, not an MP4.
-  - **Never commit captures to the PR branch itself** — they land on `main`.
-  - **This repo is public, so every pixel you push is public.** Screenshots render
-    paths, hostnames and project names verbatim. Stage a presentable rig *before*
-    capturing; cropping afterwards has failed here, because the leak was below the
-    fold. Scan the whole document, not just the viewport.
-  - **Prove the server you photographed is the build you think it is** — grep the
-    served bundle for the *old* value as a control, not just the new one. Beware a
-    discriminator that exists on both sides (a string shared with a sibling
-    component), and beware code-splitting: the top-level bundle may be byte-identical
-    while the changed chunk is elsewhere.
-  - **Disclose anything staged or mocked** in the caption. A caption implying a real
-    turn when the state was injected is worse than no screenshot.
-- **A ticket labelled `design-needed` is not resolved by opening a PR.** It is a
-  request for a human decision; answer it in the issue and get agreement first.
-  Shipping the change and calling it "closing the loop" pre-empts the decision the
-  ticket exists to ask for.
+  ```bash
+  NODE_ENV=development npm install --include=dev    # NODE_ENV=production prunes devDeps
+  scripts/clean-env.sh npm run typecheck
+  scripts/clean-env.sh npm run test -w packages/server
+  scripts/clean-env.sh npm run test -w packages/web
+  scripts/clean-env.sh npm run build
+  scripts/clean-env.sh npm run test:e2e             # after a build; fake `claude` on PATH
+  ```
+
+  Use the package scripts, never ad-hoc `npx vitest` / `tsc -p`.
+- **Never point a server, rig or test at real data or a real Claude home.** Isolate
+  `HOME` and `CLAUDE_CONFIG_DIR`, and unset the Claude credentials so no real API
+  call can happen. The data-dir guard is a backstop, not a licence.
+- **QA rig.** Until M2 lands `scripts/managers-rig/`, the credential-free rig is
+  `scripts/demo-gif/` (`seed.mjs` + `serve.mjs`), run under `pm` as `managers-qa`
+  with a wrapper in `/data/paddock-servers/managers-qa/` that `exec`s the server
+  and forces `HOST=127.0.0.1`. Screenshots and scratch go in `.playwright-mcp/` or
+  `qa-scratch/` (both gitignored) and are never committed.
+- **Commits.** Work on `main`, Conventional Commits (`type(scope): summary`), one
+  lightweight tag `m<N>` per milestone. **There is no remote to push to — never
+  push**, never force anything, and leave the `paddock` remote's config alone.
+- **No changesets, no releases.** `.changeset/` and `release.yml` were removed;
+  versions are `0.1.0`. `@herdctl/core` and `@herdctl/chat` are pinned to exact
+  versions (the fork depends on herdctl internals; bump deliberately).
+- After large edits run `npm run check:nul` — edits have been known to insert NUL
+  bytes that typecheck and tests do not notice.
+- UI work follows [`docs/DESIGN.md`](docs/DESIGN.md) and the primitives in
+  `packages/web/src/components/ui/`; `packages/web/src/styles/tokens.test.ts` must
+  stay green.
 
 ## Where to find things
 

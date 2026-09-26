@@ -25,3 +25,7 @@ test/e2e/.mobile-shots/
 /dist-tarball/
 dist-npm/
 *.tgz
+
+# Managers: QA scratch — screenshots and throwaway captures, never committed.
+.playwright-mcp/
+qa-scratch/

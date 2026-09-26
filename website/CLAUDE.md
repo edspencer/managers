@@ -1,3 +1,5 @@
+> **Upstream reference — not maintained for Managers.** This directory is Paddock's documentation site as of the fork (v0.74.1). It describes Paddock, uses Paddock's `PADDOCK_*` env names and is frozen: do not update it, build it or deploy it for Managers. See the repo-root `CLAUDE.md` for what the fork changed.
+
 # website/CLAUDE.md
 
 Astro + Starlight documentation site for Paddock. Intended to deploy to
