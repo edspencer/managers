@@ -12,6 +12,7 @@
  *     .herdctl/jobs/      a job record per chat (without one a chat is invisible)
  *     read-state.json     which seeded chats read as unread
  *     run-provenance.json which seeded chats are scheduled runs
+ *     sweep-state.json    every workspace stamped "swept at seed time" (see below)
  *   home/                 the rig's HOME (serve.mjs --home); never the real one
  *   fake-script.json      the fake `claude`'s prompt → reply book
  *   manifest.json         `<slug|_root>:<label>` → session id, for scripts
@@ -264,6 +265,21 @@ git("commit", "-q", "-m", "Seed synthetic Managers QA rig");
 
 write(path.join(DATA, "read-state.json"), `${JSON.stringify(readState, null, 2)}\n`);
 write(path.join(DATA, "run-provenance.json"), `${JSON.stringify(runProvenance, null, 2)}\n`);
+// The post-turn sweeper's watermark. `MANAGERS_SWEEP_MIN_INTERVAL_MS` is measured
+// from the LAST sweep, and a project that has never been swept counts as "last
+// swept at epoch 0" — so without this the very first QA turn in each project
+// rewrites its seeded OVERVIEW.md/CHANGELOG.md (and writes a CLAUDE.md). Stamping
+// every workspace as swept at seed time makes the huge interval actually hold.
+write(
+  path.join(DATA, "sweep-state.json"),
+  `${JSON.stringify(
+    Object.fromEntries(
+      ["", ...PROJECTS.map((p) => p.slug)].map((s) => [s, { lastSweptSessionMtime: iso(NOW), lastSweptAt: NOW.getTime() }]),
+    ),
+    null,
+    2,
+  )}\n`,
+);
 write(path.join(OUT, "fake-script.json"), `${JSON.stringify(FAKE_SCRIPT, null, 2)}\n`);
 write(
   path.join(OUT, "manifest.json"),

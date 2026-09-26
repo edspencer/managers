@@ -29,7 +29,11 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
 - `MANAGERS_DRIVE_MODE=batch`, `MANAGERS_AUTH_MODE=none`;
 - `MANAGERS_SELF_MCP=1`, so keeper and trigger turns get the `managers` self-MCP
   (the target of `[[MCP managers.*]]`);
-- `MANAGERS_SWEEP_MIN_INTERVAL_MS=999999999` (the sweeper would rewrite seeded files);
+- `MANAGERS_SWEEP_MIN_INTERVAL_MS=999999999` (the sweeper would rewrite seeded files).
+  The interval counts from the last sweep, and a never-swept project counts as swept
+  at epoch 0, so `seed.mjs` also writes `sweep-state.json` stamping every workspace
+  as swept at seed time. Without it, the first turn in each project rewrites its
+  seeded `OVERVIEW.md`/`CHANGELOG.md` and adds a `CLAUDE.md`;
 - `MANAGERS_FAKE_SCRIPT=<rig>/fake-script.json`, and
   `MANAGERS_FAKE_INVOCATION_LOG=<rig>/invocations.jsonl` (one line per fake-claude
   spawn, including its `--mcp-config` and `paddockEnvCount`, a count and never names).
