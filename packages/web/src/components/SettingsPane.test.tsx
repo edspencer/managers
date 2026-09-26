@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SettingsPane } from "./SettingsPane";
+import { RepoBackingSection } from "./settings/RepoBackingSection";
 import { makeProject, makeModelsResponse } from "../test/factories";
 
 type ModelsResponse = ReturnType<typeof makeModelsResponse>;
@@ -392,9 +393,20 @@ describe("SettingsPane", () => {
 
   // --- Repository backing / promotion (issue #213) -----------------------
 
-  it("shows a promote affordance for a notebook project", () => {
+  // Managers M3: projects are notebooks — Settings no longer offers the
+  // promote-to-repo-backed form. The component is kept (and tested directly
+  // below) because an already-backed project still shows it read-only.
+  it("offers NO promote-to-repo form for a notebook project (Managers M3)", () => {
     const project = makeProject({ slug: "p1", managed: true });
     render(<SettingsPane project={project} onSaved={vi.fn()} />);
+    expect(screen.queryByText("Repository backing")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Git repository URL")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /promote to repo-backed/i })).not.toBeInTheDocument();
+  });
+
+  it("RepoBackingSection (kept, not mounted for notebooks): shows a promote affordance for a notebook project", () => {
+    const project = makeProject({ slug: "p1", managed: true });
+    render(<RepoBackingSection project={project} onSaved={vi.fn()} />);
     expect(screen.getByText("Repository backing")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /promote to repo-backed/i })).toBeDisabled();
     // Entering a valid URL enables the promote button.
@@ -404,9 +416,9 @@ describe("SettingsPane", () => {
     expect(screen.getByRole("button", { name: /promote to repo-backed/i })).not.toBeDisabled();
   });
 
-  it("flags an obviously-bad repo URL and keeps promote disabled", () => {
+  it("RepoBackingSection (kept, not mounted for notebooks): flags an obviously-bad repo URL and keeps promote disabled", () => {
     const project = makeProject({ slug: "p1", managed: true });
-    render(<SettingsPane project={project} onSaved={vi.fn()} />);
+    render(<RepoBackingSection project={project} onSaved={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Git repository URL"), {
       target: { value: "not a url" },
     });
@@ -414,7 +426,7 @@ describe("SettingsPane", () => {
     expect(screen.getByRole("button", { name: /promote to repo-backed/i })).toBeDisabled();
   });
 
-  it("promotes through a two-step confirm and reports the updated project", async () => {
+  it("RepoBackingSection (kept, not mounted for notebooks): promotes through a two-step confirm and reports the updated project", async () => {
     const project = makeProject({ slug: "p1", name: "Note Book", managed: true });
     const promoted = makeProject({
       slug: "p1",
@@ -425,7 +437,7 @@ describe("SettingsPane", () => {
     });
     promoteProject.mockResolvedValueOnce(promoted);
     const onSaved = vi.fn();
-    render(<SettingsPane project={project} onSaved={onSaved} />);
+    render(<RepoBackingSection project={project} onSaved={onSaved} />);
 
     fireEvent.change(screen.getByLabelText("Git repository URL"), {
       target: { value: "https://github.com/owner/repo.git" },
@@ -441,12 +453,12 @@ describe("SettingsPane", () => {
     expect(onSaved).toHaveBeenCalledWith(promoted);
   });
 
-  it("surfaces a promote API error without calling onSaved", async () => {
+  it("RepoBackingSection (kept, not mounted for notebooks): surfaces a promote API error without calling onSaved", async () => {
     const { ApiError } = await vi.importActual<typeof import("../lib/api")>("../lib/api");
     promoteProject.mockRejectedValueOnce(new ApiError("git clone failed", 400));
     const project = makeProject({ slug: "p1", managed: true });
     const onSaved = vi.fn();
-    render(<SettingsPane project={project} onSaved={onSaved} />);
+    render(<RepoBackingSection project={project} onSaved={onSaved} />);
     fireEvent.change(screen.getByLabelText("Git repository URL"), {
       target: { value: "https://github.com/owner/repo.git" },
     });

@@ -565,6 +565,9 @@ function recordInvocation(flags, prompt) {
         // Managers M3: the `--setting-sources` value herdctl passed (null when
         // none), so a test can prove the retention overlay's source is loaded.
         settingSources: flags.settingSources ?? null,
+        // Managers M3: the auto-memory kill switch the server sets at boot, as
+        // this child inherited it (null when absent).
+        disableAutoMemory: process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY ?? null,
         // Managers M1: how many inherited PADDOCK_* vars reached this child. The
         // server's boot scrub (env-scrub.ts) should make this 0. A count, never names.
         paddockEnvCount: Object.keys(process.env).filter((k) => k.startsWith("PADDOCK_")).length,

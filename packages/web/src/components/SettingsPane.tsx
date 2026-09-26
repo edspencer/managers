@@ -852,7 +852,12 @@ export function SettingsPane({
           {/* Repository backing (issue #213): promote a notebook → repo-backed in
               place, or show the backing read-only. Its own submit (a distinct route),
               so it lives outside the settings save flow above. */}
-          <RepoBackingSection project={project} onSaved={onSaved} />
+          {/* Managers M3: projects are notebooks, so the "promote to repo-backed"
+              form is not offered. A project that is ALREADY backed (created via
+              the API) still shows its backing read-only. */}
+          {(!project.managed || project.path) && (
+            <RepoBackingSection project={project} onSaved={onSaved} />
+          )}
 
           <DerivedSection project={project} />
 
