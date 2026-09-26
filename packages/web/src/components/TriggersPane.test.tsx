@@ -230,6 +230,42 @@ describe("TriggersPane (Epic T / T4)", () => {
     expect(input.run.expect).toEqual({ kind: "episode", within: "48h" });
   });
 
+  it("editing a trigger keeps run.briefing.objective (Managers M7)", async () => {
+    const wake: Trigger = {
+      name: "wake",
+      agentName: "trigger-p-wake",
+      trigger: { type: "schedule", cron: "0 7 * * *" },
+      run: { prompt: "Wake.", session: "new", tools: [], briefing: { objective: "grow" } },
+      enabled: false,
+    };
+    listTriggers.mockResolvedValueOnce(response([wake]));
+    render(<TriggersPane project={project} />);
+    await screen.findByTestId("triggers-pane");
+    fireEvent.click(await screen.findByRole("button", { name: "Edit wake" }));
+    fireEvent.change(screen.getByTestId("trigger-prompt"), { target: { value: "Wake up." } });
+    fireEvent.click(screen.getByTestId("trigger-save"));
+    await waitFor(() => expect(putTrigger).toHaveBeenCalledTimes(1));
+    expect(putTrigger.mock.calls[0][2].run).toMatchObject({ prompt: "Wake up.", briefing: { objective: "grow" } });
+  });
+
+  it("editing a trigger keeps run.briefing: false (Managers M7)", async () => {
+    const quiet: Trigger = {
+      name: "quiet",
+      agentName: "trigger-p-quiet",
+      trigger: { type: "schedule", cron: "0 7 * * *" },
+      run: { prompt: "Wake.", session: "new", tools: [], briefing: false },
+      enabled: false,
+    };
+    listTriggers.mockResolvedValueOnce(response([quiet]));
+    render(<TriggersPane project={project} />);
+    await screen.findByTestId("triggers-pane");
+    fireEvent.click(await screen.findByRole("button", { name: "Edit quiet" }));
+    fireEvent.change(screen.getByTestId("trigger-prompt"), { target: { value: "Shh." } });
+    fireEvent.click(screen.getByTestId("trigger-save"));
+    await waitFor(() => expect(putTrigger).toHaveBeenCalledTimes(1));
+    expect(putTrigger.mock.calls[0][2].run.briefing).toBe(false);
+  });
+
   it("a new trigger carries no stray run fields", async () => {
     listTriggers.mockResolvedValueOnce(response([]));
     render(<TriggersPane project={project} />);

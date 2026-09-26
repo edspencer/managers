@@ -299,6 +299,26 @@ describe("Managers state tools (M5)", () => {
     expect(parsePaddockManage("mcp__managers__list_alerts", out({ project: "acme" }))).toBeNull();
   });
 
+  it("parses get_briefing (M7)", () => {
+    const b = parsePaddockManage(
+      "mcp__managers__get_briefing",
+      out({
+        project: "acme",
+        objective: "grow",
+        sections: [
+          { name: "Header", chars: 120 },
+          { name: "Open tasks", chars: 880 },
+        ],
+        text: "x".repeat(1234),
+      }),
+    );
+    expect(b).toMatchObject({ tool: "get_briefing", objective: "grow", chars: 1234 });
+    expect(paddockManageSummary(b!)).toBe("2 sections · 1,234 chars · grow");
+    const noObj = parsePaddockManage("mcp__managers__get_briefing", out({ project: "acme", objective: null, sections: [] }));
+    expect(paddockManageSummary(noObj!)).toBe("0 sections · 0 chars");
+    expect(parsePaddockManage("mcp__managers__get_briefing", out({ project: "acme" }))).toBeNull();
+  });
+
   it("parses the other state tools", () => {
     expect(
       paddockManageSummary(

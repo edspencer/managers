@@ -95,6 +95,26 @@ What changed from Paddock, and what did not:
   `mcp__<server>__<tool>` calls, excluding `managers*`. The Triggers tab's edit
   form carries run fields it doesn't show (`runExtra`), so a full-replace PUT
   never drops `run.expect`.
+- **The wake briefing (M7).** `managers/briefing.ts` `buildBriefing` is the ONE
+  builder of what a manager sees: 13 sections in a fixed order (header, the
+  protocol from `managers/protocol.ts`, behaviours/connections placeholders,
+  shared + project `MEMORY.md`, the bound objective in full or every active
+  objective's summary, open tasks awaiting-ed first, answers since the trigger's
+  previous run, recent runs, alerts, the project log, OVERVIEW.md), each with a
+  hard character budget (`SECTION_BUDGETS`) and a `[truncated: …]` note.
+  Deterministic (`now` injected, stable sorts) and snapshot-tested
+  (`test/unit/managers/__snapshots__/briefing-acme-wake.md` — change the output on
+  purpose and update it). Embedded docs have headings demoted two levels and
+  `<project-context>` escaped. It reaches the agent through `wrapPreload`, so
+  chat names stay the request: a schedule fire is briefed unless
+  `run.briefing: false`, an event fire only with `run.briefing` set
+  (`{objective}` beats the objective's `triggers:` binding); the fire writes
+  `.managers/briefings/<run>.md` (gitignored) and its sha256 onto the run.
+  `composePreloadedPrompt` (New Chat preload + `create_chat`) now sends the
+  `kind: chat` briefing instead of OVERVIEW + CHANGELOG, and always wraps. Also:
+  `get_briefing` tool, `GET …/managers/briefing` preview, `briefingText` on the
+  run detail. The environment prompt (SDK runtime only) just points at the
+  protocol. Any new `run.*` key must go into `runSchema`.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

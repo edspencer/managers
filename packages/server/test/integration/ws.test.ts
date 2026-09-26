@@ -6,7 +6,7 @@
  *   - invalid JSON → chat:error "Invalid JSON"
  *   - unknown / malformed message → chat:error "Unknown message"
  *   - the onChatSend catch path → chat:error (unknown project slug throws)
- *   - preloadContext: a NEW project chat with an OVERVIEW.md prepends it
+ *   - preloadContext: a NEW project chat is prepended with the chat briefing (M7)
  *   - per-chat model override → ensureAgentModel
  *   - message_boundary emitted around the assistant turn
  *   - chat:cancel (best-effort; no crash, no response)
@@ -159,7 +159,7 @@ describe("integration: WS transport edge cases (real app, fake claude)", () => {
 
   // --- preloadContext (dedicated project to avoid sweeper session noise) ------
 
-  it("preloadContext prepends the project OVERVIEW.md AND CHANGELOG.md for a NEW chat", async () => {
+  it("preloadContext prepends the chat BRIEFING (carrying OVERVIEW.md) for a NEW chat (Managers M7)", async () => {
     await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "Preload Proj" } });
     // Seed an overview + a changelog the keeper should be primed with (issue #188:
     // the cross-session narrative must reach the chat, not just current state).
@@ -188,14 +188,18 @@ describe("integration: WS transport edge cases (real app, fake claude)", () => {
       })
     ).json().messages;
     const firstUser = messages.find((m: { role: string }) => m.role === "user");
-    expect(firstUser.content).toContain("<project-context>");
-    expect(firstUser.content).toContain("velvet"); // overview
-    expect(firstUser.content).toContain("tangerine"); // changelog (issue #188)
+    expect(firstUser.content.startsWith("<project-context>\n## Briefing\n")).toBe(true);
+    expect(firstUser.content).toContain("- Kind: chat");
+    expect(firstUser.content).toContain("## Open tasks");
+    expect(firstUser.content).toContain("velvet"); // overview, in the briefing's OVERVIEW.md section
+    // Managers M7 replaced OVERVIEW + CHANGELOG with the briefing, which does not
+    // carry CHANGELOG.md (the episodic log is the manager's history).
+    expect(firstUser.content).not.toContain("tangerine");
     expect(firstUser.content).toContain("My request:");
     expect(firstUser.content).toContain("primed question");
   });
 
-  it("preloadContext is a no-op for a NEW chat when the project has no overview", async () => {
+  it("preloadContext still briefs a NEW chat when the project has no overview (Managers M7)", async () => {
     await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "No Overview Proj" } });
     const mark = ws.mark();
     ws.send({
@@ -216,8 +220,11 @@ describe("integration: WS transport edge cases (real app, fake claude)", () => {
       })
     ).json().messages;
     const firstUser = messages.find((m: { role: string }) => m.role === "user");
-    expect(firstUser.content).not.toContain("<project-context>");
-    expect(firstUser.content).toBe("no overview here");
+    // The briefing always has content, so it always wraps (it used to be a no-op).
+    expect(firstUser.content.startsWith("<project-context>\n## Briefing\n")).toBe(true);
+    expect(firstUser.content).toContain("(no OVERVIEW.md yet)");
+    expect(firstUser.content).toContain("(no open tasks)");
+    expect(firstUser.content.endsWith("My request:\nno overview here")).toBe(true);
   });
 
   // --- per-chat model override -----------------------------------------------

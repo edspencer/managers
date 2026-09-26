@@ -327,6 +327,14 @@ export const PROJECTS = [
         },
         enabled: true,
       },
+      // M7: the wake briefing. A schedule trigger is briefed by default, so Run now
+      // sends the briefing wrapped around this body; `[[TOOL]]` gives the chat a
+      // tool call to render. Disabled: QA fires it by hand.
+      wake: {
+        trigger: { type: "schedule", cron: "0 7 * * *" },
+        run: { prompt: "Wake. [[TOOL]]", session: "new" },
+        enabled: false,
+      },
     },
     triggerPrompts: {
       "morning-check.md": [

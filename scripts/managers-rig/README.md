@@ -179,5 +179,16 @@ Its only run, four days old, is `met`, so on a fresh boot
 that alert clears after one Run now. A matching 4-day-old project-log episode names
 that run. `empty-project`'s alerts are `[]`.
 
+### Wake briefing fixture (M7)
+
+`acme-site` also has a **disabled** `wake` schedule trigger (`cron: 0 7 * * *`) with
+the inline body `Wake. [[TOOL]]` and no `run.briefing` key, so a Run now is briefed by
+default: the chat's first user message is `<project-context>` + the briefing + `My
+request:` + the body, and `.managers/briefings/<run>.md` keeps a copy (gitignored). It
+is bound to no objective, so the briefing lists acme-site's active objectives. Preview
+any workspace's briefing at `GET /api/projects/<slug>/managers/briefing`
+(`?objective=`, `?trigger=`, `?kind=chat`); `empty-project` shows `(no objectives)` and
+`(no open tasks)`.
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.
