@@ -24,6 +24,7 @@ import type { PaddockEventBus } from "./event-bus.js";
 import type { TriggerService } from "./triggers.js";
 import type { TriggerSessionStore } from "./trigger-session.js";
 import type { ManagersState } from "./managers/state.js";
+import type { ChatCompleteUsage } from "./ws-protocol.js";
 
 /**
  * The store/service bag `makeChatHandler` is constructed with. Extracted to a
@@ -105,6 +106,11 @@ export interface ChatHandlerDeps {
    * writes immediately instead of waiting out the debounce.
    */
   onManagersTurnEnd?: (projectSlug: string) => void;
+  /**
+   * Managers M6: commit a workspace's pending state writes NOW (the autocommit
+   * flush). A trigger run calls it as soon as its run record is finished.
+   */
+  flushManagersCommit?: (dir: string) => Promise<unknown>;
 }
 
 /**
@@ -149,6 +155,30 @@ export interface StartAgentTurnOpts {
    * a turn with no attributable non-human sender.
    */
   sender?: MessageSender;
+  /**
+   * Managers M6: the run this turn belongs to (trigger fires only). It reaches
+   * the `managers` state tools as `currentRunId` — so `record_artifact` and the
+   * run's episode/task bookkeeping work — for as long as the turn is running.
+   */
+  runId?: string;
+  /**
+   * Managers M6: called exactly once when the turn ends, however it ends (the
+   * drive resolving, rejecting, or failing before it starts). Awaited, with a
+   * bound, before the hub turn ends — so the run record is written before the
+   * turn-end autocommit flush.
+   */
+  onComplete?: (r: TurnCompletion) => void | Promise<void>;
+}
+
+/** What {@link StartAgentTurnOpts.onComplete} is told about the finished turn. */
+export interface TurnCompletion {
+  success: boolean;
+  sessionId: string | null;
+  model?: string;
+  usage?: ChatCompleteUsage;
+  error?: string;
+  /** Calls per declared MCP server and tool (`mcp__<server>__<tool>`), excluding `managers*`. */
+  mcpCalls: Record<string, Record<string, number>>;
 }
 
 /** The shared per-turn execution engine — resolves the chat's sessionId as soon as known. */

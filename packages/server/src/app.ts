@@ -439,7 +439,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
       .then((p) => autocommit.flush(p.dir))
       .catch(() => undefined);
   };
-  const chatHandler = makeChatHandler({ herdctl, projects, sweep, attachments, queuedMessage, runProvenance, messageProvenance, archive, scheduleSessions, events, triggers, triggerSessions, managers, onManagersTurnEnd, cfg });
+  const flushManagersCommit = (dir: string) => autocommit.flush(dir);
+  const chatHandler = makeChatHandler({ herdctl, projects, sweep, attachments, queuedMessage, runProvenance, messageProvenance, archive, scheduleSessions, events, triggers, triggerSessions, managers, onManagersTurnEnd, flushManagersCommit, cfg });
 
   // --- external Management API (#312 M1) ---------------------------------
   // Surface how the `managementApi` block resolved. A malformed client is an

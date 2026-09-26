@@ -3,8 +3,8 @@
  *
  * The transport-agnostic middle of the `managers` MCP state tools: it binds the
  * app-wide {@link ManagersState} stores and writer to the calling turn's
- * `currentProjectSlug`, `currentSessionId()` and `currentRunId()` (null until M6
- * wires runs), and resolves a workspace key to its layout. Policy — which
+ * `currentProjectSlug`, `currentSessionId()` and `currentRunId()` (the trigger run
+ * the turn belongs to, M6), and resolves a workspace key to its layout. Policy — which
  * principal may call which op on which project — is NOT here: it is applied by
  * `enforceManagementPolicy` (management-ops.ts), exactly as for the chat ops.
  *
@@ -20,6 +20,7 @@ import type { TaskDetail, TaskFilter, TaskList } from "./tasks-store.js";
 import type { MemoryView } from "./memory-store.js";
 import type { PageOpts } from "./episodes-store.js";
 import type { ParseError } from "./store-util.js";
+import type { Alert } from "./alerts.js";
 import {
   StateWriteError,
   type ArtifactResult,
@@ -53,6 +54,8 @@ export interface ManagementStateOps {
   listTasks(project: string, filter?: TaskFilter): Promise<TaskList>;
   readTask(project: string, id: string): Promise<ReadOutcome<TaskDetail>>;
   listMemory(project: string): Promise<MemoryView>;
+  /** The workspace's dead-man's-switch alerts (M6), computed fresh. */
+  listAlerts(project: string): Promise<Alert[]>;
 
   recordEpisode(project: string, input: RecordEpisodeInput): Promise<EpisodeResult>;
   upsertTask(project: string, input: UpsertTaskInput): Promise<TaskResult>;
@@ -74,6 +77,8 @@ export interface StateOpsParams {
   origin: TurnOrigin | "external";
   /** Commit identity for agent writes (`managers-bot`). */
   botAuthor: GitAuthor;
+  /** Compute a workspace's alerts (M6; shared with the REST route). */
+  loadAlerts: (project: string) => Promise<Alert[]>;
 }
 
 export const MEMORY_OP_UNAVAILABLE =
@@ -104,6 +109,7 @@ export function buildStateOps(p: StateOpsParams): ManagementStateOps {
       const layout = await layoutOf(project);
       return state.memory.view({ project: project === "" ? null : layout, root: state.rootLayout });
     },
+    listAlerts: (project) => p.loadAlerts(project),
     recordEpisode: async (project, input) => state.writer.recordEpisode(await ws(project), input, actor()),
     upsertTask: async (project, input) => state.writer.upsertTask(await ws(project), input, actor()),
     updateObjective: async (project, input) => state.writer.updateObjective(await ws(project), input, actor()),

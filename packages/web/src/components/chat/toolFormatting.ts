@@ -96,6 +96,7 @@ export function paddockMcpIcon(tool: string) {
       return FileIcon;
     case "list_tasks":
     case "list_objectives":
+    case "list_alerts":
       return ListIcon;
     case "list_memory":
     case "memory_op":

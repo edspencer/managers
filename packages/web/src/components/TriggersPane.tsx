@@ -88,7 +88,16 @@ interface Draft {
   /** "" = inherit; a non-negative integer bounds internal spawning (0 = may not spawn). */
   maxSpawnDepth: string;
   enabled: boolean;
+  /**
+   * The run fields this form does not edit (e.g. Managers' `run.expect`), carried
+   * through untouched. The save is a FULL replace, so anything not sent back would
+   * be silently deleted by the first edit.
+   */
+  runExtra: Record<string, unknown>;
 }
+
+/** The `run` keys the editor owns; every other key rides along in {@link Draft.runExtra}. */
+const FORM_RUN_KEYS = new Set(["prompt", "promptFile", "session", "model", "tools", "maxSpawnDepth", "permissionMode", "maxTurns"]);
 
 function blankDraft(type: TriggerType, event: TriggerEvent): Draft {
   return {
@@ -109,6 +118,7 @@ function blankDraft(type: TriggerType, event: TriggerEvent): Draft {
     maxSpawnDepth: "",
     // New triggers are DISABLED by default (design §2.3) — nothing fires the instant one is saved.
     enabled: false,
+    runExtra: {},
   };
 }
 
@@ -138,6 +148,7 @@ function draftFrom(t: Trigger): Draft {
     maxTurns: run.maxTurns != null ? String(run.maxTurns) : "",
     maxSpawnDepth: run.maxSpawnDepth != null ? String(run.maxSpawnDepth) : "",
     enabled: t.enabled === true,
+    runExtra: Object.fromEntries(Object.entries(run).filter(([k]) => !FORM_RUN_KEYS.has(k))),
   };
 }
 
@@ -153,6 +164,7 @@ function toInput(d: Draft): TriggerInput {
         : { type: "schedule", interval: d.expr.trim() };
 
   const run: TriggerInput["run"] = {
+    ...(d.runExtra as Partial<TriggerInput["run"]>),
     session: d.resumeSession ? "resume" : "new",
     tools: [...d.allowedTools],
   };

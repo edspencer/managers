@@ -224,6 +224,13 @@ export const LIST_MEMORY_DESC =
   "List semantic memory: MEMORY.md (Ed's preamble and the generated index), facts and " +
   "playbooks, tagged `scope: project` or `scope: root` (Home's memory, shared by every project).";
 
+export const LIST_ALERTS_DESC =
+  "List this project's alerts — the dead-man's switch over its triggers: `run-failed` (the " +
+  "last run failed), `artifact-missing` (the last run produced nothing it was expected to), " +
+  "`stale` (no run met its expectation inside `expect.within`), `schedule-stalled` (a " +
+  "schedule is overdue) and `run-stuck` (running for over 2 hours). Computed fresh by the " +
+  "server; read-only. Each has a stable `id` (`<kind>:<trigger>`), `severity` and `message`.";
+
 export const RECORD_EPISODE_DESC =
   "Record an EPISODE — one thing that happened or that you did — in this project's episodic " +
   "log, or in an objective's journal when `objective` is given. Episodes are append-only and " +

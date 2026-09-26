@@ -117,6 +117,14 @@ const triggerWhenSchema = z.discriminatedUnion("type", [
  * trigger's capability; `[]` = a tool-less curator); `session` selects new-vs-accrete;
  * the rest mirror the per-agent overrides hooks already carry.
  */
+const triggerExpectSchema = z.strictObject({
+  kind: z.enum(["episode", "report", "artifact", "none"]),
+  /** Report type, for `kind: report` (any report when unset). */
+  report: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "must be a kebab-case report type").optional(),
+  within: z.string().trim().regex(/^\d+[hd]$/, "must look like 48h or 7d").optional(),
+  description: z.string().trim().max(300).optional(),
+});
+
 const runSchema = z.object({
   /** Inline prompt (mutually exclusive with {@link promptFile} — enforced below). */
   prompt: z.string().optional(),
@@ -134,6 +142,12 @@ const runSchema = z.object({
   permissionMode: z.enum(PERMISSION_MODES).optional(),
   /** Optional max-turns cap (else {@link TRIGGER_DEFAULT_MAX_TURNS}). */
   maxTurns: z.number().int().positive().optional(),
+  /**
+   * Managers M6: what a fire of this trigger is expected to produce, evaluated
+   * at run end into the run record's `expectResult`; `within` also arms the
+   * `stale` alert (no `met` run inside the window).
+   */
+  expect: triggerExpectSchema.optional(),
 });
 
 /**

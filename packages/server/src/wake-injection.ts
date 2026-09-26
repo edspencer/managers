@@ -62,6 +62,12 @@ export interface InjectedMcpBuildArgs {
   maxSpawnDepth: number;
   /** Late-bound accessor for the resolved session id (self-MCP tools attribute by it). */
   currentSessionId: () => string | null;
+  /**
+   * Managers M6: the run this turn belongs to, late-bound — null outside a
+   * trigger run AND once the run has finished, so a later wake that replays
+   * this turn's server set cannot write into a closed run record.
+   */
+  currentRunId?: () => string | null;
 }
 
 /** The (mostly injected) collaborators {@link buildInjectedMcpServers} needs. */
@@ -94,6 +100,7 @@ export interface InjectedMcpBuildContext {
   buildSelfMcp: (params: {
     currentProjectSlug: string;
     currentSessionId: () => string | null;
+    currentRunId: () => string | null;
     parentProvenance: { origin: TurnOrigin; depth: number };
     includeRead: boolean;
     origin: TurnOrigin;
@@ -122,6 +129,7 @@ export async function buildInjectedMcpServers(
   ctx: InjectedMcpBuildContext,
 ): Promise<Record<string, InjectedMcpServerDef>> {
   const { projectSlug, workingDir, resume, origin, depth, maxSpawnDepth, currentSessionId } = args;
+  const currentRunId = args.currentRunId ?? (() => null);
 
   // Always-on send_file (parity with the human path).
   const servers: Record<string, InjectedMcpServerDef> = {
@@ -155,6 +163,7 @@ export async function buildInjectedMcpServers(
   servers[SELF_MCP_SERVER_KEY] = ctx.buildSelfMcp({
     currentProjectSlug: projectSlug,
     currentSessionId,
+    currentRunId,
     parentProvenance: { origin, depth: injectionDepth },
     includeRead: selfMcp.inject,
     origin,

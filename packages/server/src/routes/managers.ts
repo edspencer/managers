@@ -14,7 +14,8 @@
  *   GET managers/memory                 MEMORY.md + facts + playbooks, root and project, scope-tagged
  *   GET managers/memory/facts/:name     (?scope=root|project)
  *   GET managers/runs                   paged by month (?before&months&trigger&status)
- *   GET managers/runs/:id
+ *   GET managers/runs/:id               the record + durationSeconds, chat, and the alerts naming it (M6)
+ *   GET managers/alerts                 the dead-man's-switch alerts, computed fresh (M6)
  *   GET managers/reports                every report type with its current report's metadata
  *   GET managers/reports/:type          current report + dated list
  *   GET managers/reports/:type/:date
@@ -43,6 +44,7 @@ import { isRootKey } from "../project-paths.js";
 import { sendProjectError } from "../route-errors.js";
 import type { RouteCtx } from "../route-context.js";
 import { ManagersState } from "../managers/state.js";
+import { loadAlerts, type Alert } from "../managers/alerts.js";
 import { isDate, isMonth, isName, isRunId, isTaskId, type WorkspaceLayout } from "../managers/layout.js";
 import { RUN_STATUSES, type TaskStatus } from "../managers/schemas.js";
 import { MAX_PAGE_MONTHS, type PageOpts } from "../managers/episodes-store.js";
@@ -488,8 +490,50 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const got = await state.runs.get(layout, id);
         if (!got) return notFound(reply, `No such run: ${id}`);
         if (isParseFailure(got)) return unparseable(reply, got.parseError);
-        return { run: got };
+        const start = got.started ? Date.parse(got.started) : NaN;
+        const end = got.finished ? Date.parse(got.finished) : NaN;
+        const alerts = (await alertsFor(req.params.slug).catch(() => [] as Alert[])).filter((a) => a.runId === id);
+        return {
+          run: got,
+          durationSeconds: Number.isFinite(start) && Number.isFinite(end) ? Math.round((end - start) / 1000) : null,
+          chat: got.sessionId ? { project: req.params.slug, sessionId: got.sessionId } : null,
+          alerts,
+        };
       }),
+  );
+
+  /** A workspace's alerts: its triggers, recent runs and live herdctl schedules. */
+  async function alertsFor(slug: string): Promise<Alert[]> {
+    const project = await projects.get(slug);
+    return loadAlerts({
+      state,
+      project,
+      schedules: () => ctx.herdctl.listAgentSchedules(project),
+    });
+  }
+
+  app.get<{ Params: { slug: string } }>(
+    "/managers/alerts",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "List alerts",
+        description:
+          "The dead-man's switch over this workspace's triggers, computed fresh: `run-failed`, `artifact-missing`, " +
+          "`stale` (no `met` run inside `expect.within`), `schedule-stalled` (nextRunAt over 15 min past) and " +
+          "`run-stuck` (running over 2 h). A JSON ARRAY of `{ id, kind, trigger, severity, message, runId, at }`, " +
+          "errors first; `[]` when nothing is wrong.",
+        params: paramsSchema(),
+        response: {
+          200: {
+            description: "The alerts, errors first.",
+            type: "array",
+            items: { type: "object", additionalProperties: true },
+          },
+        },
+      },
+    },
+    (req, reply) => withWorkspace(req, reply, async () => alertsFor(req.params.slug)),
   );
 
   // --- reports ---------------------------------------------------------------------------

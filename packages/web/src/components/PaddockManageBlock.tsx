@@ -305,6 +305,25 @@ export function PaddockManageBody({ data }: { data: PaddockManage }) {
         </div>
       );
 
+    case "list_alerts":
+      return (
+        <div className={wrap}>
+          {data.alerts.length === 0 ? (
+            <span className="text-2xs text-fg-muted">Nothing is wrong.</span>
+          ) : (
+            <ul className="max-h-72 divide-y divide-edge-subtle overflow-auto text-2xs">
+              {data.alerts.map((a) => (
+                <li key={a.id} className="flex items-center gap-2 py-1">
+                  <Chip>{a.severity}</Chip>
+                  <span className="shrink-0 font-mono text-fg-muted">{a.id}</span>
+                  <span className="min-w-0 flex-1 truncate text-fg">{a.message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+
     case "fork_chat_batch":
       return (
         <div className={wrap}>

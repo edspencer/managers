@@ -64,6 +64,7 @@ import {
 } from "./management-policy.js";
 import type { TurnOrigin } from "./run-provenance.js";
 import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
+import { loadAlerts } from "./managers/alerts.js";
 
 /**
  * Frame an agent-initiated FORK kickoff (issue #214 Phase 2). A fork inherits the
@@ -213,6 +214,14 @@ export function buildManagementOps(
         currentRunId: params.currentRunId ?? (() => null),
         origin: params.origin ?? "external",
         botAuthor: deps.cfg.botGitAuthor,
+        loadAlerts: async (slug) => {
+          const project = await deps.projects.get(slug);
+          return loadAlerts({
+            state: deps.managers!,
+            project,
+            schedules: () => deps.herdctl.listAgentSchedules(project),
+          });
+        },
       })
     : undefined;
 
@@ -591,6 +600,7 @@ function enforceStatePolicy(
     listTasks: (p, f) => readGuard("list_tasks", p, () => s.listTasks(p, f)),
     readTask: (p, id) => readGuard("read_task", p, () => s.readTask(p, id)),
     listMemory: (p) => readGuard("list_memory", p, () => s.listMemory(p)),
+    listAlerts: (p) => readGuard("list_alerts", p, () => s.listAlerts(p)),
     recordEpisode: (p, i) => writeGuard("record_episode", p, () => s.recordEpisode(p, i)),
     upsertTask: (p, i) => writeGuard("upsert_task", p, () => s.upsertTask(p, i)),
     updateObjective: (p, i) => writeGuard("update_objective", p, () => s.updateObjective(p, i)),

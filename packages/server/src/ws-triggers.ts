@@ -29,6 +29,7 @@ import {
   type TriggerEvent,
 } from "./trigger-config.js";
 import type { ChatHandlerDeps, StartAgentTurn } from "./ws-context.js";
+import { beginTriggerRun } from "./managers/trigger-runs.js";
 
 /**
  * The context a fired lifecycle event carries into an EVENT trigger's prompt (Epic T /
@@ -179,8 +180,22 @@ async function fireTriggerForProject(
     }
   }
 
+  // Managers M6: every fire writes a run record (status running) first; the
+  // turn's completion hook finishes it, evaluates `expect` and commits at once.
+  const run = deps.managers
+    ? await beginTriggerRun({
+        state: deps.managers,
+        slug,
+        dir: project.dir,
+        trigger,
+        author: deps.cfg.botGitAuthor,
+        flush: deps.flushManagersCommit,
+      })
+    : null;
+
   try {
     const sessionId = await startAgentTurn({
+      ...(run ? { runId: run.runId, onComplete: run.onComplete } : {}),
       projectSlug: slug,
       agentName,
       workingDir: project.workingDir,

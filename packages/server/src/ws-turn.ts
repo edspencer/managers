@@ -46,9 +46,11 @@ import type {
   StartAgentTurnOpts,
   StartAgentTurn,
   ChatHandlerContext,
+  TurnCompletion,
 } from "./ws-context.js";
 import { buildSelfMcpServerDef } from "./ws-self-mcp.js";
 import { makeTriggerCluster } from "./ws-triggers.js";
+import { countMcpCall } from "./managers/mcp-calls.js";
 import {
   initTurnUsage,
   foldTurnUsage,
@@ -57,6 +59,9 @@ import {
   type Routing,
   type ChatCompleteUsage,
 } from "./ws-protocol.js";
+
+/** How long a turn's end waits on its `onComplete` hook (the run record) at most. */
+const ON_COMPLETE_BOUND_MS = 15_000;
 
 /**
  * The recovery nudge injected by a manual Continue (issue #301, Layer 2) — and,
@@ -442,6 +447,24 @@ const makeBackgroundTurnSink = (
 async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
   const { projectSlug, agentName, workingDir, resume, prompt, driveMode, fallbackModel, origin, depth, parent, maxSpawnDepth, sender } =
     opts;
+  // Managers M6: the run this turn belongs to, visible to the state tools only
+  // while the turn runs; and the completion hook, fired exactly once.
+  let runActive = opts.runId !== undefined;
+  const mcpCalls: Record<string, Record<string, number>> = {};
+  let completed = false;
+  const complete = async (r: Omit<TurnCompletion, "mcpCalls">): Promise<void> => {
+    runActive = false;
+    if (completed || !opts.onComplete) return;
+    completed = true;
+    try {
+      await Promise.race([
+        Promise.resolve(opts.onComplete({ ...r, mcpCalls })),
+        new Promise((res) => setTimeout(res, ON_COMPLETE_BOUND_MS).unref?.()),
+      ]);
+    } catch {
+      /* a run-record failure must never disturb the turn's own ending */
+    }
+  };
   let resolvedSession: string | null = resume ?? null;
   let jobId: string | null = null;
   let attributed = false;
@@ -466,10 +489,15 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
   // history path (`scanTranscriptNotice`) already applies on reload. A
   // `usage_limit` dead-end still surfaces (a session-limit stop is real).
   let producedReply = false;
+  // Managers M6: the dead-end this turn surfaced, if any. A batch turn can end
+  // `success: true` with a terminal error result (the banner is the only sign),
+  // so the run record treats a surfaced dead-end as a failure too.
+  let deadEnd: TurnNotice | null = null;
   const emitNotice = (notice: TurnNotice): void => {
     if (noticeEmitted) return;
     if (suppressNoticeAfterReply(notice, producedReply)) return;
     noticeEmitted = true;
+    deadEnd = notice;
     turn.emit({ type: "chat:notice", payload: { ...routing(), notice } });
   };
 
@@ -530,6 +558,7 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
       });
     },
     onToolCall: (call) => {
+      countMcpCall(mcpCalls, call.toolName);
       turn.emit({
         type: "chat:tool_call",
         payload: {
@@ -551,15 +580,22 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
   // the IDENTICAL set — see wake-injection.ts. A RESUME gates self-MCP on the chat's
   // OWN recorded depth (resolved inside the builder); `currentSessionId` is late-bound
   // to `resolvedSession` so the self-MCP write tools attribute against the live id.
-  const injectedMcpServers = await buildInjection({
-    projectSlug,
-    workingDir,
-    resume,
-    origin,
-    depth,
-    maxSpawnDepth,
-    currentSessionId: () => resolvedSession,
-  });
+  let injectedMcpServers: Record<string, InjectedMcpServerDef>;
+  try {
+    injectedMcpServers = await buildInjection({
+      projectSlug,
+      workingDir,
+      resume,
+      origin,
+      depth,
+      maxSpawnDepth,
+      currentSessionId: () => resolvedSession,
+      currentRunId: () => (runActive ? (opts.runId ?? null) : null),
+    });
+  } catch (err) {
+    await complete({ success: false, sessionId: resolvedSession, error: err instanceof Error ? err.message : String(err) });
+    throw err;
+  }
 
   const drive =
     driveMode === "session"
@@ -685,7 +721,7 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
   // Detached completion: emit the terminal frame + end the hub turn no matter
   // what. Never throws to the event loop (guards the fan-out from one bad turn).
   void drivePromise
-    .then((result) => {
+    .then(async (result) => {
       // #404: mirror the human-turn path — a session-mode turn that produced a real
       // reply routinely ends with a trailing `error_*` / `success:false` result
       // frame, so gating the post-turn sweep / recovery arm on raw `result.success`
@@ -722,6 +758,19 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
           ...(completeUsage ? { model: completeModel, usage: completeUsage } : {}),
         },
       });
+      // Managers M6: finish the run record BEFORE the hub turn ends, so the
+      // turn-end autocommit flush carries it.
+      const runFailure: TurnNotice | null = deadEnd;
+      const runSucceeded = effectiveSuccess && runFailure === null;
+      await complete({
+        success: runSucceeded,
+        sessionId: finalSession,
+        model: completeModel,
+        ...(completeUsage ? { usage: completeUsage } : {}),
+        ...(runSucceeded
+          ? {}
+          : { error: result.error?.message ?? runFailure?.message ?? "the turn did not succeed" }),
+      });
       turn.end();
       try {
         deps.herdctl.invalidateSessions(agentName);
@@ -740,7 +789,7 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
         rejectId(new Error(result.error?.message ?? "turn ended with no session id"));
       }
     })
-    .catch((err: unknown) => {
+    .catch(async (err: unknown) => {
       const error = err instanceof Error ? err.message : String(err);
       // #329: the drive itself rejected — surface the failure inline so the chat
       // doesn't just look dead (deduped against any notice already emitted).
@@ -749,6 +798,7 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
         type: "chat:complete",
         payload: { ...routing(), sessionId: resolvedSession, jobId, success: false, error },
       });
+      await complete({ success: false, sessionId: resolvedSession, error });
       turn.end();
       rejectId(err instanceof Error ? err : new Error(error));
     });

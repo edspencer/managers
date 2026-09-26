@@ -56,6 +56,8 @@ import {
   type RunPage,
   type RunQuery,
   type RunRecord,
+  type RunDetail,
+  type ManagersAlert,
   type ReportTypeSummary,
   type ReportTypeDetail,
   type ReportDoc,
@@ -1174,6 +1176,16 @@ export const api = {
   async managersRun(slug: string, id: string): Promise<RunRecord> {
     const { run } = await req<{ run: RunRecord }>(`${mgr(slug)}/runs/${encodeURIComponent(id)}`);
     return run;
+  },
+
+  /** The run record plus its duration, chat link and the alerts naming it (M6). */
+  async managersRunDetail(slug: string, id: string): Promise<RunDetail> {
+    return req<RunDetail>(`${mgr(slug)}/runs/${encodeURIComponent(id)}`);
+  },
+
+  /** The workspace's dead-man's-switch alerts (M6), errors first. */
+  async managersAlerts(slug: string): Promise<ManagersAlert[]> {
+    return req<ManagersAlert[]>(`${mgr(slug)}/alerts`);
   },
 
   async managersReports(slug: string): Promise<ReportTypeSummary[]> {

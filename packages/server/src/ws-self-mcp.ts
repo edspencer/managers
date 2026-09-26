@@ -57,6 +57,8 @@ export function buildSelfMcpServerDef(
   params: {
     currentProjectSlug: string;
     currentSessionId: () => string | null;
+    /** Managers M6: the trigger run this turn belongs to (null outside one). */
+    currentRunId?: () => string | null;
     parentProvenance: RunProvenance;
     /**
      * Managers M5: whether to include the chat-read block (`selfMcpEnabled`). The

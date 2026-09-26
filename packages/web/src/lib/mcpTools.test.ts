@@ -283,6 +283,22 @@ describe("Managers state tools (M5)", () => {
     expect(paddockManageSummary(moved!)).toBe("Task t-260926-7k3f → done");
   });
 
+  it("parses list_alerts (M6), including the empty list", () => {
+    const some = parsePaddockManage(
+      "mcp__managers__list_alerts",
+      out({
+        project: "acme",
+        count: 1,
+        alerts: [{ id: "stale:publish-check", kind: "stale", trigger: "publish-check", severity: "warning", message: "m" }],
+      }),
+    );
+    expect(some).toMatchObject({ tool: "list_alerts", count: 1 });
+    expect(paddockManageSummary(some!)).toBe("1 alert");
+    const none = parsePaddockManage("mcp__managers__list_alerts", out({ project: "acme", count: 0, alerts: [] }));
+    expect(paddockManageSummary(none!)).toBe("No alerts");
+    expect(parsePaddockManage("mcp__managers__list_alerts", out({ project: "acme" }))).toBeNull();
+  });
+
   it("parses the other state tools", () => {
     expect(
       paddockManageSummary(

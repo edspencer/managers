@@ -26,7 +26,8 @@ import YAML from "yaml";
 import { z } from "zod";
 import { WriteQueue, appendText, writeFileAtomic } from "./write-queue.js";
 import { isName, isRunId, isTaskId, monthOfId, MONTH_RE, type WorkspaceLayout } from "./layout.js";
-import { newEpisodeId, newTaskId, mintUnique } from "./ids.js";
+import { newEpisodeId, newRunId, newTaskId, mintUnique } from "./ids.js";
+import { evaluateExpect } from "./expect.js";
 import { parseFrontmatter, stringifyFrontmatter } from "./frontmatter.js";
 import {
   CLOSED_TASK_STATUSES,
@@ -41,6 +42,7 @@ import {
   taskWriteSchema,
   type EpisodeWrite,
   type ObjectiveStatus,
+  type RunWrite,
   type TaskSource,
   type TaskStatus,
 } from "./schemas.js";
@@ -139,6 +141,25 @@ export interface RecordArtifactInput {
   kind: string;
   ref: string;
   note?: string;
+}
+
+/** What a trigger fire knows when its run starts. */
+export interface StartRunInput {
+  trigger: string;
+  kind: RunWrite["kind"];
+  objective?: string | null;
+  model?: string | null;
+  expect?: RunWrite["expect"];
+}
+
+/** How a run ended (from the turn engine's completion hook). */
+export interface FinishRunInput {
+  status: "succeeded" | "failed" | "cancelled";
+  sessionId?: string | null;
+  model?: string | null;
+  usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number } | null;
+  mcpCalls?: Record<string, Record<string, number>>;
+  error?: string | null;
 }
 
 // --- results -------------------------------------------------------------------
@@ -266,6 +287,30 @@ function dropNulls(v: unknown): unknown {
   return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== null));
 }
 
+/**
+ * Lift a raw (possibly hand-edited, possibly lenient) run mapping into the strict
+ * write shape's conventions: nulls where the schema wants empty lists/maps, and
+ * no null keys inside the nested objects the strict schema declares optional.
+ */
+function normaliseRun(r: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...r };
+  for (const k of ["episodes", "tasksTouched", "reports"]) out[k] = (listOr(out[k]) as unknown[]).map(String);
+  out.artifacts = (listOr(out.artifacts) as unknown[]).map(dropNulls);
+  if (out.mcpCalls === undefined || out.mcpCalls === null) out.mcpCalls = {};
+  if (out.usage === undefined || out.usage === null) {
+    out.usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
+  }
+  if (out.expect && typeof out.expect === "object") {
+    out.expect = Object.fromEntries(
+      Object.entries(out.expect as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined),
+    );
+  } else out.expect = null;
+  for (const k of ["objective", "finished", "sessionId", "model", "expectResult", "briefing", "error"]) {
+    if (out[k] === undefined) out[k] = null;
+  }
+  return out;
+}
+
 // --- the writer ------------------------------------------------------------------
 
 export type WriteListener = (dir: string, label: string, author: GitAuthor, reason: string) => void;
@@ -345,6 +390,7 @@ export class StateWriter {
       if (!r.success) throw zodFail("episode", r.error);
       const file = objective === null ? ws.layout.logFile(monthOf(now)) : ws.layout.journalFile(objective, monthOf(now));
       await appendText(file, formatEpisode(r.data));
+      await this.touchRun(ws, actor, "episodes", id);
       this.notify(ws, actor, "record_episode");
       return { id, file: ws.layout.rel(file), importance: r.data.importance, objective };
     });
@@ -463,6 +509,7 @@ export class StateWriter {
         await fs.rm(prior.abs, { force: true });
         movedFrom = ws.layout.rel(prior.abs);
       }
+      await this.touchRun(ws, actor, "tasksTouched", id!);
       this.notify(ws, actor, prior ? "upsert_task (update)" : "upsert_task (create)");
       return {
         id: id!,
@@ -648,6 +695,7 @@ export class StateWriter {
       const current = ws.layout.reportCurrentFile(type);
       await writeFileAtomic(dated, text);
       await writeFileAtomic(current, text);
+      await this.touchRun(ws, actor, "reports", type);
       this.notify(ws, actor, `write_report (${type})`);
       return { type, date, file: ws.layout.rel(dated), currentFile: ws.layout.rel(current) };
     });
@@ -671,33 +719,155 @@ export class StateWriter {
     const note = input.note === undefined ? undefined : oneLine(String(input.note), 500);
 
     return this.locked(ws, actor, async () => {
-      const month = monthOfId(runId);
-      const candidates = month ? [ws.layout.runFile(month, runId)] : [];
-      for (const m of await listDirsDesc(ws.layout.runsDir, MONTH_RE)) {
-        const f = ws.layout.runFile(m, runId);
-        if (!candidates.includes(f)) candidates.push(f);
-      }
-      let file: string | null = null;
-      for (const f of candidates) if (await exists(f)) { file = f; break; }
-      if (!file) throw new StateWriteError("not_found", `No such run: ${runId}`);
-      let data: Record<string, unknown>;
-      try {
-        const parsed = YAML.parse(await fs.readFile(file, "utf8"), { schema: "core" }) as unknown;
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not a mapping");
-        data = parsed as Record<string, unknown>;
-      } catch (err) {
-        throw new StateWriteError("conflict", `${ws.layout.rel(file)} does not parse (${(err as Error).message})`);
-      }
-      const { known, extra } = splitKnown(data, RUN_KEYS);
-      const artifacts = [
-        ...(listOr(known.artifacts) as unknown[]).map(dropNulls),
-        { kind, ref, ...(note ? { note } : {}), at: isoSecond(this.now()) },
-      ];
-      const r = runWriteSchema.safeParse({ ...known, id: known.id ?? runId, artifacts });
-      if (!r.success) throw zodFail("run record", r.error);
-      await writeFileAtomic(file, YAML.stringify({ ...r.data, ...extra }, { lineWidth: 0 }));
+      const { file, run } = await this.mutateRun(ws, runId, (known) => ({
+        ...known,
+        artifacts: [
+          ...(listOr(known.artifacts) as unknown[]).map(dropNulls),
+          { kind, ref, ...(note ? { note } : {}), at: isoSecond(this.now()) },
+        ],
+      }));
       this.notify(ws, actor, "record_artifact");
-      return { run: runId, file: ws.layout.rel(file), artifacts: r.data.artifacts.length };
+      return { run: runId, file: ws.layout.rel(file), artifacts: run.artifacts.length };
+    });
+  }
+
+  // --- runs (M6) -----------------------------------------------------------------------
+
+  /** The run record's file, looking in its id's month first, or null. Call under the lock. */
+  private async findRunFile(ws: WriteWorkspace, runId: string): Promise<string | null> {
+    const month = monthOfId(runId);
+    const candidates = month ? [ws.layout.runFile(month, runId)] : [];
+    for (const m of await listDirsDesc(ws.layout.runsDir, MONTH_RE)) {
+      const f = ws.layout.runFile(m, runId);
+      if (!candidates.includes(f)) candidates.push(f);
+    }
+    for (const f of candidates) if (await exists(f)) return f;
+    return null;
+  }
+
+  /**
+   * Read-modify-write one run record, strictly validated, keeping hand-added keys.
+   * Call under the workspace lock.
+   */
+  private async mutateRun(
+    ws: WriteWorkspace,
+    runId: string,
+    mutate: (known: Record<string, unknown>) => Record<string, unknown>,
+  ): Promise<{ file: string; run: RunWrite }> {
+    const file = await this.findRunFile(ws, runId);
+    if (!file) throw new StateWriteError("not_found", `No such run: ${runId}`);
+    let data: Record<string, unknown>;
+    try {
+      const parsed = YAML.parse(await fs.readFile(file, "utf8"), { schema: "core" }) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not a mapping");
+      data = parsed as Record<string, unknown>;
+    } catch (err) {
+      throw new StateWriteError("conflict", `${ws.layout.rel(file)} does not parse (${(err as Error).message})`);
+    }
+    const { known, extra } = splitKnown(data, RUN_KEYS);
+    const next = mutate({ ...known, id: known.id ?? runId });
+    const r = runWriteSchema.safeParse(normaliseRun(next));
+    if (!r.success) throw zodFail("run record", r.error);
+    await writeFileAtomic(file, YAML.stringify({ ...r.data, ...extra }, { lineWidth: 0 }));
+    return { file, run: r.data };
+  }
+
+  /**
+   * Note on the current run that this write touched `id` (an episode, a task, a
+   * report type). Best effort, under the caller's lock: a missing or hand-broken
+   * run record must never fail the write that is being recorded.
+   */
+  private async touchRun(
+    ws: WriteWorkspace,
+    actor: WriteActor,
+    field: "episodes" | "tasksTouched" | "reports",
+    id: string,
+  ): Promise<void> {
+    const runId = actor.runId;
+    if (!runId || !isRunId(runId)) return;
+    await this.mutateRun(ws, runId, (known) => {
+      const list = (listOr(known[field]) as unknown[]).map(String);
+      return list.includes(id) ? known : { ...known, [field]: [...list, id] };
+    }).catch(() => undefined);
+  }
+
+  /**
+   * Start a run: mint its id under the lock (unique against the disk) and write
+   * the record with `status: running`. Trigger fires only (plan M6).
+   */
+  async startRun(ws: WriteWorkspace, input: StartRunInput, actor: WriteActor): Promise<{ id: string; file: string }> {
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const id = await mintUnique(
+        () => newRunId(now),
+        async (x) => (await this.findRunFile(ws, x)) !== null,
+      );
+      const rec = normaliseRun({
+        id,
+        trigger: input.trigger,
+        kind: input.kind,
+        objective: input.objective ?? null,
+        status: "running",
+        started: isoSecond(now),
+        finished: null,
+        sessionId: null,
+        model: input.model ?? null,
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        episodes: [],
+        tasksTouched: [],
+        reports: [],
+        artifacts: [],
+        mcpCalls: {},
+        expect: input.expect ?? null,
+        expectResult: null,
+        briefing: null,
+        error: null,
+      });
+      const r = runWriteSchema.safeParse(rec);
+      if (!r.success) throw zodFail("run record", r.error);
+      const file = ws.layout.runFile(monthOf(now), id);
+      await writeFileAtomic(file, YAML.stringify(r.data, { lineWidth: 0 }));
+      this.notify(ws, actor, `run start (${input.trigger})`);
+      return { id, file: ws.layout.rel(file) };
+    });
+  }
+
+  /**
+   * Finish a running run: its outcome, usage and MCP call counts, then evaluate
+   * `expect` against what the run recorded. Refuses (409) a run that is not
+   * `running`, so a run is finished exactly once.
+   */
+  async finishRun(ws: WriteWorkspace, runId: string, input: FinishRunInput, actor: WriteActor): Promise<RunWrite> {
+    if (!isRunId(runId)) throw invalid(`Invalid run id: ${runId}`);
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const { run } = await this.mutateRun(ws, runId, (known) => {
+        if (known.status !== "running") {
+          throw new StateWriteError("conflict", `Run ${runId} is already ${String(known.status)}`);
+        }
+        const merged: Record<string, unknown> = {
+          ...known,
+          status: input.status,
+          finished: isoSecond(now),
+          sessionId: input.sessionId ?? known.sessionId ?? null,
+          model: input.model ?? known.model ?? null,
+          usage: input.usage
+            ? {
+                inputTokens: input.usage.inputTokens,
+                outputTokens: input.usage.outputTokens,
+                cacheReadTokens: input.usage.cacheReadTokens,
+                cacheCreationTokens: input.usage.cacheCreationTokens,
+              }
+            : known.usage,
+          mcpCalls: input.mcpCalls ?? known.mcpCalls ?? {},
+          error: input.error ? oneLine(input.error, 500) : null,
+        };
+        const probe = runWriteSchema.safeParse(normaliseRun(merged));
+        merged.expectResult = probe.success ? evaluateExpect(probe.data) : "missing";
+        return merged;
+      });
+      this.notify(ws, actor, `run finish (${run.trigger}, ${run.status})`);
+      return run;
     });
   }
 }

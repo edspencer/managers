@@ -660,6 +660,15 @@ export interface TriggerRun {
   maxSpawnDepth?: number;
   permissionMode?: TriggerPermissionMode;
   maxTurns?: number;
+  /** Managers M6: what a fire is expected to produce (evaluated per run; `within` arms `stale`). */
+  expect?: TriggerExpect;
+}
+
+export interface TriggerExpect {
+  kind: "episode" | "report" | "artifact" | "none";
+  report?: string;
+  within?: string;
+  description?: string;
 }
 
 /**
@@ -2103,6 +2112,29 @@ export interface RunRecord {
   briefing: { path: string | null; sha256: string | null } | null;
   error: string | null;
   file: string;
+}
+
+/** `GET …/managers/runs/:id` (M6): the record plus derived fields. */
+export interface RunDetail {
+  run: RunRecord;
+  durationSeconds: number | null;
+  chat: { project: string; sessionId: string } | null;
+  /** The alerts that name this run. */
+  alerts: ManagersAlert[];
+}
+
+export type AlertKind = "run-failed" | "schedule-stalled" | "run-stuck" | "stale" | "artifact-missing";
+
+/** One dead-man's-switch alert (M6), `GET …/managers/alerts`. */
+export interface ManagersAlert {
+  /** `<kind>:<trigger>`. */
+  id: string;
+  kind: AlertKind;
+  trigger: string;
+  severity: "error" | "warning";
+  message: string;
+  runId: string | null;
+  at: string | null;
 }
 
 export interface RunPage {

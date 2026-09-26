@@ -121,7 +121,16 @@ export type PaddockManage =
   | { tool: "list_objectives"; project: string; count: number; objectives: PmObjective[] }
   | { tool: "read_task"; project: string; task: PmTask }
   | { tool: "read_objective"; project: string; objective: PmObjective }
-  | { tool: "list_memory"; project: string; facts: number; playbooks: number };
+  | { tool: "list_memory"; project: string; facts: number; playbooks: number }
+  | { tool: "list_alerts"; project: string; count: number; alerts: PmAlert[] };
+
+export interface PmAlert {
+  id: string;
+  kind: string;
+  trigger: string;
+  severity: string;
+  message: string;
+}
 
 export interface PmTask {
   id: string;
@@ -339,6 +348,11 @@ export function parsePaddockManage(
         playbooks: Array.isArray(data.playbooks) ? data.playbooks.length : 0,
       };
     }
+    case "list_alerts": {
+      if (!Array.isArray(data.alerts)) return null;
+      const alerts = data.alerts as PmAlert[];
+      return { tool, project: String(data.project ?? ""), count: num(data.count, alerts.length), alerts };
+    }
     default:
       return null;
   }
@@ -385,5 +399,7 @@ export function paddockManageSummary(pm: PaddockManage): string {
       return `${pm.objective.id} · ${pm.objective.status}`;
     case "list_memory":
       return `${pm.facts} ${pm.facts === 1 ? "fact" : "facts"}, ${pm.playbooks} ${pm.playbooks === 1 ? "playbook" : "playbooks"}`;
+    case "list_alerts":
+      return pm.count === 0 ? "No alerts" : `${pm.count} ${pm.count === 1 ? "alert" : "alerts"}`;
   }
 }

@@ -1,12 +1,13 @@
 /**
  * The Managers state tools on the `managers` MCP server (M5, plan §2.3).
  *
- *   state-read   list_objectives, read_objective, list_tasks, read_task, list_memory
+ *   state-read   list_objectives, read_objective, list_tasks, read_task, list_memory, list_alerts
  *   state-write  record_episode, upsert_task, update_objective, write_report, record_artifact
  *   memory       memory_op (a stub until M14; refused unless Ed is present)
  *
- * `get_briefing` (M7) and `list_alerts` (M6) are in the policy catalogue but have
- * no tool yet — they arrive with the features behind them.
+ *   list_alerts  (M6) the dead-man's-switch alerts, computed fresh
+ *
+ * `get_briefing` (M7) is in the policy catalogue but has no tool yet.
  *
  * The block is injected on EVERY keeper and trigger turn (unlike the chat-read
  * and spawn-write blocks, which keep their opt-in gates): the tools start no
@@ -34,6 +35,7 @@ import {
   LIST_TASKS_DESC,
   READ_TASK_DESC,
   LIST_MEMORY_DESC,
+  LIST_ALERTS_DESC,
   RECORD_EPISODE_DESC,
   UPSERT_TASK_DESC,
   UPDATE_OBJECTIVE_DESC,
@@ -233,6 +235,17 @@ export function stateTools(state: ManagementStateOps): ServerTools {
           playbooks: v.playbooks,
           ...(v.parseErrors.length ? { parseErrors: v.parseErrors } : {}),
         });
+      }),
+    },
+
+    {
+      name: "list_alerts",
+      description: LIST_ALERTS_DESC,
+      inputSchema: { type: "object", properties: { ...projectProp } },
+      handler: guarded("listing alerts", async (args) => {
+        const project = projectOf(state, args);
+        const alerts = await state.listAlerts(project);
+        return ok({ project, count: alerts.length, alerts });
       }),
     },
 
