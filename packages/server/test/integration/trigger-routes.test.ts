@@ -82,7 +82,9 @@ describe("integration: unified triggers management API (Epic T / T3)", () => {
   it("lists an empty set + surfaces the picker catalog (tools + events + types)", async () => {
     const project = await freshProject();
     const r = await list(project.slug);
-    expect(r.triggers).toEqual([]);
+    // A new notebook's only trigger is the seeded, disabled `wake` (Managers M4).
+    expect(r.triggers.map((x) => x.name)).toEqual(["wake"]);
+    expect(r.triggers[0]).toMatchObject({ enabled: false, trigger: { type: "schedule" } });
     // The capability picker's catalog is served with the list so the UI never
     // hard-codes the tool set — folds in the G4 GRANTABLE_TOOLS list.
     expect(r.grantableTools.map((tl) => tl.name)).toEqual(
@@ -129,7 +131,8 @@ describe("integration: unified triggers management API (Epic T / T3)", () => {
     expect(agent!.permission_mode).toBe("acceptEdits");
 
     // Listed back as a DTO.
-    const listed = (await list(project.slug)).triggers;
+    // (Excluding the seeded `wake` trigger every new notebook has — Managers M4.)
+    const listed = (await list(project.slug)).triggers.filter((x) => x.name !== "wake");
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       name: "cleanup",
@@ -153,7 +156,8 @@ describe("integration: unified triggers management API (Epic T / T3)", () => {
     });
     expect(del.statusCode).toBe(200);
     expect(del.json()).toMatchObject({ ok: true, name: "cleanup", removed: true });
-    expect((await list(project.slug)).triggers).toEqual([]);
+    // Only the seeded `wake` trigger (Managers M4) is left.
+    expect((await list(project.slug)).triggers.map((x) => x.name)).toEqual(["wake"]);
     expect(armedAgent(project.slug, "cleanup")).toBeUndefined();
   });
 
@@ -222,7 +226,7 @@ describe("integration: unified triggers management API (Epic T / T3)", () => {
     });
     expect(on.statusCode).toBe(200);
     expect(on.json().trigger.enabled).toBe(true);
-    expect((await list(project.slug)).triggers[0]!.enabled).toBe(true);
+    expect((await list(project.slug)).triggers.find((x) => x.name === "tick")!.enabled).toBe(true);
 
     const off = await t.app.inject({
       method: "PUT",

@@ -103,7 +103,8 @@ describe("TriggerService (T1 surface consumed by T2–T5)", () => {
     await triggers.set(p.slug, "a", { trigger: { type: "event", on: "onArchive" }, run: { prompt: "x" } });
     await triggers.set(p.slug, "b", { trigger: { type: "schedule", interval: "1h" }, run: { prompt: "y" } });
     const list = await triggers.list(p.slug);
-    expect(list.map((t) => t.name).sort()).toEqual(["a", "b"]);
+    // `wake` is the disabled default every new notebook is seeded with (Managers M4).
+    expect(list.map((t) => t.name).sort()).toEqual(["a", "b", "wake"]);
     const byAgent = await triggers.getByAgentName(p.slug, triggerAgentName(p.slug, "a"));
     expect(byAgent?.name).toBe("a");
     expect(await triggers.getByAgentName(p.slug, "trigger-nope-nope")).toBeNull();

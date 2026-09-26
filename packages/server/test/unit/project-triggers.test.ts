@@ -62,9 +62,14 @@ describe("ProjectStore triggers", () => {
 
   it("leaves trigger-less files untouched (no empty triggers key)", async () => {
     const p = await store.create({ name: "Plain Proj" });
+    // A new notebook is seeded with a disabled `wake` trigger (Managers M4), so
+    // remove it by hand to get a trigger-less file, then prove a rewrite keeps it so.
+    await writeTriggersRaw(p.slug, undefined);
     expect(await readYaml(p.slug)).not.toHaveProperty("triggers");
     const got = await store.get(p.slug);
     expect(got.triggers).toBeUndefined();
+    await store.update(p.slug, { summary: "rewritten" });
+    expect(await readYaml(p.slug)).not.toHaveProperty("triggers");
   });
 
   it("setTrigger persists + validates (rejects a bad discriminant)", async () => {
@@ -87,6 +92,7 @@ describe("ProjectStore triggers", () => {
 
   it("removeTrigger drops the entry (and the whole key when last)", async () => {
     const p = await store.create({ name: "Rm Proj" });
+    await store.removeTrigger(p.slug, "wake"); // the seeded default (Managers M4)
     await store.setTrigger(p.slug, "a", { trigger: { type: "event", on: "onArchive" }, run: { prompt: "x" } });
     await store.setTrigger(p.slug, "b", { trigger: { type: "schedule", interval: "1h" }, run: { prompt: "y" } });
     await store.removeTrigger(p.slug, "a");

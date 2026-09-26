@@ -36,7 +36,15 @@ import {
   sanitizeTrigger,
   sanitizeTriggers,
   isValidTriggerName,
+  TRIGGER_PROMPT_DIR,
 } from "./trigger-config.js";
+import { RESERVED_STATE_DIRS, isReservedSlug } from "./managers/layout.js";
+import {
+  WAKE_PROMPT_TEMPLATE,
+  DEFAULT_WAKE_TRIGGER_NAME,
+  DEFAULT_WAKE_PROMPT_FILE,
+  DEFAULT_WAKE_CRON,
+} from "./managers/templates/wake.js";
 import { sanitizeRecoveryOverride } from "./recovery-config.js";
 import { sanitizeCurationOverride } from "./curation-config.js";
 import { sanitizeAttachmentsOverride } from "./attachments-config.js";
@@ -590,6 +598,16 @@ export class ProjectStore {
         "invalid",
       );
     }
+    // Managers M4: a slug may not squat on one of the root workspace's own state
+    // dirs — `<projectsRoot>/tasks/` IS Home's task store (plan §2.7).
+    if (isReservedSlug(slug)) {
+      throw new ProjectError(
+        `The slug "${slug}" is reserved: the Home workspace keeps its own ` +
+          `${RESERVED_STATE_DIRS.join("/")} directories at the top level, so a project ` +
+          `cannot use one of those names. Pick another slug.`,
+        "invalid",
+      );
+    }
     if (await this.exists(slug)) {
       throw new ProjectError(`Project already exists: ${slug}`, "exists");
     }
@@ -654,6 +672,21 @@ export class ProjectStore {
       ...(repo ? { repo } : {}),
       // Carry the canonicalised path only when set (issue #206).
       ...(linkedPath ? { path: linkedPath } : {}),
+      // Managers M4: every notebook starts with a daily `wake` trigger, switched
+      // OFF (autonomy is opt-in). Its prompt file is seeded in finishCreate. An
+      // unmanaged project gets neither: its working dir is someone else's tree,
+      // and Managers writes nothing into it.
+      ...(managed
+        ? {
+            triggers: {
+              [DEFAULT_WAKE_TRIGGER_NAME]: {
+                trigger: { type: "schedule" as const, cron: DEFAULT_WAKE_CRON },
+                run: { promptFile: DEFAULT_WAKE_PROMPT_FILE, session: "new" as const, tools: [] },
+                enabled: false,
+              },
+            },
+          }
+        : {}),
     };
 
     // Everything this call brings into being, newest last — the ONLY things a
@@ -726,6 +759,16 @@ export class ProjectStore {
     const { slug, yaml, dir, name, now, managed } = args;
     await this.writeYaml(slug, yaml);
     const contentDir = contentDirFor(dir, yaml);
+    // The seeded wake trigger's prompt (Managers M4). A managed project's working
+    // dir is its content dir, which is where `promptFile` resolves. Never clobber.
+    if (managed && yaml.triggers?.[DEFAULT_WAKE_TRIGGER_NAME]) {
+      const promptDir = path.join(contentDir, TRIGGER_PROMPT_DIR);
+      const promptFile = path.join(promptDir, DEFAULT_WAKE_PROMPT_FILE);
+      await fs.mkdir(promptDir, { recursive: true });
+      await fs.writeFile(promptFile, WAKE_PROMPT_TEMPLATE, { encoding: "utf8", flag: "wx" }).catch((err) => {
+        if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      });
+    }
     // The curated trio follows the content (issue #206): for a managed project
     // with an external `path` these land out there rather than in the data dir.
     // `dir` is already made; `contentDir` may be the same directory or the

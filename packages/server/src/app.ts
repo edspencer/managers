@@ -55,6 +55,8 @@ import { TriggerSessionStore } from "./trigger-session.js";
 import { PaddockEventBus } from "./event-bus.js";
 import { TriggerService } from "./triggers.js";
 import { buildSwaggerOptions, buildSwaggerUiOptions, type SwaggerImage } from "./openapi.js";
+import { ensureDataRepo, dataGitInitEnabled } from "./managers/data-repo.js";
+import { ManagersState } from "./managers/state.js";
 
 // Resolve the package version at runtime (dist/app.js → ../package.json) so the
 // generated OpenAPI document's info.version tracks the release without a build step.
@@ -165,6 +167,21 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     warn: (message) => app.log.warn(message),
   });
   await projects.init();
+  // Managers M4: the data-repo skeleton (marker, .gitignore, union-merge
+  // .gitattributes, README, `git init`) — before herdctl starts and before the
+  // GitService below first asks whether the root is a repo.
+  {
+    const repo = await ensureDataRepo(cfg.projectsRoot, { gitInit: dataGitInitEnabled() });
+    if (repo.changed.length > 0 || repo.gitInitialized) {
+      app.log.info(
+        { changed: repo.changed, gitInitialized: repo.gitInitialized },
+        "data repo skeleton ensured",
+      );
+    }
+  }
+  // The Managers domain stores (objectives, tasks, episodes, memory, runs,
+  // reports): one app-wide instance so every reader shares the mtime caches.
+  const managers = new ManagersState(cfg.projectsRoot);
 
   // The user's own MCP servers, under `claude.mcpServers: host` (#691 step 5).
   // Read BEFORE the service is constructed because every keeper's agent config
@@ -423,7 +440,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     );
   }
 
-  await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, cfg });
+  await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, managers, cfg });
 
   await app.register(async (scoped) => {
     // `hide: true` keeps the WS upgrade out of the OpenAPI doc — it's not a REST

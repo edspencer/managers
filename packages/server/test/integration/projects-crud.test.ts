@@ -312,9 +312,12 @@ describe("integration: project CRUD over REST (real fleet, fake claude)", () => 
     expect(yaml.started).toBe(created.started);
     // `pinned` IS an on-disk field — owned by /pins, not patchable here.
     expect(yaml.pinned).toEqual([]);
-    for (const key of ["bogusKey", "nested", "contentDir", "dir", "hasOverview", "triggers"]) {
+    for (const key of ["bogusKey", "nested", "contentDir", "dir", "hasOverview"]) {
       expect(Object.hasOwn(yaml, key), key).toBe(false);
     }
+    // `triggers` is not patchable: the body's `evil` entry is dropped, and only the
+    // disabled `wake` trigger every new notebook is seeded with (Managers M4) remains.
+    expect(Object.keys(yaml.triggers ?? {})).toEqual(["wake"]);
   });
 
   it("pins and unpins a file", async () => {

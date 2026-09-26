@@ -101,6 +101,10 @@ const env = {
   LOG_LEVEL: process.env.LOG_LEVEL || "warn",
 };
 delete env.CLAUDE_CONFIG_DIR; // use paddock's own <dataDir>/claude-home (#691)
+// Managers M4: boot `git init`s the projects root (ensureDataRepo). Keep the
+// default server a non-repo, as the specs expect; MANAGERS_E2E_GIT=1 builds its
+// own repo above.
+env.MANAGERS_DATA_GIT_INIT = "0";
 // An operator-set value is honoured over `claude.credentials` (#691), so an
 // ambient one on a dev box would silently change which login the E2E instance
 // runs on. Let paddock decide from the config, as a real first run does.
