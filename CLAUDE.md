@@ -78,6 +78,23 @@ What changed from Paddock, and what did not:
   the in-process keeper may only WRITE its own project; external principals need
   explicit grants (`DEFAULT_READ_ONLY_SCOPE` no longer uses `list_*`).
   `memory_op` is a stub that refuses outside human-origin turns (M14).
+- **Runs and the dead-man's switch (M6).** Every trigger fire (the one path,
+  `ws-triggers.ts` `fireTriggerForProject`) writes `runs/YYYY-MM/<run-id>.yaml`
+  via `managers/trigger-runs.ts`: `status: running` before the turn, finished by
+  the turn's `onComplete` hook (`StartAgentTurnOpts.runId`/`onComplete`, fired
+  once by `ws-turn.ts` on every ending and awaited — bounded — BEFORE the hub
+  turn ends), then committed at once (`flushManagersCommit`). The run id reaches
+  the state tools as `currentRunId` only while the turn runs, so
+  `record_artifact` works and each episode/task/report the run writes is noted
+  on its record. A surfaced dead-end (error/max-turns/usage-limit notice) counts
+  as a failed run even when the drive reported success. `run.expect`
+  (`trigger-config.ts`) is evaluated at finish (`managers/expect.ts`);
+  `managers/alerts.ts` `computeAlerts` (pure) derives `run-failed`,
+  `artifact-missing`, `stale`, `schedule-stalled` and `run-stuck`, served by
+  `GET …/managers/alerts` and the `list_alerts` tool. `mcpCalls` counts
+  `mcp__<server>__<tool>` calls, excluding `managers*`. The Triggers tab's edit
+  form carries run fields it doesn't show (`runExtra`), so a full-replace PUT
+  never drops `run.expect`.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

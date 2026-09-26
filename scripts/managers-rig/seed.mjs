@@ -137,6 +137,10 @@ function projectYaml(p) {
       if (t.run.session) L.push(`      session: ${t.run.session}`);
       if (t.run.tools) L.push(`      tools: [${t.run.tools.join(", ")}]`);
       if (t.run.maxTurns) L.push(`      maxTurns: ${t.run.maxTurns}`);
+      // Any other run.* key (M6 `expect`, later `briefing`/`behaviour`): JSON is valid YAML.
+      for (const [k, v] of Object.entries(t.run)) {
+        if (!["promptFile", "prompt", "session", "tools", "maxTurns"].includes(k)) L.push(`      ${k}: ${JSON.stringify(v)}`);
+      }
       L.push(`    enabled: ${t.enabled ? "true" : "false"}`);
     }
   }

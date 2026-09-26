@@ -208,6 +208,42 @@ describe("TriggersPane (Epic T / T4)", () => {
     expect(input.run.tools).toEqual(["Bash"]);
   });
 
+  it("editing a trigger keeps run fields the form does not show (Managers M6 run.expect)", async () => {
+    const publishCheck: Trigger = {
+      name: "publish-check",
+      agentName: "trigger-p-publish-check",
+      trigger: { type: "schedule", cron: "0 3 1 1 *" },
+      run: { prompt: "Check.", session: "new", tools: [], expect: { kind: "episode", within: "48h" } },
+      enabled: true,
+    };
+    listTriggers.mockResolvedValueOnce(response([publishCheck]));
+    render(<TriggersPane project={project} />);
+    await screen.findByTestId("triggers-pane");
+    fireEvent.click(await screen.findByRole("button", { name: "Edit publish-check" }));
+    fireEvent.change(screen.getByTestId("trigger-prompt"), { target: { value: "[[APIERROR]]" } });
+    fireEvent.click(screen.getByTestId("trigger-save"));
+
+    await waitFor(() => expect(putTrigger).toHaveBeenCalled());
+    const [, name, input] = putTrigger.mock.calls[0];
+    expect(name).toBe("publish-check");
+    expect(input.run.prompt).toBe("[[APIERROR]]");
+    expect(input.run.expect).toEqual({ kind: "episode", within: "48h" });
+  });
+
+  it("a new trigger carries no stray run fields", async () => {
+    listTriggers.mockResolvedValueOnce(response([]));
+    render(<TriggersPane project={project} />);
+    await screen.findByTestId("triggers-pane");
+    fireEvent.click(await screen.findByTestId("add-trigger"));
+    fireEvent.change(screen.getByTestId("trigger-name"), { target: { value: "n" } });
+    fireEvent.change(screen.getByTestId("trigger-expr"), { target: { value: "1h" } });
+    fireEvent.change(screen.getByTestId("trigger-prompt"), { target: { value: "x" } });
+    fireEvent.click(screen.getByTestId("trigger-save"));
+    await waitFor(() => expect(putTrigger).toHaveBeenCalled());
+    const [, , input] = putTrigger.mock.calls[0];
+    expect(Object.keys(input.run).sort()).toEqual(["prompt", "session", "tools"]);
+  });
+
   it("deletes a trigger after confirmation", async () => {
     render(<TriggersPane project={project} />);
     await screen.findByTestId("triggers-pane");

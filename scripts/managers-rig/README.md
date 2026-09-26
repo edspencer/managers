@@ -169,5 +169,15 @@ still clean once the server is up.
 | `widget-lib` | Objective `burn-down-issues` with a short journal; the §4 renovate `awaiting-ed` task; and a **deliberately malformed task** (`status: someday`) — the `parseError` fixture: lists skip and report it, a direct read is 422. |
 | `empty-project` | Still nothing: the empty-state fixture. |
 
+### Runs and alerts fixtures (M6)
+
+`acme-site` also has an **enabled** `publish-check` trigger (`cron: 0 3 1 1 *`, so it
+never fires during QA; use Run now) with `run.expect: {kind: episode, within: 48h}`.
+Its inline prompt records one episode through `[[MCP managers.record_episode …]]`.
+Its only run, four days old, is `met`, so on a fresh boot
+`GET /api/projects/acme-site/managers/alerts` shows **`stale:publish-check`**, and
+that alert clears after one Run now. A matching 4-day-old project-log episode names
+that run. `empty-project`'s alerts are `[]`.
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

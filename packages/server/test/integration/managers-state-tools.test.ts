@@ -126,7 +126,7 @@ describe("integration: Managers state tools, write REST and autocommit (M5)", ()
     }
   }
 
-  it("a trigger's record_episode + upsert_task write the files and ONE managers-bot commit", async () => {
+  it("a trigger's record_episode + upsert_task write the files and ONE managers-bot commit (with the run record)", async () => {
     expect(t.cfg.selfMcpEnabled).toBe(false);
     const before = botCommits();
     const lines = await runPrompt(
@@ -156,8 +156,13 @@ describe("integration: Managers state tools, write REST and autocommit (M5)", ()
 
     // The turn ending flushes the debounce: one commit, by the bot, owned paths only.
     await waitFor(() => botCommits() === before + 1);
+    // M6: the fire's run record rides in the same commit (committed at run end).
     const files = git("show", "--name-only", "--format=", "HEAD").split("\n").sort();
-    expect(files).toEqual([`${acme.slug}/${epOut.file}`, `${acme.slug}/${taskOut.file}`].sort());
+    const runFiles = files.filter((f) => f.startsWith(`${acme.slug}/runs/`));
+    expect(runFiles).toHaveLength(1);
+    expect(files.filter((f) => !runFiles.includes(f))).toEqual(
+      [`${acme.slug}/${epOut.file}`, `${acme.slug}/${taskOut.file}`].sort(),
+    );
     expect(git("status", "--porcelain", "--", `${acme.slug}/log`, `${acme.slug}/tasks`)).toBe("");
   });
 

@@ -121,7 +121,12 @@ function acmeDomain(clock) {
     refs: (refs ?? []).map((r) => ids[r] ?? r),
     run: suffix === "ap" ? wakeRunId : undefined,
   }));
+  // M6: publish-check's last MET run was four days ago, so its 48h window has
+  // lapsed and it shows as `stale:publish-check` until it is run again.
+  const publishRun = { daysAgo: 4, hh: 6, suffix: "pc" };
+  const publishRunId = clock.runId(clock.at(publishRun.daysAgo, publishRun.hh), publishRun.suffix);
   const log = [
+    { daysAgo: 4, hh: 6, mm: 1, suffix: "pc", imp: 2, tags: ["publish-check"], run: publishRunId, text: "Publish check: the shipping-times post is live and indexed." },
     { daysAgo: 26, hh: 12, suffix: "ca", imp: 3, tags: ["site"], text: "Fixed the broken careers-page footer link found by the link check." },
     { daysAgo: 11, hh: 9, suffix: "cb", imp: 2, tags: ["site"], text: "Link check: every link resolves." },
     { daysAgo: 2, hh: 18, suffix: "cc", imp: 4, tags: ["answer"], source: "ed", text: "Ed: keep the two-day review window going for the final post." },
@@ -186,6 +191,7 @@ function acmeDomain(clock) {
     renderRun(clock, { ...wakeRun, trigger: "morning-check", status: "succeeded", minutes: 4, objective: "blog-cadence", expect: { kind: "episode", within: "48h" }, expectResult: "met", episodes: [clock.episodeId(clock.at(1, 7), "ap")] }),
     renderRun(clock, { daysAgo: 2, hh: 7, suffix: "fl", trigger: "morning-check", status: "failed", minutes: 1, error: "Turn ended early: the model returned an error.", expect: { kind: "episode", within: "48h" }, expectResult: "missing" }),
     renderRun(clock, { daysAgo: 3, hh: 7, suffix: "ms", trigger: "morning-check", status: "succeeded", minutes: 3, expect: { kind: "report", report: "status" }, expectResult: "missing" }),
+    renderRun(clock, { ...publishRun, trigger: "publish-check", status: "succeeded", minutes: 2, expect: { kind: "episode", within: "48h" }, expectResult: "met", episodes: [clock.episodeId(clock.at(4, 6, 1), "pc")] }),
     renderRun(clock, { daysAgo: 34, hh: 7, suffix: "ol", trigger: "morning-check", status: "succeeded", minutes: 6, expectResult: "n/a", mcpCalls: { paddock: { list_chats: 1 } } }),
     renderReportsStatus(clock, [
       { daysAgo: 0, body: "Seven of eight blog weeks met. Pricing is shipped except the enterprise tier.\n\n## Needs you\n- Pick the final post's title.\n- Decide the enterprise tier price." },
@@ -307,6 +313,19 @@ export const PROJECTS = [
         trigger: { type: "schedule", cron: "0 7 * * *" },
         run: { promptFile: "morning-check.md", session: "new", maxTurns: 20 },
         enabled: false,
+      },
+      // M6: an ENABLED trigger with an expectation, so the dead-man's switch has
+      // something to watch. The cron (03:00 on 1 January) never fires during QA;
+      // "Run now" is how it is exercised. Its prompt records one episode.
+      "publish-check": {
+        trigger: { type: "schedule", cron: "0 3 1 1 *" },
+        run: {
+          prompt:
+            'Publish check. [[MCP managers.record_episode {"text":"Publish check: the latest post is live.","importance":3,"tags":["publish-check"]}]]',
+          session: "new",
+          expect: { kind: "episode", within: "48h" },
+        },
+        enabled: true,
       },
     },
     triggerPrompts: {
