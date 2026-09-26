@@ -19,6 +19,7 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
 | `serve.mjs` | `--data <dir>/data --port <N> [--home <dir>/home]`. Boots `packages/server/dist` with `rigEnv` (below) and forwards SIGTERM/SIGINT/SIGHUP to it. Importable: `startServer`, `rigEnv`. |
 | `leak-check.mjs` | `--out <scratch> [--port <N>]`. The isolation proof; see below. |
 | `lib/transcript.mjs` | Builders for Claude Code transcript lines (forked from the demo rig). |
+| `lib/domain.mjs` | Renderers for Managers domain state (objectives + journals, tasks, facts, `MEMORY.md`, runs, status reports) from relative-time data, in the exact §4 on-disk shapes. |
 
 `rigEnv` deletes every `PADDOCK_*` / `MANAGERS_*`, `CLAUDE_CODE_OAUTH_TOKEN`,
 `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR` and `NODE_ENV` it inherits, then sets:
@@ -140,7 +141,23 @@ Read the header of `fixtures.mjs`. In short:
 - domain state (objectives, tasks, memory, reports, runs) is plain files, so add it
   to a project's `files`;
 - new `project.yaml` blocks go in `yaml: { … }`;
-- chats go in `chats: [{ label, prompt, reply, hoursAgo, unread?, origin?, tool? }]`.
+- chats go in `chats: [{ label, prompt, reply, hoursAgo, unread?, origin?, tool? }]`;
+- Managers domain state goes in `state: (clock) => ({ path: text })`, built with the
+  `lib/domain.mjs` renderers so every date is relative to the seed clock.
+
+`seed.mjs` also runs the server's own `ensureDataRepo` (from `packages/server/dist`,
+so **build before seeding**) before the initial commit, so the rig's `.gitignore`,
+`.gitattributes` and `README.md` are exactly what boot would write and the tree is
+still clean once the server is up.
+
+### Domain fixtures (M4)
+
+| Workspace | State |
+| --- | --- |
+| Home (root) | Shared memory: `MEMORY.md` + facts `house-style`, `weekend-quiet` (every project sees them as `scope: root`); one `awaiting-ed` task. |
+| `acme-site` | Objectives `blog-cadence`, `pricing-rewrite` (active) and `fix-broken-links` (done); **25 journal entries over 40 days** across two month files each, plus 3 project-log entries; tasks in **every status** (two `awaiting-ed`, one `doing`, `blocked`, `open`, and a `done` and a `dropped` in `tasks/done/<month>/`); facts `reviews-stall-drafts`, `pricing-owner`; four runs (`succeeded`/`met`, **`failed`**, `succeeded` with **`expectResult: missing`**, an old `n/a`); a `status` report (`current.md` + two dated). |
+| `widget-lib` | Objective `burn-down-issues` with a short journal; the §4 renovate `awaiting-ed` task; and a **deliberately malformed task** (`status: someday`) — the `parseError` fixture: lists skip and report it, a direct read is 422. |
+| `empty-project` | Still nothing: the empty-state fixture. |
 
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

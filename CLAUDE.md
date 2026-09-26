@@ -44,6 +44,21 @@ What changed from Paddock, and what did not:
     (the server still accepts `repo`/`path`); a GitHub repo is stored as a link.
     Discover lost its sidebar button and the empty-Home takeover; `/discover` and
     its footer link remain.
+- **Domain store (M4, `managers/`).** Managers' own state is plain files in the
+  data repo, per workspace (the root is Home): `objectives/<id>/{objective.md,
+  journal/YYYY-MM.md}`, `log/YYYY-MM.md`, `tasks/{open,done/YYYY-MM}/<id>.md`,
+  `memory/{MEMORY.md,facts/,playbooks/}` (the ROOT's is shared with every project,
+  tagged `scope: root`), `runs/YYYY-MM/<id>.yaml`, `reports/<type>/{current,
+  YYYY-MM-DD}.md`. `layout.ts` owns every path and id grammar; `schemas.ts` has a
+  lenient read and a strict write zod schema per record; the stores re-parse a file
+  only when its mtime/ctime/size moved (no watchers). A file that will not parse is
+  skipped with a `parseErrors` entry in lists and is a 422 `parse_error` on a direct
+  read. Read REST lives under `…/managers/…` on both workspace mounts
+  (`routes/managers.ts`). Boot runs `ensureDataRepo` (marker, `.gitignore`, union-merge
+  `.gitattributes`, README, `git init` unless `MANAGERS_DATA_GIT_INIT=0` — the test
+  helper sets `0`). Slugs `objectives tasks log runs reports memory archive` are
+  reserved, and a new notebook is seeded with `.managers/triggers/wake.md` and a
+  DISABLED `wake` trigger.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

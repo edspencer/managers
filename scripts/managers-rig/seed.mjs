@@ -39,8 +39,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { ROOT_WORKSPACE, PROJECTS, FAKE_SCRIPT } from "./fixtures.mjs";
 import { makeIds, clock, usage, userLine, assistantText, toolCall } from "./lib/transcript.mjs";
+import { makeClock } from "./lib/domain.mjs";
 
 // ── args ────────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -84,6 +86,7 @@ const real = (p) => {
   }
 }
 
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DATA = path.join(OUT, "data");
 const HOME = path.join(OUT, "home");
 const PROJECTS_ROOT = path.join(DATA, "projects");
@@ -171,6 +174,8 @@ function recordJob({ sessionId, slug, startedAt, finishedAt, triggerType = "web"
   write(outputFile, "");
 }
 
+const domainClock = makeClock(NOW);
+let stateFileCount = 0;
 const runProvenance = {};
 const readState = {};
 const manifest = {};
@@ -220,6 +225,11 @@ function seedWorkspace(p, dir, slug) {
   fs.mkdirSync(dir, { recursive: true });
   write(path.join(dir, "project.yaml"), projectYaml(p));
   for (const [name, content] of Object.entries(p.files ?? {})) write(path.join(dir, name), `${content.replace(/\n$/, "")}\n`);
+  // Managers domain state (M4+): objectives, journals, tasks, memory, runs, reports.
+  for (const [name, content] of Object.entries(p.state?.(domainClock) ?? {})) {
+    write(path.join(dir, name), content.endsWith("\n") ? content : `${content}\n`);
+    stateFileCount++;
+  }
   for (const [name, content] of Object.entries(p.triggerPrompts ?? {})) {
     write(path.join(dir, ".managers", "triggers", name), `${content}\n`);
   }
@@ -259,6 +269,17 @@ const git = (...a) =>
       GIT_CONFIG_SYSTEM: "/dev/null",
     },
   });
+// The data-repo skeleton (M4) — the server's OWN ensureDataRepo, so the rig's
+// .gitignore/.gitattributes/README are byte-identical to what boot would write
+// and the tree is still clean after the server starts. Needs a server build.
+const dataRepoJs = path.join(REPO_ROOT, "packages", "server", "dist", "managers", "data-repo.js");
+if (!fs.existsSync(dataRepoJs)) {
+  console.error(`seed.mjs: ${dataRepoJs} is missing. Build first: scripts/clean-env.sh npm run build`);
+  process.exit(2);
+}
+const { ensureDataRepo } = await import(pathToFileURL(dataRepoJs).href);
+await ensureDataRepo(PROJECTS_ROOT, { gitInit: false });
+
 git("init", "-q", "-b", "main");
 git("add", "-A");
 git("commit", "-q", "-m", "Seed synthetic Managers QA rig");
@@ -286,6 +307,6 @@ write(
   `${JSON.stringify({ generatedFrom: iso(NOW), projectsRoot: PROJECTS_ROOT, chats: manifest }, null, 2)}\n`,
 );
 
-console.log(`Seeded ${chatCount} chats (${unreadCount} unread) across ${PROJECTS.length} projects + Home`);
+console.log(`Seeded ${chatCount} chats (${unreadCount} unread) and ${stateFileCount} Managers state files across ${PROJECTS.length} projects + Home`);
 console.log(`  data: ${DATA}`);
 console.log(`  home: ${HOME}`);
