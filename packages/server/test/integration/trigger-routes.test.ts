@@ -325,6 +325,54 @@ describe("integration: unified triggers management API (Epic T / T3)", () => {
     expect(byName.cleanup.nextRunAt).toBeNull();
   });
 
+  // Managers M15 (real-Claude shakedown): a never-fired cron had nextRunAt null and an
+  // unscoped schedule's "Run now" left "Last run —"; both now come through.
+  it("GET …/triggers/runtime projects a never-fired cron's next run and falls back to Managers run records", async () => {
+    const project = await freshProject();
+    await t.app.inject({
+      method: "PUT",
+      url: `/api/projects/${project.slug}/triggers/daily`,
+      payload: { trigger: { type: "schedule", cron: "0 9 * * *" }, run: { prompt: "curate" }, enabled: true },
+    });
+    // The control: a DISABLED schedule is not armed, so it still has no next run.
+    await t.app.inject({
+      method: "PUT",
+      url: `/api/projects/${project.slug}/triggers/dormant`,
+      payload: { trigger: { type: "schedule", cron: "0 9 * * *" }, run: { prompt: "nope" }, enabled: false },
+    });
+    const month = new Date().toISOString().slice(0, 7);
+    const dir = path.join(project.dir, "runs", month);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(
+      path.join(dir, "r-260927-1327-zz.yaml"),
+      [
+        "id: r-260927-1327-zz",
+        "trigger: daily",
+        "kind: wake",
+        "objective: null",
+        "status: succeeded",
+        `started: ${month}-01T13:27:26Z`,
+        `finished: ${month}-01T13:27:43Z`,
+        "sessionId: 00000000-0000-4000-8000-000000000001",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const r = await t.app.inject({ method: "GET", url: `/api/projects/${project.slug}/triggers/runtime` });
+    const daily = (r.json().runtime as { name: string; nextRunAt: string | null; lastRun: Record<string, unknown> | null }[]).find(
+      (x) => x.name === "daily",
+    )!;
+    expect(daily.nextRunAt).not.toBeNull();
+    const dormant = (r.json().runtime as { name: string; nextRunAt: string | null }[]).find((x) => x.name === "dormant")!;
+    expect(dormant.nextRunAt).toBeNull();
+    expect(Date.parse(daily.nextRunAt!)).toBeGreaterThan(Date.now());
+    expect(daily.lastRun).toMatchObject({
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      status: "completed",
+      durationSeconds: 17,
+    });
+  });
+
   it("the runtime route is matched before /:name (a trigger can't shadow it)", async () => {
     const project = await freshProject();
     // Even with a real trigger present, GET …/triggers/runtime hits the runtime route,

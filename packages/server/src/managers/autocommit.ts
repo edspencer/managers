@@ -217,6 +217,25 @@ export class Autocommitter {
   }
 
   /**
+   * M15: commit the REMOVAL of a whole subtree (`rel`, relative to `root`) — a
+   * deleted project — so the data repo (and its remote) stop carrying it. Any
+   * pending commit for the removed directory is dropped. `{ committed: false }`
+   * when nothing under `rel` was tracked.
+   */
+  async commitRemoval(root: string, rel: string, message: string, author: GitAuthor): Promise<CommitResult> {
+    if (!this.enabled) return { committed: false };
+    if (!rel || rel === "." || path.isAbsolute(rel) || rel.split(/[\\/]/).includes("..")) return { committed: false };
+    const gone = path.resolve(root, rel);
+    for (const [key, p] of this.pending) {
+      if (key === gone || key.startsWith(gone + path.sep)) {
+        if (p.timer) clearTimeout(p.timer);
+        this.pending.delete(key);
+      }
+    }
+    return this.exclusive(() => this.opts.git.commitProject(path.resolve(root), message, [rel], { author }));
+  }
+
+  /**
    * M15: run `fn` on the global commit chain — after every commit queued so far,
    * and before any queued later. The data-repo sync runs here, so a pull or push
    * never overlaps a commit. Runs even when autocommit is disabled.

@@ -45,6 +45,31 @@ describe("data sync (integration)", () => {
     expect(git(bare, "log", "-1", "--format=%s", branch)).toMatch(/managers: update/);
   });
 
+  it("commits a project's creation and its deletion, so the remote stops carrying it", async () => {
+    const p = (await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "Throwaway" } })).json() as {
+      project: { slug: string; dir: string };
+    };
+    const tracked = () => git(t.projectsRoot, "ls-files", "--", p.project.slug).split("\n").filter(Boolean);
+    expect(tracked()).toEqual(expect.arrayContaining([`${p.project.slug}/project.yaml`, `${p.project.slug}/CLAUDE.md`]));
+    expect(git(t.projectsRoot, "log", "-1", "--format=%s")).toBe(`managers: create project ${p.project.slug}`);
+    await t.app.inject({
+      method: "POST",
+      url: `/api/projects/${p.project.slug}/managers/objectives`,
+      payload: { id: "tmp", title: "Temporary", success: "Gone" },
+    });
+    await t.autocommit.flush(p.project.dir);
+    expect(tracked().length).toBeGreaterThan(2);
+
+    const del = await t.app.inject({ method: "DELETE", url: `/api/projects/${p.project.slug}` });
+    expect(del.statusCode).toBe(200);
+    expect(tracked()).toEqual([]);
+    expect(git(t.projectsRoot, "log", "-1", "--format=%s")).toBe(`managers: delete project ${p.project.slug}`);
+    expect(git(t.projectsRoot, "status", "--porcelain", "--", p.project.slug)).toBe("");
+    expect((await t.dataSync.syncNow()).ok).toBe(true);
+    const branch = git(t.projectsRoot, "symbolic-ref", "--short", "HEAD");
+    expect(git(bare, "ls-tree", "-r", "--name-only", branch)).not.toContain(`${p.project.slug}/`);
+  });
+
   it("a failing sync raises data-sync-failed on Home (needs-you and alerts)", async () => {
     git(t.projectsRoot, "remote", "set-url", "origin", path.join(t.tmp, "gone.git"));
     const r = await t.dataSync.syncNow();

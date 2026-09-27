@@ -220,7 +220,7 @@ export class DataSync {
       const out = (await this.git(["ls-remote", "--heads", remote, `refs/heads/${branch}`])).stdout.trim();
       remoteHasBranch = out !== "";
     } catch (err) {
-      return fail("fetch", false, errText(err));
+      return fail("fetch", false, firstLines(errText(err)));
     }
 
     let pulled = false;

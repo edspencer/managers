@@ -36,7 +36,7 @@ export class ManagersState {
    * M15: the data-repo sync, when one is wired (app.ts). Home's alerts read its
    * status for `data-sync-failed`.
    */
-  dataSync: { readonly status: DataSyncStatus } | null = null;
+  dataSync: { readonly status: DataSyncStatus; request?(): void } | null = null;
 
   constructor(readonly projectsRoot: string) {}
 
