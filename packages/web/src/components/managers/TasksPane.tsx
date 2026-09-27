@@ -397,7 +397,9 @@ export function TasksPane({
               title="No tasks match"
               body={
                 moreDone
-                  ? "Nothing open fits these filters. Closed tasks are loaded a month at a time: show them, or clear the filters."
+                  ? done.length
+                    ? "Nothing in the months loaded so far fits these filters. Load an older month, or clear the filters."
+                    : "Nothing open fits these filters. Closed tasks load a month at a time: show them, or clear the filters."
                   : "Nothing here fits these filters. Try a different objective or status."
               }
               action={

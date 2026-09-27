@@ -154,7 +154,8 @@ export function TaskRow({
       id={task.id}
       data-testid={`task-row-${task.id}`}
       className={cx(
-        "scroll-mt-24 px-4 py-3 motion-base transition-colors",
+        // Rows sit flush in a rounded card: keep the highlight inside its corners.
+        "scroll-mt-24 px-4 py-3 motion-base transition-colors first:rounded-t-2xl last:rounded-b-2xl",
         highlighted && "bg-accent-soft ring-1 ring-inset ring-accent",
       )}
     >
