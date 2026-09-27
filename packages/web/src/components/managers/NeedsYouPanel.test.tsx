@@ -249,7 +249,7 @@ describe("NeedsYouPanel (M14.5)", () => {
               },
             ],
             status: { generated: null, stale: false },
-            parseErrors: [],
+            parseErrors: [{ file: "tasks/open/t-260925-bad0.md", error: "status: bad" }],
             configError: "project.yaml is not valid YAML (x)",
           },
         ],
@@ -267,6 +267,9 @@ describe("NeedsYouPanel (M14.5)", () => {
     expect(within(group).getByTestId("needs-you-project-widget-lib").tagName).toBe("SPAN");
     expect(within(group).getByTestId("needs-you-alert-config-unreadable:")).toHaveTextContent("missing from the project list");
     expect(managersWake).not.toHaveBeenCalled();
+    // No link into a Tasks tab that cannot open.
+    expect(within(group).getByTestId("needs-you-parse-errors")).toHaveTextContent("1 task file won’t parse");
+    expect(within(group).queryByRole("link", { name: "Open Tasks" })).toBeNull();
   });
 
   it("caps a long list at GROUP_CAP with Show all N, and Show fewer", async () => {

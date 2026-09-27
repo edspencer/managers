@@ -347,10 +347,16 @@ function Group({
 
       {group.parseErrors.length > 0 && (
         <p className="text-xs text-warn" data-testid="needs-you-parse-errors">
-          {plural(group.parseErrors.length, "task file")} won&rsquo;t parse, so an ask could be missing here.{" "}
-          <Link to={tasksUrl(base)} className="underline underline-offset-2">
-            Open Tasks
-          </Link>
+          {plural(group.parseErrors.length, "task file")} won&rsquo;t parse, so an ask could be missing here.
+          {/* A project with an unreadable project.yaml has no Tasks tab to open. */}
+          {!broken && (
+            <>
+              {" "}
+              <Link to={tasksUrl(base)} className="underline underline-offset-2">
+                Open Tasks
+              </Link>
+            </>
+          )}
         </p>
       )}
     </Card>
