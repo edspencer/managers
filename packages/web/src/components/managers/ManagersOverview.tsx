@@ -39,7 +39,9 @@ export function ManagersOverview({ slug, base }: { slug: string; base: string })
         onOpenRun={setRunId}
         onRunFinished={() => setRunsKey((k) => k + 1)}
       />
-      <div className="mb-8 grid items-start gap-6 xl:grid-cols-2">
+      {/* Stacked, not side by side: Home's reading column is narrow (max-w-3xl),
+          and at half of it a run's trigger name truncates. */}
+      <div className="mb-8 space-y-6">
         <section>
           <Heading label="Objectives" link={{ to: objectivesUrl(base), text: "All objectives" }} />
           <ObjectivesSummary slug={slug} base={base} />

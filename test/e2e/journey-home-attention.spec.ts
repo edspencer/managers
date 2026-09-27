@@ -419,7 +419,10 @@ test("an idle workspace's Home collapses both feeds into one invitation, keeps t
   // labels, so it reads out of the same list.)
   const headings = (await main.locator("h3").allTextContents()).map((h) => h.trim());
   const idx = (re: RegExp) => headings.findIndex((h) => re.test(h));
-  expect(idx(/^All caught up$/)).toBe(0);
+  // Managers M12: a project's Home opens on its manager (status report,
+  // objectives, runs); the invitation comes right after them.
+  expect(headings.slice(0, 3)).toEqual(["Status report", "Objectives", "Runs"]);
+  expect(idx(/^All caught up$/)).toBe(3);
   expect(idx(/^OVERVIEW\.md$/)).toBeGreaterThan(idx(/^All caught up$/));
   expect(idx(/^CHANGELOG\.md$/)).toBeGreaterThan(idx(/^OVERVIEW\.md$/));
   // And the collapsed feeds leave no headings behind to be ordered at all.

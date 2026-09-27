@@ -248,8 +248,11 @@ export function HomePane({
                can see both without scrolling one off the top. `items-start`
                keeps a two-row Unread from stretching to a ten-row Running. */
             <div className="mb-8 grid items-start gap-4 xl:grid-cols-2">
-              {/* Running: the live work, and the shortcut to start more. */}
-              <section>
+              {/* Running: the live work, and the shortcut to start more.
+                  `min-w-0` on both grid items: a grid item's min width is its
+                  content's by default, so one long chat name (a report run's
+                  whole prompt, M12) widened the page past a phone's screen. */}
+              <section className="min-w-0">
                 <div className="mb-2 flex items-center justify-between">
                   <SectionLabel label="Running" count={running.length} />
                   <NewChatButton onNewChat={onNewChat} />
@@ -265,7 +268,7 @@ export function HomePane({
               </section>
 
               {/* Unread: replies that landed while the user was elsewhere. */}
-              <section>
+              <section className="min-w-0">
                 <div className="mb-2 flex items-center justify-between">
                   <SectionLabel label="Unread" count={unread.length} />
                 </div>
@@ -455,7 +458,7 @@ function NotesSection({
   const open = !collapsed;
   const hasBody = body.trim().length > 0;
   return (
-    <section className="mb-8">
+    <section className="mb-8 min-w-0">
       <button
         type="button"
         onClick={toggle}

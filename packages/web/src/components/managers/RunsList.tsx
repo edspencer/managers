@@ -123,10 +123,9 @@ export function RunsList({
           >
             <StatusDot tone={RUN_STATUS_TONE[r.status]} pulse={r.status === "running"} />
             <span className="sr-only">{RUN_STATUS_LABEL[r.status]}</span>
-            <span className="min-w-0 flex-1 truncate">
-              <span className="font-mono text-sm text-fg">{r.trigger ?? r.kind}</span>
-              {r.status === "failed" && <span className="ml-2 text-2xs font-medium text-danger">failed</span>}
-            </span>
+            <span className="min-w-0 truncate font-mono text-sm text-fg">{r.trigger ?? r.kind}</span>
+            {r.status === "failed" && <span className="shrink-0 text-2xs font-medium text-danger">failed</span>}
+            <span className="flex-1" />
             <ExpectMark run={r} />
             <span className="w-12 shrink-0 text-right text-2xs tabular text-fg-subtle">
               {r.status === "running" ? "…" : durationLabel(secs)}

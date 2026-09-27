@@ -198,14 +198,17 @@ export const merge = (...maps) => Object.assign({}, ...maps);
 export function renderReportsStatus(clock, entries) {
   const files = {};
   const sorted = [...entries].sort((a, b) => a.daysAgo - b.daysAgo);
+  // Never in the future: "today at 07:10" has not happened yet when the rig is
+  // seeded before then, and a report "generated" later than now reads as "just now".
+  const at = (daysAgo) => new Date(Math.min(clock.at(daysAgo, 7, 10).getTime(), Date.now() - 2 * 3600_000));
   for (const e of sorted) {
-    const d = clock.at(e.daysAgo, 7, 10);
+    const d = at(e.daysAgo);
     // M12: `generated` like an M10-composed report, so Home's card can say how old it is.
     files[`reports/status/${clock.date(d)}.md`] = `${frontmatter({ type: "status", generated: clock.iso(d), updated: clock.iso(d) })}# Status\n\n${e.body}\n`;
   }
   const newest = sorted[0];
   if (newest) {
-    const d = clock.at(newest.daysAgo, 7, 10);
+    const d = at(newest.daysAgo);
     files["reports/status/current.md"] = files[`reports/status/${clock.date(d)}.md`];
   }
   return files;

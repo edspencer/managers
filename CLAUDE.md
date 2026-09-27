@@ -227,6 +227,26 @@ What changed from Paddock, and what did not:
   manager now" switch reads `GET …/managers/wake` `{available, reason}`, the same
   check the answer route uses. Every pane has a skeleton, an error `Callout` with
   Retry and an empty state; tokens and `ui/` primitives only.
+- **Project overview, report history, Memory (M12).** A PROJECT's Home opens on
+  `ManagersOverview` (passed into `HomePane` as the `managers` slot; the root's Home is
+  M13's): `StatusReportCard` shows `reports/status/current.md` MINUS its title and its
+  stored "Needs you"/"Alerts" (`reportMarkdown.ts` `reportBody`, fence-aware) and renders
+  both LIVE from `…/tasks?status=awaiting-ed` and `…/alerts` (`AlertsList`), so a stale
+  report never hides or repeats a request; the three reads are independent (a report
+  error is a Callout, the live sections still render). "Refresh now" POSTs M10's refresh
+  and polls the run (spinner) → re-reads; a failed run, a run that wrote no report, and a
+  409 each say so. `ObjectivesSummary` (active/paused), `RunsList` (last 10, pages back
+  ≤12 months) → `RunDrawer` (`Dialog placement="side"`, new on the primitive: error,
+  expect, what it wrote, connection calls, chat link, "What the manager saw" = the
+  run's `briefingText`). Routes `…/reports/:reportType[/:reportDate]` (`ReportHistory`,
+  no tab — Home stays highlighted) and the Memory tab `…/memory[/:fact]` (`MemoryPane`:
+  project + Shared sections, Active/Superseded/All in `?show=`, "Consolidation: on/off"
+  from the `consolidate-memory` behaviour → `settings#behaviours`). The fact DTO gains
+  `evidenceLinks` (`managers/evidence-links.ts`: ids resolved through
+  `EpisodesStore.index`, project facts in the project, root facts in Home then the
+  viewing project; `href` = objective page `#ep-…` or the log file in Files; unresolved
+  ids kept with `found: false`). Objective Lessons' `[[fact]]` now link to Memory.
+  Rendered Markdown's internal links navigate in-app via `useInternalLinks`.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
