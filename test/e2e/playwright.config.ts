@@ -56,6 +56,7 @@ export default defineConfig({
       name: "chromium",
       testIgnore: [
         "**/journey-git-*.spec.ts",
+        "**/journey-managers-loop.spec.ts",
         "**/journey-mobile.spec.ts",
         "**/journey-mobile-git.spec.ts",
       ],
@@ -63,7 +64,8 @@ export default defineConfig({
     },
     {
       name: "chromium-git",
-      testMatch: "**/journey-git-*.spec.ts",
+      // Managers M13: the full-loop journey asserts on the data repo's commits.
+      testMatch: ["**/journey-git-*.spec.ts", "**/journey-managers-loop.spec.ts"],
       use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${GIT_PORT}` },
     },
     {
@@ -134,6 +136,11 @@ export default defineConfig({
         // state. See journey-git-github.spec.ts.
         MANAGERS_GITHUB_CLIENT_ID: "Iv1.e2e0000client0id",
         MANAGERS_TEST_LIVE: process.env.MANAGERS_TEST_LIVE ?? "",
+        // Managers M13 (journey-managers-loop): UI state writes commit as "Ed", and
+        // quickly — the default 10 s debounce would eat a sixth of the test's budget.
+        MANAGERS_GIT_AUTHOR_NAME: "Ed",
+        MANAGERS_GIT_AUTHOR_EMAIL: "ed@example.invalid",
+        MANAGERS_AUTOCOMMIT_DEBOUNCE_MS: "500",
       },
     },
   ],

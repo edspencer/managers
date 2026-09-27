@@ -624,6 +624,7 @@
                     "reason": {
                       "type": "string",
                       "enum": [
+                        "not-supported",
                         "already-host",
                         "env-shadowed",
                         "profile-paranoid",
@@ -1028,6 +1029,7 @@
                     "code": {
                       "type": "string",
                       "enum": [
+                        "not_supported",
                         "env_shadowed",
                         "invalid"
                       ]
@@ -1416,6 +1418,40 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/managers/needs-you": {
+      "get": {
+        "summary": "Everything waiting on Ed, across every workspace",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Home's cross-project collation, computed on the server from the same caches the per-workspace routes use (no model involved): `{ generatedAt, projects: [{ slug, name, needsYou, alerts, status: { generated, stale }, parseErrors }], totals: { checked, needsYou, alerts, errors, withItems } }`. `needsYou` is the workspace's awaiting-ed tasks (as `…/managers/tasks?status=awaiting-ed`), `alerts` its alerts (as `…/managers/alerts`), `status.stale` whether its status report is over 48 h old. Home (the root workspace) has `slug: \"\"`. Quiet workspaces (nothing awaiting, no alerts, no unreadable task files) are left out unless `all=1`; `totals.checked` counts them anyway. A workspace that cannot be read is listed as `{ slug, name, error }` instead of failing the response. Order: workspaces with asks (longest-waiting first), then unreadable ones, then alert-only ones (worst severity first), then quiet ones; ties by name.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "all",
+            "required": false,
+            "description": "`1` (or `true`) to include quiet workspaces."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ generatedAt, projects, totals }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ generatedAt, projects, totals }`.",
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -3747,7 +3783,7 @@
         "tags": [
           "Triggers"
         ],
-        "description": "Fires a trigger immediately (\"Run now\") through the same hub path a cron/event fire uses, producing a first-class badged run. Fires any trigger type regardless of its `enabled` flag. Success is 202 with an object containing `ok: true`, the `name`, and the started `sessionId`. Returns 503 when firing is unavailable, 404 for an unknown trigger, 409 for the post-turn curator trigger (not runnable on demand), and 502 if the fire started no chat.",
+        "description": "Fires a trigger immediately (\"Run now\") through the same hub path a cron/event fire uses, producing a first-class badged run. Fires any trigger type regardless of its `enabled` flag. Success is 202 with an object containing `ok: true`, the `name`, and the started `sessionId`. Returns 503 when firing is unavailable, 404 for an unknown trigger, 409 for the post-turn curator trigger (not runnable on demand) or when a behaviour gating the trigger is off (`code: behaviour_off`, `behaviours: [...]`; nothing runs), and 502 if the fire started no chat.",
         "parameters": [
           {
             "schema": {
@@ -3818,6 +3854,1218 @@
               "application/json": {
                 "schema": {
                   "description": "Stored attachment descriptors.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/objectives": {
+      "get": {
+        "summary": "List the workspace's objectives",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Every `objectives/<id>/objective.md`, parsed: `{ objectives: [{ id, title, status, success, triggers, created, updated, file, excerpt, openTasks }] }`, active first. `excerpt` is the start of the `## Where we are` section (plain text, at most 280 characters); `openTasks` counts the objective's tasks in `tasks/open/` (every status but done and dropped). A file that will not parse is skipped and listed in `parseErrors` (present only when non-empty).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ objectives, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objectives, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an objective",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Creates `objectives/<id>/objective.md`. Body: `id` (kebab-case), `title` and `success` (required), `status`, `whereWeAre`, `strategy`, `lessons`, `triggers[]`. Section text must not contain `## ` headings. 409 when the objective already exists. Returns 201 `{ objective }`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The objective."
+              }
+            }
+          },
+          "description": "The objective."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`{ objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/objectives/{id}": {
+      "get": {
+        "summary": "Get one objective with a page of its journal",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The objective's frontmatter, its `whereWeAre` / `strategy` / `lessons` sections (plus `otherSections`), and `journal`: one page of `journal/YYYY-MM.md` episodes, newest first, `months` files per page. Pass `journal.nextBefore` as `before` for the next page. 400 for a malformed id or query, 404 for an unknown objective, 422 when its file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Only months strictly before this `YYYY-MM` (the previous page's `nextBefore`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "description": "Month files per page, 1–24 (default 3)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Objective id (kebab-case directory name)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update an objective",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Changes only the fields given (`title`, `success`, `status`, `whereWeAre`, `strategy`, `lessons`, `triggers[]`); a section is replaced in place and Ed's other sections are kept. 404 for an unknown objective, 409 when its file does not parse. Returns `{ objective }`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The fields to change."
+              }
+            }
+          },
+          "description": "The fields to change."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Objective id (kebab-case)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/log": {
+      "get": {
+        "summary": "Page through the workspace's episodic log",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Episodes in `log/YYYY-MM.md` (those not tied to an objective), newest first, paged by month exactly like an objective's journal: `{ log: { entries, months, nextBefore, parseErrors? } }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Only months strictly before this `YYYY-MM` (the previous page's `nextBefore`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "description": "Month files per page, 1–24 (default 3)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ log }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ log }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/tasks": {
+      "get": {
+        "summary": "List tasks",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Tasks in `tasks/open/` — or, with `month=YYYY-MM`, the closed tasks in `tasks/done/<month>/` — filtered by `status` (comma-separated: open, doing, blocked, awaiting-ed, done, dropped) and `objective`. `awaiting-ed` sorts first. `doneMonths` lists the closed months on disk, newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "description": "Comma-separated statuses to keep."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "objective",
+            "required": false,
+            "description": "Only tasks for this objective id."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "description": "Read this `YYYY-MM` done month instead of open tasks."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ tasks, doneMonths, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ tasks, doneMonths, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Creates `tasks/open/<id>.md` (or `done/<month>/` for a done/dropped status) with a fresh `t-YYMMDD-xxxx` id, validated strictly: `title` is required, `awaiting-ed` requires `ask`, GitHub refs must be `owner/repo#N`. Body fields: title, status, objective, ask, options[], github[], due, shovel_ready, notes, source (ed|manager|harvested; default ed), log. Returns 201 `{ task }` (the re-read task). Auto-committed as the requesting user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The task fields."
+              }
+            }
+          },
+          "description": "The task fields."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`{ task }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/tasks/{id}": {
+      "get": {
+        "summary": "Get one task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` (open|done) and `month`. Found in `open/` or any done month. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Task id, t-YYMMDD-xxxx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ task }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Changes only the fields given (same fields as create), appends a line to the task's `## Log`, and moves the file to `tasks/done/<month>/` when the status becomes done or dropped (back to `open/` when it reopens). 400 for invalid fields, 404 for an unknown task, 409 when the file on disk does not parse.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The fields to change."
+              }
+            }
+          },
+          "description": "The fields to change."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Task id, t-YYMMDD-xxxx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ task }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/memory": {
+      "get": {
+        "summary": "The workspace's semantic memory, with the shared root memory",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`indexes` (`MEMORY.md` split into Ed's `preamble` and the generated `index`, per scope), `facts` and `playbooks`, each tagged `scope: project | root`. The root workspace's memory is shared with every project, so a project sees both; the root sees only `root` (and `indexes.project` is null). Each fact carries `evidenceLinks` (M12): its `evidence` episode ids resolved to `{ episode, found, workspace, objective, file, line, href }`, where `href` is the web app's URL for the journal entry (or the log file).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ indexes, facts, playbooks, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ indexes, facts, playbooks, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/memory/facts/{name}": {
+      "get": {
+        "summary": "Get one memory fact",
+        "tags": [
+          "Managers"
+        ],
+        "description": "One `memory/facts/<name>.md`: frontmatter, `body`, `history`, `scope` and `evidenceLinks` (M12). Without `scope`, a project fact wins over a root fact of the same name. 400 for a malformed name or scope, 404 when absent, 422 when the file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "description": "`root` or `project`."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "description": "Fact name (kebab-case)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ fact }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ fact }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/runs": {
+      "get": {
+        "summary": "List run records",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Trigger-run records (`runs/YYYY-MM/<id>.yaml`), newest first, paged by month; filter by `trigger` and `status` (running, succeeded, failed, cancelled). These are Managers runs, not the chat History.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Only months strictly before this `YYYY-MM` (the previous page's `nextBefore`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "description": "Month files per page, 1–24 (default 3)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "trigger",
+            "required": false,
+            "description": "Only runs of this trigger."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "description": "Only runs with this status."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ runs, months, nextBefore, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ runs, months, nextBefore, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/runs/{id}": {
+      "get": {
+        "summary": "Get one run record",
+        "tags": [
+          "Managers"
+        ],
+        "description": "400 for a malformed id (r-YYMMDD-HHMM-xx), 404 when absent, 422 when the file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Run id, r-YYMMDD-HHMM-xx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ run }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ run }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/alerts": {
+      "get": {
+        "summary": "List alerts",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The dead-man's switch over this workspace's triggers, computed fresh: `run-failed`, `artifact-missing`, `stale` (no `met` run inside `expect.within`), `schedule-stalled` (nextRunAt over 15 min past) and `run-stuck` (running over 2 h). A JSON ARRAY of `{ id, kind, trigger, severity, message, runId, at }`, errors first; `[]` when nothing is wrong.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The alerts, errors first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The alerts, errors first.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/briefing": {
+      "get": {
+        "summary": "Preview the wake briefing",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The deterministic briefing a wake starts from (the same builder the fire path, the new-chat preload and the `get_briefing` tool use), built fresh with no run id: `{ text, sections: [{ name, chars }], objective }`. `?objective=` briefs on one objective in full; `?trigger=` briefs as a wake of that trigger would (its bound objective, its runs); `?kind=chat` is the new-chat preload. 400 for a malformed objective or kind, 404 for an unknown trigger.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "objective",
+            "required": false,
+            "description": "Objective id to brief on in full."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "trigger",
+            "required": false,
+            "description": "Trigger name to brief as."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "description": "`wake` (default), `chat`, or `report` (M10; with `report`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "report",
+            "required": false,
+            "description": "Report type for `kind=report` (default `status`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ text, sections, objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ text, sections, objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/reports": {
+      "get": {
+        "summary": "List report types",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Every EFFECTIVE report type (M10: the built-in `status`, Home's definitions, this workspace's own) plus any `reports/<type>/` directory with no definition: `{ reports: [{ type, defined, enabled, description, schedule, origin, inherited, trigger, current, dates }] }`. `enabled` is whether the schedule is armed here (this workspace's own flag only); `current` is `current.md`'s metadata (no body, with `generated`) or null; `dates` the dated reports on disk, newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ reports }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ reports }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/reports/{type}": {
+      "get": {
+        "summary": "Get a report type's current report",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`{ type, current, dates }` with `current` the full `current.md` (frontmatter, title, body, updated) or null when there is none yet. 400 for a malformed type, 404 when the type is neither defined here (M10) nor has a directory.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "description": "Report type (kebab-case), e.g. `status`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ type, current, dates }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ type, current, dates }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/reports/{type}/{date}": {
+      "get": {
+        "summary": "Get one dated report",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`{ report }` for `reports/<type>/<date>.md`. 400 for a malformed type or date, 404 when absent.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "description": "Report type (kebab-case)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "description": "`YYYY-MM-DD`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ report }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ report }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/reports/{type}/refresh": {
+      "post": {
+        "summary": "Refresh a report now",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Fires the derived `report-<type>` trigger now, through the one trigger fire path, deliberately IGNORING its `enabled` flag (a manual run is a deliberate act) but never a behaviour gate. 202 `{ ok, type, trigger, runId, sessionId }`; the run finishes asynchronously (poll `managers/runs/:runId`). 400 for a malformed type, 404 for a type not defined here, 409 `behaviour_off` when a behaviour gating the trigger is off, 502 when no chat started, 503 when firing is unavailable.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "description": "Report type (kebab-case), e.g. `status`."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "`{ ok, type, trigger, runId, sessionId }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ ok, type, trigger, runId, sessionId }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/wake": {
+      "get": {
+        "summary": "Can an answer wake the manager?",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`{ available, reason }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire this workspace's `wake` trigger — it exists, is enabled, and every behaviour gating it is on. `reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch (M11).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ available, reason }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ available, reason }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/tasks/{id}/answer": {
+      "post": {
+        "summary": "Answer an awaiting-ed task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With `wake: true` it also fires the project's `wake` trigger when that trigger exists, is enabled and every behaviour gating it is on (M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "`{ choice?, text?, wake? }`."
+              }
+            }
+          },
+          "description": "`{ choice?, text?, wake? }`."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Task id, t-YYMMDD-xxxx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ task, episode, wake? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task, episode, wake? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/behaviours": {
+      "get": {
+        "summary": "List the workspace's behaviours",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Every behaviour that applies here — built in, defined by Home (the root) or by this project — merged field by field, with `enabled` from this workspace's own `project.yaml` only (default OFF). Each has `origin` (`builtin|home|project`), `inherited`, `overridden` and `boundTriggers` (`{ name, exists, enabled, type }`). `changedOutsideUi` is true when autonomy changed other than through the PATCH route (the `behaviours-changed-outside-ui` alert). Returns `{ behaviours, changedOutsideUi, changedSince }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ behaviours, changedOutsideUi, changedSince }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ behaviours, changedOutsideUi, changedSince }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/behaviours/{name}": {
+      "patch": {
+        "summary": "Switch a behaviour on or off",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Ed's autonomy switch: `{ enabled: boolean }`. Writes `behaviours.<name>.enabled` into THIS workspace's `project.yaml` (creating a `{ enabled }` entry for an inherited behaviour), re-registers the keeper and trigger agents (so schedules are re-armed or disarmed and tools denied or allowed), records an `#autonomy` episode (`source ed`) in the project log, and commits `project.yaml` with the log at once. No agent tool can do this. 400 for a malformed name or body, 404 for a behaviour not defined here. Returns `{ behaviour, changed, episode? }` (`changed: false` and no episode when it already had that value).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "`{ enabled: boolean }`."
+              }
+            }
+          },
+          "description": "`{ enabled: boolean }`."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "description": "Behaviour name (kebab-case)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ behaviour, changed, episode? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ behaviour, changed, episode? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/behaviours/acknowledge": {
+      "post": {
+        "summary": "Accept an out-of-UI behaviour change",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Records the workspace's CURRENT autonomy as known-good, clearing the `behaviours-changed-outside-ui` alert. Changes nothing else. Returns `{ ok: true }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ ok: true }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ ok: true }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/connections": {
+      "get": {
+        "summary": "List the workspace's MCP connections",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The `mcp:` block of THIS workspace's `project.yaml` (never inherited from Home), resolved against the server's environment. Each connection has `name`, `description`, `transport`, `url` (query and userinfo stripped), `command` (basename), `headerKeys` (names only), `envRefs` (`{ name, where, set }` — variable names and whether each is set, never values), `tools` (the narrowing, or null), `allow` (the exact allowlist patterns the keeper gets), `attached`, `errors` and `warnings`. No value from the environment is ever returned. Returns `{ connections }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ connections }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ connections }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/connections/{name}/probe": {
+      "post": {
+        "summary": "Test an MCP connection",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Connects to the named connection the way an agent would (streamable HTTP or SSE, with its resolved headers), runs `initialize` then `tools/list` with a 10 s timeout, and disconnects. A connection that does not resolve (an unset env var, an inline secret, a reserved name…) is not contacted: `ok: false` with its first resolution error. Errors are sanitised to a short category (`401 Unauthorized`, `ECONNREFUSED`, `timed out after 10s`) with no stack, url or header text. 404 for an unknown connection. Returns `{ name, ok, tools, error, ms }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "description": "Connection name."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ name, ok, tools, error, ms }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ name, ok, tools, error, ms }`.",
                   "type": "object",
                   "additionalProperties": true
                 }
@@ -6151,7 +7399,7 @@
         "tags": [
           "Triggers"
         ],
-        "description": "Fires a trigger immediately (\"Run now\") through the same hub path a cron/event fire uses, producing a first-class badged run. Fires any trigger type regardless of its `enabled` flag. Success is 202 with an object containing `ok: true`, the `name`, and the started `sessionId`. Returns 503 when firing is unavailable, 404 for an unknown trigger, 409 for the post-turn curator trigger (not runnable on demand), and 502 if the fire started no chat.",
+        "description": "Fires a trigger immediately (\"Run now\") through the same hub path a cron/event fire uses, producing a first-class badged run. Fires any trigger type regardless of its `enabled` flag. Success is 202 with an object containing `ok: true`, the `name`, and the started `sessionId`. Returns 503 when firing is unavailable, 404 for an unknown trigger, 409 for the post-turn curator trigger (not runnable on demand) or when a behaviour gating the trigger is off (`code: behaviour_off`, `behaviours: [...]`; nothing runs), and 502 if the fire started no chat.",
         "parameters": [
           {
             "schema": {
@@ -6230,6 +7478,1218 @@
           }
         }
       }
+    },
+    "/api/projects/{slug}/managers/objectives": {
+      "get": {
+        "summary": "List the workspace's objectives",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Every `objectives/<id>/objective.md`, parsed: `{ objectives: [{ id, title, status, success, triggers, created, updated, file, excerpt, openTasks }] }`, active first. `excerpt` is the start of the `## Where we are` section (plain text, at most 280 characters); `openTasks` counts the objective's tasks in `tasks/open/` (every status but done and dropped). A file that will not parse is skipped and listed in `parseErrors` (present only when non-empty).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ objectives, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objectives, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create an objective",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Creates `objectives/<id>/objective.md`. Body: `id` (kebab-case), `title` and `success` (required), `status`, `whereWeAre`, `strategy`, `lessons`, `triggers[]`. Section text must not contain `## ` headings. 409 when the objective already exists. Returns 201 `{ objective }`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The objective."
+              }
+            }
+          },
+          "description": "The objective."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`{ objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/objectives/{id}": {
+      "get": {
+        "summary": "Get one objective with a page of its journal",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The objective's frontmatter, its `whereWeAre` / `strategy` / `lessons` sections (plus `otherSections`), and `journal`: one page of `journal/YYYY-MM.md` episodes, newest first, `months` files per page. Pass `journal.nextBefore` as `before` for the next page. 400 for a malformed id or query, 404 for an unknown objective, 422 when its file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Only months strictly before this `YYYY-MM` (the previous page's `nextBefore`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "description": "Month files per page, 1–24 (default 3)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Objective id (kebab-case directory name)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update an objective",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Changes only the fields given (`title`, `success`, `status`, `whereWeAre`, `strategy`, `lessons`, `triggers[]`); a section is replaced in place and Ed's other sections are kept. 404 for an unknown objective, 409 when its file does not parse. Returns `{ objective }`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The fields to change."
+              }
+            }
+          },
+          "description": "The fields to change."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Objective id (kebab-case)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/log": {
+      "get": {
+        "summary": "Page through the workspace's episodic log",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Episodes in `log/YYYY-MM.md` (those not tied to an objective), newest first, paged by month exactly like an objective's journal: `{ log: { entries, months, nextBefore, parseErrors? } }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Only months strictly before this `YYYY-MM` (the previous page's `nextBefore`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "description": "Month files per page, 1–24 (default 3)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ log }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ log }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/tasks": {
+      "get": {
+        "summary": "List tasks",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Tasks in `tasks/open/` — or, with `month=YYYY-MM`, the closed tasks in `tasks/done/<month>/` — filtered by `status` (comma-separated: open, doing, blocked, awaiting-ed, done, dropped) and `objective`. `awaiting-ed` sorts first. `doneMonths` lists the closed months on disk, newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "description": "Comma-separated statuses to keep."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "objective",
+            "required": false,
+            "description": "Only tasks for this objective id."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "description": "Read this `YYYY-MM` done month instead of open tasks."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ tasks, doneMonths, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ tasks, doneMonths, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Creates `tasks/open/<id>.md` (or `done/<month>/` for a done/dropped status) with a fresh `t-YYMMDD-xxxx` id, validated strictly: `title` is required, `awaiting-ed` requires `ask`, GitHub refs must be `owner/repo#N`. Body fields: title, status, objective, ask, options[], github[], due, shovel_ready, notes, source (ed|manager|harvested; default ed), log. Returns 201 `{ task }` (the re-read task). Auto-committed as the requesting user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The task fields."
+              }
+            }
+          },
+          "description": "The task fields."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "`{ task }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/tasks/{id}": {
+      "get": {
+        "summary": "Get one task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` (open|done) and `month`. Found in `open/` or any done month. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Task id, t-YYMMDD-xxxx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ task }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Changes only the fields given (same fields as create), appends a line to the task's `## Log`, and moves the file to `tasks/done/<month>/` when the status becomes done or dropped (back to `open/` when it reopens). 400 for invalid fields, 404 for an unknown task, 409 when the file on disk does not parse.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "The fields to change."
+              }
+            }
+          },
+          "description": "The fields to change."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Task id, t-YYMMDD-xxxx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ task }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/memory": {
+      "get": {
+        "summary": "The workspace's semantic memory, with the shared root memory",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`indexes` (`MEMORY.md` split into Ed's `preamble` and the generated `index`, per scope), `facts` and `playbooks`, each tagged `scope: project | root`. The root workspace's memory is shared with every project, so a project sees both; the root sees only `root` (and `indexes.project` is null). Each fact carries `evidenceLinks` (M12): its `evidence` episode ids resolved to `{ episode, found, workspace, objective, file, line, href }`, where `href` is the web app's URL for the journal entry (or the log file).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ indexes, facts, playbooks, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ indexes, facts, playbooks, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/memory/facts/{name}": {
+      "get": {
+        "summary": "Get one memory fact",
+        "tags": [
+          "Managers"
+        ],
+        "description": "One `memory/facts/<name>.md`: frontmatter, `body`, `history`, `scope` and `evidenceLinks` (M12). Without `scope`, a project fact wins over a root fact of the same name. 400 for a malformed name or scope, 404 when absent, 422 when the file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "description": "`root` or `project`."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "description": "Fact name (kebab-case)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ fact }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ fact }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/runs": {
+      "get": {
+        "summary": "List run records",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Trigger-run records (`runs/YYYY-MM/<id>.yaml`), newest first, paged by month; filter by `trigger` and `status` (running, succeeded, failed, cancelled). These are Managers runs, not the chat History.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "description": "Only months strictly before this `YYYY-MM` (the previous page's `nextBefore`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "description": "Month files per page, 1–24 (default 3)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "trigger",
+            "required": false,
+            "description": "Only runs of this trigger."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "description": "Only runs with this status."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ runs, months, nextBefore, parseErrors? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ runs, months, nextBefore, parseErrors? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/runs/{id}": {
+      "get": {
+        "summary": "Get one run record",
+        "tags": [
+          "Managers"
+        ],
+        "description": "400 for a malformed id (r-YYMMDD-HHMM-xx), 404 when absent, 422 when the file does not parse.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Run id, r-YYMMDD-HHMM-xx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ run }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ run }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/alerts": {
+      "get": {
+        "summary": "List alerts",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The dead-man's switch over this workspace's triggers, computed fresh: `run-failed`, `artifact-missing`, `stale` (no `met` run inside `expect.within`), `schedule-stalled` (nextRunAt over 15 min past) and `run-stuck` (running over 2 h). A JSON ARRAY of `{ id, kind, trigger, severity, message, runId, at }`, errors first; `[]` when nothing is wrong.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The alerts, errors first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The alerts, errors first.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/briefing": {
+      "get": {
+        "summary": "Preview the wake briefing",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The deterministic briefing a wake starts from (the same builder the fire path, the new-chat preload and the `get_briefing` tool use), built fresh with no run id: `{ text, sections: [{ name, chars }], objective }`. `?objective=` briefs on one objective in full; `?trigger=` briefs as a wake of that trigger would (its bound objective, its runs); `?kind=chat` is the new-chat preload. 400 for a malformed objective or kind, 404 for an unknown trigger.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "objective",
+            "required": false,
+            "description": "Objective id to brief on in full."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "trigger",
+            "required": false,
+            "description": "Trigger name to brief as."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "description": "`wake` (default), `chat`, or `report` (M10; with `report`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "report",
+            "required": false,
+            "description": "Report type for `kind=report` (default `status`)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ text, sections, objective }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ text, sections, objective }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/reports": {
+      "get": {
+        "summary": "List report types",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Every EFFECTIVE report type (M10: the built-in `status`, Home's definitions, this workspace's own) plus any `reports/<type>/` directory with no definition: `{ reports: [{ type, defined, enabled, description, schedule, origin, inherited, trigger, current, dates }] }`. `enabled` is whether the schedule is armed here (this workspace's own flag only); `current` is `current.md`'s metadata (no body, with `generated`) or null; `dates` the dated reports on disk, newest first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ reports }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ reports }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/reports/{type}": {
+      "get": {
+        "summary": "Get a report type's current report",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`{ type, current, dates }` with `current` the full `current.md` (frontmatter, title, body, updated) or null when there is none yet. 400 for a malformed type, 404 when the type is neither defined here (M10) nor has a directory.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "description": "Report type (kebab-case), e.g. `status`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ type, current, dates }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ type, current, dates }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/reports/{type}/{date}": {
+      "get": {
+        "summary": "Get one dated report",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`{ report }` for `reports/<type>/<date>.md`. 400 for a malformed type or date, 404 when absent.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "description": "Report type (kebab-case)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "date",
+            "required": true,
+            "description": "`YYYY-MM-DD`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ report }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ report }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/reports/{type}/refresh": {
+      "post": {
+        "summary": "Refresh a report now",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Fires the derived `report-<type>` trigger now, through the one trigger fire path, deliberately IGNORING its `enabled` flag (a manual run is a deliberate act) but never a behaviour gate. 202 `{ ok, type, trigger, runId, sessionId }`; the run finishes asynchronously (poll `managers/runs/:runId`). 400 for a malformed type, 404 for a type not defined here, 409 `behaviour_off` when a behaviour gating the trigger is off, 502 when no chat started, 503 when firing is unavailable.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "type",
+            "required": true,
+            "description": "Report type (kebab-case), e.g. `status`."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "`{ ok, type, trigger, runId, sessionId }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ ok, type, trigger, runId, sessionId }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/wake": {
+      "get": {
+        "summary": "Can an answer wake the manager?",
+        "tags": [
+          "Managers"
+        ],
+        "description": "`{ available, reason }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire this workspace's `wake` trigger — it exists, is enabled, and every behaviour gating it is on. `reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch (M11).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ available, reason }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ available, reason }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/tasks/{id}/answer": {
+      "post": {
+        "summary": "Answer an awaiting-ed task",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With `wake: true` it also fires the project's `wake` trigger when that trigger exists, is enabled and every behaviour gating it is on (M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "`{ choice?, text?, wake? }`."
+              }
+            }
+          },
+          "description": "`{ choice?, text?, wake? }`."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Task id, t-YYMMDD-xxxx."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ task, episode, wake? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ task, episode, wake? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/behaviours": {
+      "get": {
+        "summary": "List the workspace's behaviours",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Every behaviour that applies here — built in, defined by Home (the root) or by this project — merged field by field, with `enabled` from this workspace's own `project.yaml` only (default OFF). Each has `origin` (`builtin|home|project`), `inherited`, `overridden` and `boundTriggers` (`{ name, exists, enabled, type }`). `changedOutsideUi` is true when autonomy changed other than through the PATCH route (the `behaviours-changed-outside-ui` alert). Returns `{ behaviours, changedOutsideUi, changedSince }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ behaviours, changedOutsideUi, changedSince }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ behaviours, changedOutsideUi, changedSince }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/behaviours/{name}": {
+      "patch": {
+        "summary": "Switch a behaviour on or off",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Ed's autonomy switch: `{ enabled: boolean }`. Writes `behaviours.<name>.enabled` into THIS workspace's `project.yaml` (creating a `{ enabled }` entry for an inherited behaviour), re-registers the keeper and trigger agents (so schedules are re-armed or disarmed and tools denied or allowed), records an `#autonomy` episode (`source ed`) in the project log, and commits `project.yaml` with the log at once. No agent tool can do this. 400 for a malformed name or body, 404 for a behaviour not defined here. Returns `{ behaviour, changed, episode? }` (`changed: false` and no episode when it already had that value).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "`{ enabled: boolean }`."
+              }
+            }
+          },
+          "description": "`{ enabled: boolean }`."
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "description": "Behaviour name (kebab-case)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ behaviour, changed, episode? }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ behaviour, changed, episode? }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/behaviours/acknowledge": {
+      "post": {
+        "summary": "Accept an out-of-UI behaviour change",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Records the workspace's CURRENT autonomy as known-good, clearing the `behaviours-changed-outside-ui` alert. Changes nothing else. Returns `{ ok: true }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ ok: true }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ ok: true }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/connections": {
+      "get": {
+        "summary": "List the workspace's MCP connections",
+        "tags": [
+          "Managers"
+        ],
+        "description": "The `mcp:` block of THIS workspace's `project.yaml` (never inherited from Home), resolved against the server's environment. Each connection has `name`, `description`, `transport`, `url` (query and userinfo stripped), `command` (basename), `headerKeys` (names only), `envRefs` (`{ name, where, set }` — variable names and whether each is set, never values), `tools` (the narrowing, or null), `allow` (the exact allowlist patterns the keeper gets), `attached`, `errors` and `warnings`. No value from the environment is ever returned. Returns `{ connections }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ connections }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ connections }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/connections/{name}/probe": {
+      "post": {
+        "summary": "Test an MCP connection",
+        "tags": [
+          "Managers"
+        ],
+        "description": "Connects to the named connection the way an agent would (streamable HTTP or SSE, with its resolved headers), runs `initialize` then `tools/list` with a 10 s timeout, and disconnects. A connection that does not resolve (an unset env var, an inline secret, a reserved name…) is not contacted: `ok: false` with its first resolution error. Errors are sanitised to a short category (`401 Unauthorized`, `ECONNREFUSED`, `timed out after 10s`) with no stack, url or header text. 404 for an unknown connection. Returns `{ name, ok, tools, error, ms }`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "description": "Connection name."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ name, ok, tools, error, ms }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ name, ok, tools, error, ms }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "security": [
@@ -6257,6 +8717,10 @@
     {
       "name": "Triggers",
       "description": "Unified schedule/event/webhook triggers: CRUD, runtime status, run-now."
+    },
+    {
+      "name": "Managers",
+      "description": "Managers domain state per workspace (root and project): objectives with journals, the episodic log, tasks, memory, runs and reports."
     },
     {
       "name": "Chats",

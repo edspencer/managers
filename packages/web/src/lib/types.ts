@@ -2362,3 +2362,34 @@ export interface ConnectionProbeResult {
   error: string | null;
   ms: number;
 }
+
+// --- Managers M13: Home's cross-project Needs you -----------------------------
+
+/** One workspace's part of `GET /api/managers/needs-you`. */
+export interface NeedsYouGroup {
+  /** Workspace key; `""` is Home. */
+  slug: string;
+  name: string;
+  /** Its awaiting-ed tasks (as `…/managers/tasks?status=awaiting-ed`). */
+  needsYou: TaskSummary[];
+  /** Its alerts (as `…/managers/alerts`), errors first. */
+  alerts: ManagersAlert[];
+  status: { generated: string | null; stale: boolean };
+  /** Task files that will not parse (an ask could be hiding in one). */
+  parseErrors: ManagersParseError[];
+}
+
+/** A workspace the collation could not read. */
+export interface NeedsYouError {
+  slug: string;
+  name: string;
+  error: string;
+}
+
+export type NeedsYouEntry = NeedsYouGroup | NeedsYouError;
+
+export interface NeedsYouResponse {
+  generatedAt: string;
+  projects: NeedsYouEntry[];
+  totals: { checked: number; needsYou: number; alerts: number; errors: number; withItems: number };
+}

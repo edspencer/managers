@@ -260,9 +260,10 @@ done" then "Load older" both have something). The one change: the `morning-check
 run of yesterday (`r-…-wk`, the run the `blog-cadence` "Morning wake" journal
 entry names) now carries `sessionId` = the seeded `acme-site:morning` chat, so
 the journal's run link opens a chat. Home has one awaiting-ed task and no
-objectives. No fixture has an ENABLED `wake`, so the answer form's "Wake the
-manager now" switch is disabled with its reason; enable `acme-site`'s `wake` in
-the Triggers tab to exercise the enabled path (its cron is 07:00 UTC).
+objectives. No fixture has an ENABLED `wake` (until M13's `widget-lib` one), so
+the answer form's "Wake the manager now" switch is disabled with its reason;
+enable `acme-site`'s `wake` in the Triggers tab to exercise the enabled path (its
+cron is 07:00 UTC).
 
 ### Home overview, Memory and report history fixture (M12)
 
@@ -285,6 +286,28 @@ Additions only:
 - `empty-project` stays empty: no report ("No status report yet"), no runs ("No
   runs yet — enable a trigger"), no project memory (Shared still lists Home's two
   facts).
+
+### Home "Needs you" fixture (M13)
+
+Additions only:
+- `widget-lib` has a status report **three days old**, so the root Home's Needs you
+  shows "Status report 3d old" on its group (`acme-site`'s is fresh, the control).
+- `widget-lib` has an **enabled** `wake` trigger (cron 03:00 on 1 January, so it
+  never fires by itself) whose prompt records one `#wake` episode on
+  `burn-down-issues`. Answering `widget-lib`'s ask from Home with "Wake the manager
+  now" on therefore fires a real run (fake `claude`) that shows on `widget-lib`'s
+  Home. It is the first enabled `wake` in the rig: the answer form's disabled
+  switch and its reason are now on `acme-site` ("the wake trigger is disabled") and
+  Home ("no wake trigger").
+- With the seed as is, `/` shows three groups — `acme-site` (2 asks, the
+  `stale:publish-check` warning), `widget-lib` (1 ask, 1 unreadable task file,
+  the stale hint) and Home (1 ask) — and "4 asks · 1 alert — 6 projects checked".
+- **Per-project error.** The rig runs as root, so `chmod 000` on a task directory
+  changes nothing (root reads it anyway), and the stores treat ENOENT/ENOTDIR as
+  "no tasks yet". Make a directory unreadable with a self-referencing symlink
+  instead, and remove it afterwards:
+  `mkdir -p <rig>/data/projects/broken-conn/tasks && ln -s open <rig>/data/projects/broken-conn/tasks/open`
+  (ELOOP). `broken-conn`'s group then shows an error row and the others render.
 
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

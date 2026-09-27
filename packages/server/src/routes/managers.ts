@@ -61,7 +61,7 @@
  * reported in `parseErrors` (present only when non-empty).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { isRootKey } from "../project-paths.js";
+import { ROOT_KEY, isRootKey } from "../project-paths.js";
 import { sendProjectError } from "../route-errors.js";
 import type { RouteCtx } from "../route-context.js";
 import { ManagersState } from "../managers/state.js";
@@ -82,6 +82,7 @@ import { workspaceLabel } from "../managers/state-writes.js";
 import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
 import { probeConnection } from "../managers/mcp-probe.js";
 import { EvidenceResolver } from "../managers/evidence-links.js";
+import { collectNeedsYou } from "../managers/needs-you.js";
 import { effectiveTriggersFor, reportTypesFor } from "../managers/effective-triggers.js";
 import { BehaviourOffError } from "../managers/behaviours.js";
 import type { Project } from "../projects.js";
@@ -247,6 +248,75 @@ function objectiveInput(id: string, b: Body): UpdateObjectiveInput {
 
 /** M9.5: behaviour switches are serialised per workspace directory (both mounts share it). */
 const toggleLocks = new WriteQueue();
+
+/**
+ * A workspace's alerts: its triggers (M10: the derived report triggers too),
+ * recent runs and live herdctl schedules. The ONE computation behind
+ * `…/managers/alerts` and Home's Needs you collation (M13).
+ */
+async function workspaceAlerts(ctx: RouteCtx, state: ManagersState, slug: string): Promise<Alert[]> {
+  const { projects } = ctx;
+  const project = await projects.get(slug);
+  return loadAlerts({
+    state,
+    project: { ...project, triggers: await effectiveTriggersFor(projects, project) },
+    schedules: () => ctx.herdctl.listAgentSchedules(project),
+    behaviours: await behavioursFor(projects, project),
+  });
+}
+
+/**
+ * Managers instance-level routes (M13) — registered ONCE, outside the workspace
+ * mount, because they look across every workspace:
+ *
+ *   GET /api/managers/needs-you     Home's "Needs you": every workspace's awaiting-ed
+ *                                   tasks, alerts and status-report age (?all=1 keeps
+ *                                   quiet workspaces); a workspace that cannot be read
+ *                                   is `{ slug, name, error }`, never a failed response.
+ */
+export function registerManagerInstanceRoutes(app: FastifyInstance, ctx: RouteCtx): void {
+  const state = ctx.managers ?? new ManagersState(ctx.cfg.projectsRoot);
+  app.get<{ Querystring: Q }>(
+    "/api/managers/needs-you",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Everything waiting on Ed, across every workspace",
+        description:
+          "Home's cross-project collation, computed on the server from the same caches the per-workspace routes " +
+          "use (no model involved): `{ generatedAt, projects: [{ slug, name, needsYou, alerts, status: { " +
+          "generated, stale }, parseErrors }], totals: { checked, needsYou, alerts, errors, withItems } }`. " +
+          "`needsYou` is the workspace's awaiting-ed tasks (as `…/managers/tasks?status=awaiting-ed`), `alerts` its " +
+          "alerts (as `…/managers/alerts`), `status.stale` whether its status report is over 48 h old. Home (the " +
+          "root workspace) has `slug: \"\"`. Quiet workspaces (nothing awaiting, no alerts, no unreadable task " +
+          "files) are left out unless `all=1`; `totals.checked` counts them anyway. A workspace that cannot be " +
+          "read is listed as `{ slug, name, error }` instead of failing the response. Order: workspaces with asks " +
+          "(longest-waiting first), then unreadable ones, then alert-only ones (worst severity first), then quiet " +
+          "ones; ties by name.",
+        querystring: {
+          type: "object",
+          properties: { all: { type: "string", description: "`1` (or `true`) to include quiet workspaces." } },
+        },
+        response: ok200("`{ generatedAt, projects, totals }`."),
+      },
+    },
+    async (req, reply) => {
+      const all = req.query.all;
+      if (all !== undefined && !["1", "0", "true", "false"].includes(all)) {
+        return invalid(reply, `all must be 1 or 0, got ${JSON.stringify(all)}`);
+      }
+      const { projects } = ctx;
+      const [root, list] = await Promise.all([projects.get(ROOT_KEY), projects.list()]);
+      const workspaces = [root, ...list].map((p) => ({ slug: p.slug, name: p.name, dir: p.dir }));
+      return collectNeedsYou({
+        state,
+        workspaces,
+        alertsOf: (slug) => workspaceAlerts(ctx, state, slug),
+        all: all === "1" || all === "true",
+      });
+    },
+  );
+}
 
 export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx): void {
   const { projects } = ctx;
@@ -611,17 +681,7 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       }),
   );
 
-  /** A workspace's alerts: its triggers, recent runs and live herdctl schedules. */
-  async function alertsFor(slug: string): Promise<Alert[]> {
-    const project = await projects.get(slug);
-    return loadAlerts({
-      state,
-      // M10: alerts watch the derived report triggers too.
-      project: { ...project, triggers: await effectiveTriggersFor(projects, project) },
-      schedules: () => ctx.herdctl.listAgentSchedules(project),
-      behaviours: await behavioursFor(projects, project),
-    });
-  }
+  const alertsFor = (slug: string) => workspaceAlerts(ctx, state, slug);
 
   app.get<{ Params: { slug: string } }>(
     "/managers/alerts",

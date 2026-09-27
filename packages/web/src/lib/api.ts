@@ -19,6 +19,7 @@ import {
   type DirListing,
   type DiscoverResult,
   type DiscoverSessions,
+  type NeedsYouResponse,
   type GitCommitResult,
   type GitInfo,
   type GitProjectStatus,
@@ -1303,5 +1304,10 @@ export const api = {
       { method: "PATCH", body: JSON.stringify(patch) },
     );
     return objective;
+  },
+
+  /** Managers M13: everything waiting on Ed across every workspace (Home's Needs you). */
+  async managersNeedsYou(opts: { all?: boolean } = {}): Promise<NeedsYouResponse> {
+    return req<NeedsYouResponse>(`/api/managers/needs-you${opts.all ? "?all=1" : ""}`);
   },
 };

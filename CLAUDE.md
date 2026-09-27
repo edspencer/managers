@@ -247,6 +247,23 @@ What changed from Paddock, and what did not:
   viewing project; `href` = objective page `#ep-…` or the log file in Files; unresolved
   ids kept with `found: false`). Objective Lessons' `[[fact]]` now link to Memory.
   Rendered Markdown's internal links navigate in-app via `useInternalLinks`.
+- **Home's "Needs you" (M13).** The ROOT's Home opens on `NeedsYouPanel` (the
+  `managers` slot at the root), fed by the one instance-level Managers route, `GET
+  /api/managers/needs-you` (`registerManagerInstanceRoutes`, outside the workspace
+  mount; `managers/needs-you.ts` `collectNeedsYou`): for Home plus every project, its
+  awaiting-ed tasks, its alerts (the SAME `workspaceAlerts` the `…/alerts` route
+  uses), its status report's age (`stale` past 48 h) and unreadable task files. A
+  workspace that throws becomes `{slug, name, error}` (paths made relative), never a
+  failed response. Quiet workspaces are dropped unless `?all=1`; `totals.checked`
+  counts them. Order: asks (longest-waiting first) → unreadable → alert-only (worst
+  severity first) → quiet, ties by name. The panel groups by workspace (header →
+  that Home, counts, "Status report 3d old"), answers with `TaskAnswer` in place
+  (per-workspace `…/wake`), alert rows open the project's Home, and it re-reads
+  quietly after an answer. Note the stores read ENOENT **and ENOTDIR** as "none yet",
+  so a corrupt task dir only surfaces as an error when reading it really fails
+  (EACCES for a non-root server, ELOOP, …). The full v1 loop is
+  `test/e2e/journey-managers-loop.spec.ts`, which runs on the GIT e2e server
+  (`chromium-git`; its UI author is "Ed" and its autocommit debounce 500 ms).
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

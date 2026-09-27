@@ -36,7 +36,7 @@ import { registerMcpRoutes } from "./routes/mcp.js";
 import { registerDiscoverRoutes } from "./routes/discover.js";
 import { registerTranscriptsRoutes } from "./routes/transcripts.js";
 import { mountWorkspaceRoutes } from "./routes/workspace-mount.js";
-import { registerManagerWorkspaceRoutes } from "./routes/managers.js";
+import { registerManagerInstanceRoutes, registerManagerWorkspaceRoutes } from "./routes/managers.js";
 
 // Re-exported for callers/tests that reference the dep bag or the byte helper by
 // name; the definitions now live in the extracted modules (issue #403).
@@ -51,6 +51,8 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   registerProjectRoutes(app, ctx);
   registerDiscoverRoutes(app, ctx);
   registerTranscriptsRoutes(app, ctx);
+  // Managers M13: instance-level, looks across every workspace (Home's Needs you).
+  registerManagerInstanceRoutes(app, ctx);
 
   // The workspace-scoped half of every group, mounted twice: `/api/root` (the
   // root workspace, key `""`) and `/api/projects/:slug` (a project). Same

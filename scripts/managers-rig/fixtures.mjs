@@ -257,6 +257,11 @@ function widgetDomain(clock) {
       options: ["merge", "skip"],
       github: ["widget-lib#88"],
     }),
+    // M13: a status report three days old, so Home's Needs you shows its
+    // "Status report 3d old" hint (acme-site's is fresh).
+    renderReportsStatus(clock, [
+      { daysAgo: 3, body: "## In flight\n- Burn-down: 56 open issues; the renovate bump waits on Ed.\n\n## Notes\n- Date-picker fixes are batched for 2.4.1." },
+    ]),
     // A deliberately MALFORMED task (unknown status): the parseError fixture. The
     // list must skip it and report it, never fail.
     {
@@ -482,6 +487,18 @@ export const PROJECTS = [
           prompt: "Triage external PRs. [[TOOL]]",
           session: "new",
           behaviour: "triage-external-prs",
+        },
+        enabled: true,
+      },
+      // M13: an ENABLED wake (its cron, 03:00 on 1 January, never fires during QA),
+      // so answering widget-lib's ask with "Wake the manager now" from Home's Needs
+      // you really fires a run. Its prompt records one episode on the objective.
+      wake: {
+        trigger: { type: "schedule", cron: "0 3 1 1 *" },
+        run: {
+          prompt:
+            'Wake: pick up Ed\'s answers. [[MCP managers.record_episode {"text":"Woke on Ed\'s answer and picked up the renovate decision.","importance":4,"tags":["wake"],"objective":"burn-down-issues"}]]',
+          session: "new",
         },
         enabled: true,
       },

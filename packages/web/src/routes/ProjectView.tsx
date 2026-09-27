@@ -27,6 +27,7 @@ import { TasksPane } from "../components/managers/TasksPane";
 import { MemoryPane } from "../components/managers/MemoryPane";
 import { ReportHistory } from "../components/managers/ReportHistory";
 import { ManagersOverview } from "../components/managers/ManagersOverview";
+import { NeedsYouPanel } from "../components/managers/NeedsYouPanel";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DeleteProjectDialog } from "../components/DeleteProjectDialog";
 import { ForkChatModal } from "../components/ForkChatModal";
@@ -1651,9 +1652,11 @@ export function ProjectView({
               // which is the root's slug and is falsy.
               root={root}
               // Managers M12: a PROJECT's Home opens on its manager — the status
-              // report with live Needs you and Alerts, objectives, runs. Home's
-              // own collation is M13.
-              managers={root ? undefined : <ManagersOverview key={`mo:${slug}`} slug={slug} base={base} />}
+              // report with live Needs you and Alerts, objectives, runs. M13: the
+              // ROOT's Home opens on "Needs you", every workspace's asks and alerts.
+              managers={
+                root ? <NeedsYouPanel key="needs-you" /> : <ManagersOverview key={`mo:${slug}`} slug={slug} base={base} />
+              }
               // Empty = no projects and no root chats. `null` until known.
               instanceEmpty={root ? instanceEmpty : false}
               onInstanceRecheck={onInstanceRecheck}
