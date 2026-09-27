@@ -404,6 +404,18 @@ export const PROJECTS = [
           instructions: "Draft only; never publish.",
         },
       },
+      // M9: this project's Paddock connection — the rig's fake Paddock /mcp
+      // (serve.mjs), authenticated by MANAGERS_MCP_PADDOCK_WIDGET_LIB (set by rigEnv
+      // to the synthetic "Bearer rig-token"). The url is an env ref too, because
+      // the fake's port is only known when serve.mjs starts it.
+      mcp: {
+        paddock: {
+          url: "env:MANAGERS_RIG_PADDOCK_URL",
+          headers: { Authorization: "env:MANAGERS_MCP_PADDOCK_WIDGET_LIB" },
+          tools: ["list_projects", "list_chats", "create_chat", "read_chat"],
+          description: "This project's Paddock deployment (the rig's fake)",
+        },
+      },
     },
     // M8: an ENABLED trigger bound to Home's triage-external-prs, which is OFF here —
     // so it is not armed and "Run now" is refused until Ed switches it on. The cron
@@ -417,6 +429,18 @@ export const PROJECTS = [
           behaviour: "triage-external-prs",
         },
         enabled: true,
+      },
+      // M9: Run-now QA of a real call on the paddock connection. Disabled (it never
+      // fires on its own); unscoped, so it runs as the keeper with the connection.
+      // create_chat is ALSO a tool of Home's triage-external-prs behaviour, which is
+      // OFF here — so it is denied until Ed switches that behaviour on.
+      "paddock-dispatch": {
+        trigger: { type: "schedule", cron: "0 4 1 1 *" },
+        run: {
+          prompt: 'Dispatch. [[MCP paddock.list_projects {}]] [[MCP paddock.create_chat {"project":"demo","prompt":"triage #12"}]]',
+          session: "new",
+        },
+        enabled: false,
       },
     },
     files: {
@@ -459,6 +483,42 @@ export const PROJECTS = [
     status: "idea",
     startedDaysAgo: 2,
     summary: "A project with nothing in it yet (the empty-state fixture).",
+    chats: [],
+  },
+  {
+    // M9 unhappy path: a Paddock connection whose token variable is NOT set.
+    slug: "broken-conn",
+    name: "Broken Conn",
+    status: "active",
+    startedDaysAgo: 5,
+    summary: "A project whose Paddock connection is missing its token (M9 fixture).",
+    yaml: {
+      mcp: {
+        paddock: {
+          url: "env:MANAGERS_RIG_PADDOCK_URL",
+          headers: { Authorization: "env:MANAGERS_MCP_PADDOCK_BROKEN_CONN" },
+          description: "Paddock, but the token was never set",
+        },
+      },
+    },
+    chats: [],
+  },
+  {
+    // M9 unhappy path: a Paddock connection with the WRONG (synthetic) token.
+    slug: "wrong-token",
+    name: "Wrong Token",
+    status: "active",
+    startedDaysAgo: 4,
+    summary: "A project whose Paddock connection has a token the server rejects (M9 fixture).",
+    yaml: {
+      mcp: {
+        paddock: {
+          url: "env:MANAGERS_RIG_PADDOCK_URL",
+          headers: { Authorization: "env:MANAGERS_MCP_PADDOCK_WRONG_TOKEN" },
+          description: "Paddock, with a stale token",
+        },
+      },
+    },
     chats: [],
   },
 ];

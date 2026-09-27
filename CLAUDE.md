@@ -139,6 +139,29 @@ What changed from Paddock, and what did not:
   (cleared by a switch or `POST …/behaviours/acknowledge`). HerdctlService caches
   Home's definitions for the sync config builders (`setRootProvider`); the fire path
   always re-reads, so a stale arming can only be refused, never widened.
+- **Per-project MCP connections (M9, `managers/project-mcp.ts`).** `project.yaml`
+  `mcp:` maps a connection name to the instance `mcpServers:` declaration shape
+  (`url`/`type`/`headers`/`command`/`args`/`env`) plus `tools:` (bare tool names;
+  absent = every tool) and `description`. `resolveProjectMcp(project, env)` reuses
+  `resolveDeclaredMcpServers` but an inline secret-ish `headers`/`env` value or a url
+  with a query/userinfo is a HARD error (dropped), `managers`/`managers_files`/
+  `playwright` are refused, an unset `env:VAR` drops the connection, and `tools:`
+  becomes exact `mcp__<name>__<tool>` allowlist patterns. Never cascaded from the
+  root; `normalize` carries the block verbatim so a broken entry survives a save.
+  `HerdctlService.projectMcpOf` resolves it (logging secret-free notices on
+  registration); `buildAgentConfig` merges the servers over the instance/host ones
+  and widens `allowed_tools` by the exact patterns; `buildTriggerConfig` gives a
+  SCOPED trigger a connection only when its own `run.tools` names it
+  (`triggerConnections` swaps `mcp__<name>__*` for what the connection allows).
+  Off-behaviour tools stay denied on top. REST: `GET …/managers/connections`
+  (redacted url, header KEYS, env var names + set?, allowlist, errors) and `POST
+  …/connections/:name/probe` (`managers/mcp-probe.ts`: SDK client, 10 s,
+  `initialize` + `tools/list`, errors sanitised to e.g. `401 Unauthorized`). The
+  briefing's Connections section lists names, descriptions and callable tools; a
+  `preSerialization` hook redacts inline `mcp:` values from every project DTO.
+  Settings → Connections (`ConnectionsSection.tsx`). The fake `claude` now
+  permission-checks MCP calls against `--allowedTools`/`--disallowedTools`, and the
+  rig runs `fake-paddock-mcp.mjs` beside the server.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

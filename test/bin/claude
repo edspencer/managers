@@ -151,6 +151,12 @@
  *                     default 15000), a tool reporting `isError`, or malformed args all
  *                     produce a `tool_result` with `is_error: true` — and the turn
  *                     CONTINUES to its normal reply and a success result.
+ *                     Managers M9: the call is PERMISSION-CHECKED first, as the real
+ *                     CLI does under `-p`: a tool matching a `--disallowedTools` entry
+ *                     (exact, or an `mcp__<server>__*` / `mcp__<server>` prefix) is
+ *                     refused, and when `--allowedTools` is present a tool matching
+ *                     none of its `mcp__…` entries is refused too — both as an
+ *                     `is_error` result naming the tool, with no connection made.
  * Sweeper coverage: when the prompt looks like the paddock sweeper's curation
  * prompt (contains the literal "<<<OVERVIEW>>>" marker request), the fake emits a
  * marker-shaped reply (<<<OVERVIEW>>> … <<<CHANGELOG>>> … <<<END>>>) so
@@ -238,6 +244,40 @@ function parseMcpConfig(raw) {
   } catch {
     return {};
   }
+}
+
+/** Split a `--allowedTools` / `--disallowedTools` value (comma or whitespace separated). */
+function toolList(raw) {
+  if (!raw) return null;
+  return String(raw)
+    .split(/[,\s]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+/** Does a permission entry match an `mcp__<server>__<tool>` name? (MCP entries only.) */
+function mcpEntryMatches(entry, name) {
+  if (!entry.startsWith("mcp__")) return false;
+  if (entry === name) return true;
+  if (entry.endsWith("__*")) return name.startsWith(entry.slice(0, -1));
+  // A bare `mcp__<server>` names every tool of that server.
+  return !entry.slice(5).includes("__") && name.startsWith(`${entry}__`);
+}
+
+/**
+ * Managers M9: the CLI's permission check for one MCP tool. Returns a refusal
+ * message, or null when the call may proceed.
+ */
+function mcpPermissionError(name, flags) {
+  const denied = toolList(flags.disallowedTools) ?? [];
+  if (denied.some((e) => mcpEntryMatches(e, name))) {
+    return `Permission to use ${name} has been denied (--disallowedTools).`;
+  }
+  const allowed = toolList(flags.allowedTools);
+  if (allowed && !allowed.some((e) => mcpEntryMatches(e, name))) {
+    return `Claude requested permissions to use ${name}, but it is not in --allowedTools.`;
+  }
+  return null;
 }
 
 /**
@@ -720,7 +760,9 @@ async function main() {
         cwd,
         sessionId,
       });
-      const { text, isError } = await callMcpTool(servers, d);
+      // An unknown server keeps its own "not configured" error; a configured one is permission-checked.
+      const refusal = d.argsError || !servers[d.server] ? null : mcpPermissionError(`mcp__${d.server}__${d.tool}`, flags);
+      const { text, isError } = refusal ? { text: refusal, isError: true } : await callMcpTool(servers, d);
       append({
         parentUuid: null,
         isSidechain: false,

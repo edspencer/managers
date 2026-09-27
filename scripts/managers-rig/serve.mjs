@@ -34,6 +34,15 @@
  *                         the --mcp-config, and `paddockEnvCount` (a COUNT of
  *                         inherited PADDOCK_* vars — never names or values).
  *   HOST=127.0.0.1        forced, whatever pm or the caller exported.
+ *
+ * ── The fake Paddock /mcp (M9) ──────────────────────────────────────────────
+ * `fake-paddock-mcp.mjs` is spawned beside the server on PORT+1 (a free port if
+ * that is taken) and killed with it. The rig's `mcp:` connections reach it via
+ *   MANAGERS_RIG_PADDOCK_URL=http://127.0.0.1:<port>/mcp
+ * and authenticate with SYNTHETIC tokens set here (never real ones):
+ *   MANAGERS_MCP_PADDOCK_WIDGET_LIB="Bearer rig-token"     the right one
+ *   MANAGERS_MCP_PADDOCK_WRONG_TOKEN="Bearer wrong-secret" the wrong-token fixture
+ * `broken-conn` references MANAGERS_MCP_PADDOCK_BROKEN_CONN, which is left UNSET.
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -64,7 +73,7 @@ export function isScrubbed(key) {
  * it, checking the server's environ is vacuous: this function already stripped
  * everything. Never pass real values through it.
  */
-export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv }) {
+export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl }) {
   const env = {};
   for (const [k, v] of Object.entries(process.env)) if (!isScrubbed(k)) env[k] = v;
 
@@ -80,6 +89,10 @@ export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv
   // The sweeper would rewrite seeded OVERVIEW.md/CHANGELOG.md mid-QA.
   env.MANAGERS_SWEEP_MIN_INTERVAL_MS = "999999999";
   env.LOG_LEVEL = env.LOG_LEVEL || "warn";
+  // M9: the fake Paddock /mcp and the synthetic connection tokens (see the header).
+  if (paddockMcpUrl) env.MANAGERS_RIG_PADDOCK_URL = paddockMcpUrl;
+  env.MANAGERS_MCP_PADDOCK_WIDGET_LIB = "Bearer rig-token";
+  env.MANAGERS_MCP_PADDOCK_WRONG_TOKEN = "Bearer wrong-secret";
   if (fakeScript) env.MANAGERS_FAKE_SCRIPT = fakeScript;
   if (invocationLog) env.MANAGERS_FAKE_INVOCATION_LOG = invocationLog;
   if (leakEnv) Object.assign(env, leakEnv);
@@ -110,11 +123,55 @@ async function assertPortFree(port) {
 }
 
 /**
+ * Spawn `fake-paddock-mcp.mjs` on `port` (0 = any free port) and resolve with its
+ * url once it prints it. Rejects if it exits first (e.g. the port is taken).
+ */
+function spawnFakePaddock(port) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(HERE, "fake-paddock-mcp.mjs"), "--port", String(port)], {
+      env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: process.env.HOME ?? "/nonexistent" },
+      cwd: REPO_ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "";
+    let err = "";
+    const timer = setTimeout(() => {
+      try {
+        child.kill("SIGTERM");
+      } catch {}
+      reject(new Error("fake Paddock MCP did not start within 15s"));
+    }, 15_000);
+    child.stdout.on("data", (b) => {
+      out += b.toString("utf8");
+      const m = /FAKE_PADDOCK_MCP_URL=(\S+)/.exec(out);
+      if (m) {
+        clearTimeout(timer);
+        resolve({ child, url: m[1], stop: () => { try { child.kill("SIGTERM"); } catch {} } });
+      }
+    });
+    child.stderr.on("data", (b) => (err = (err + b.toString("utf8")).slice(-2000)));
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`fake Paddock MCP exited (code ${code}) ${err.trim().split("\n").pop() ?? ""}`));
+    });
+  });
+}
+
+/** The fake Paddock /mcp on PORT+1, or on any free port when that one is taken. */
+export async function startFakePaddock(serverPort) {
+  try {
+    return await spawnFakePaddock(Number(serverPort) + 1);
+  } catch {
+    return spawnFakePaddock(0);
+  }
+}
+
+/**
  * Spawn the built server and resolve once /api/health answers. Server output goes
  * to `logFile` and, when `echo` is set, to our own stdout/stderr too (so `pm logs`
  * shows it).
  */
-export async function startServer({ dataDir, port, home, fakeScript, invocationLog, leakEnv, logFile, echo = false }) {
+export async function startServer({ dataDir, port, home, fakeScript, invocationLog, leakEnv, logFile, echo = false, paddockMcpUrl }) {
   const entry = path.join(REPO_ROOT, "packages", "server", "dist", "index.js");
   if (!fs.existsSync(entry)) {
     throw new Error(`Server build missing at ${entry}\nRun:  scripts/clean-env.sh npm run build`);
@@ -123,7 +180,7 @@ export async function startServer({ dataDir, port, home, fakeScript, invocationL
 
   const log = logFile ? fs.createWriteStream(logFile, { flags: "w" }) : null;
   const child = spawn(process.execPath, [entry], {
-    env: rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv }),
+    env: rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl }),
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });
@@ -190,8 +247,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const fakeScript = arg("fake-script", path.join(rigDir, "fake-script.json"));
 
   let server;
+  let fakePaddock;
   try {
+    fakePaddock = await startFakePaddock(port);
+    console.log(`Fake Paddock MCP up: ${fakePaddock.url}`);
     server = await startServer({
+      paddockMcpUrl: fakePaddock.url,
       dataDir,
       port,
       home,
@@ -202,17 +263,23 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     });
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
+    fakePaddock?.stop();
     process.exit(1);
   }
+  const stopAll = () => {
+    server.stop();
+    fakePaddock.stop();
+  };
   // Take the child down with us, and go down with it: an orphaned server keeps the
   // port and answers the next run's health check with stale data.
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(sig, () => {
-      server.stop();
+      stopAll();
       process.exit(0);
     });
   }
-  process.on("exit", server.stop);
+  process.on("exit", stopAll);
+  fakePaddock.child.on("exit", (code) => console.error(`Fake Paddock MCP exited (code ${code})`));
   server.child.on("exit", (code, signal) => {
     console.error(`Managers rig server exited (code ${code}, signal ${signal})`);
     process.exit(code ?? 1);

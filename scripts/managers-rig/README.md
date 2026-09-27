@@ -14,9 +14,10 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
 
 | File | Does |
 | --- | --- |
-| `fixtures.mjs` | The synthetic world: Home (the root workspace) plus `acme-site`, `widget-lib` and `empty-project`, with their files, triggers and chats. **Later milestones add fixtures here, as data.** Never remove one an earlier milestone's QA relies on. |
+| `fixtures.mjs` | The synthetic world: Home (the root workspace) plus `acme-site`, `widget-lib`, `empty-project` and (M9) `broken-conn`, `wrong-token`, with their files, triggers and chats. **Later milestones add fixtures here, as data.** Never remove one an earlier milestone's QA relies on. |
 | `seed.mjs` | `--out <dir> [--now <ISO>]`. Writes `<dir>/data` (a complete `MANAGERS_DATA_DIR`: the `.managers-data` marker, a projects root `git init`ed with one clean commit, chats, job records, read state, provenance), `<dir>/home`, `fake-script.json` and `manifest.json`. Times are relative to the wall clock; `--now` is only for screenshot determinism. |
 | `serve.mjs` | `--data <dir>/data --port <N> [--home <dir>/home]`. Boots `packages/server/dist` with `rigEnv` (below) and forwards SIGTERM/SIGINT/SIGHUP to it. Importable: `startServer`, `rigEnv`. |
+| `fake-paddock-mcp.mjs` | M9. A stand-in Paddock `/mcp` (streamable HTTP, bearer `rig-token`, canned tools). `serve.mjs` spawns it on PORT+1; tests import `startFakePaddockMcp`. See "Connections fixture". |
 | `leak-check.mjs` | `--out <scratch> [--port <N>]`. The isolation proof; see below. |
 | `lib/transcript.mjs` | Builders for Claude Code transcript lines (forked from the demo rig). |
 | `lib/domain.mjs` | Renderers for Managers domain state (objectives + journals, tasks, facts, `MEMORY.md`, runs, status reports) from relative-time data, in the exact §4 on-disk shapes. |
@@ -41,6 +42,10 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
   seeded `OVERVIEW.md`/`CHANGELOG.md` (since M3 the sweeper never touches
   `CLAUDE.md`). A project created in QA has no watermark, so IT is swept after its
   first turn — which is how M3's QA checks curation;
+- M9: `MANAGERS_RIG_PADDOCK_URL` (the fake Paddock's url) and the synthetic
+  connection tokens `MANAGERS_MCP_PADDOCK_WIDGET_LIB="Bearer rig-token"` and
+  `MANAGERS_MCP_PADDOCK_WRONG_TOKEN="Bearer wrong-secret"`
+  (`MANAGERS_MCP_PADDOCK_BROKEN_CONN` stays unset on purpose);
 - `MANAGERS_FAKE_SCRIPT=<rig>/fake-script.json`, and
   `MANAGERS_FAKE_INVOCATION_LOG=<rig>/invocations.jsonl` (one line per fake-claude
   spawn, including its `--mcp-config`, its `--setting-sources` (`settingSources`,
@@ -203,6 +208,30 @@ behaviours at `/projects/widget-lib/settings` → Behaviours (or `PATCH
 `consolidate-memory` (off). `empty-project` defines none of its own, so its card shows
 "No behaviours defined in this project" above the inherited rows. A hand edit of a
 `project.yaml` flag raises `behaviours-changed-outside-ui` in that workspace's alerts.
+
+### Connections fixture (M9)
+
+`serve.mjs` also starts **`fake-paddock-mcp.mjs`**, a streamable-HTTP MCP server on
+**PORT+1** (any free port when that one is taken; `pm logs managers-qa` prints
+`Fake Paddock MCP up: <url>`). It answers only `Authorization: Bearer rig-token`
+(401 otherwise) and serves canned `list_projects`, `list_chats`, `create_chat` and
+`read_chat`. It is killed with the server. `rigEnv` points the connections at it with
+`MANAGERS_RIG_PADDOCK_URL` and sets two SYNTHETIC tokens:
+
+| Workspace | `mcp.paddock` | Expect |
+| --- | --- | --- |
+| `widget-lib` | `Authorization: env:MANAGERS_MCP_PADDOCK_WIDGET_LIB` (`Bearer rig-token`), narrowed to the four tools | "env … set"; Test connection lists the four tools |
+| `broken-conn` | `env:MANAGERS_MCP_PADDOCK_BROKEN_CONN`, which is **unset** | "missing" chip, Not attached, Test connection names the variable |
+| `wrong-token` | `env:MANAGERS_MCP_PADDOCK_WRONG_TOKEN` (`Bearer wrong-secret`) | Test connection: `401 Unauthorized` |
+| `empty-project` | none | the Connections empty state with the YAML snippet |
+
+`widget-lib` also has a **disabled** `paddock-dispatch` trigger whose body calls
+`[[MCP paddock.list_projects {}]]` then `[[MCP paddock.create_chat
+{"project":"demo","prompt":"triage #12"}]]`. `create_chat` is a tool of Home's
+`triage-external-prs`, which is OFF, so on a fresh boot that call is **denied** (the
+fake `claude` enforces `--disallowedTools` / `--allowedTools` for MCP calls since M9)
+and `list_projects` succeeds; switch the behaviour on and Run now again to see a
+canned `fake-chat-new-0001`. The run record's `mcpCalls` counts both attempts.
 
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

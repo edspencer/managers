@@ -13,7 +13,10 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packagesDir = path.resolve(here, "../../..");
 const ALLOWED = new Set([path.join(packagesDir, "server", "src", "env-scrub.ts")]);
-const PATTERN = /PADDOCK_[A-Z]/;
+// The PREFIX only: `PADDOCK_` not preceded by an identifier character. Managers M9's
+// per-project token convention `MANAGERS_MCP_<CONN>_<PROJECT>` spells
+// `MANAGERS_MCP_PADDOCK_…` for the `paddock` connection, which is a Managers var.
+const PATTERN = /(?<![A-Za-z0-9_])PADDOCK_[A-Z]/;
 
 function walk(dir: string, out: string[]): void {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -48,5 +51,8 @@ describe("no PADDOCK_* in packages/*/src", () => {
   it("the guard pattern would catch a regression (control)", () => {
     expect(PATTERN.test("process.env." + "PADDOCK_" + "DATA_DIR")).toBe(true);
     expect(PATTERN.test("process.env.MANAGERS_DATA_DIR")).toBe(false);
+    expect(PATTERN.test('env["' + "PADDOCK_" + 'AUTH_MODE"]')).toBe(true);
+    expect(PATTERN.test("`" + "PADDOCK_" + "X`")).toBe(true);
+    expect(PATTERN.test("env:MANAGERS_MCP_PADDOCK_WIDGET_LIB")).toBe(false);
   });
 });
