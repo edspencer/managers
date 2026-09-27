@@ -3,7 +3,7 @@
  *
  *   node scripts/managers-rig/serve.mjs --data <rig>/data --port <N> [--home <rig>/home]
  *
- * Forked from scripts/demo-gif/serve.mjs (`demoEnv` → `rigEnv`). Used by the pm
+ * Forked from scripts/demo-gif/serve.mjs (`demoEnv` → `rigEnv`). Used by the rig
  * wrapper (see README.md), by leak-check.mjs, and importable by any QA script.
  *
  * ── Why the environment is built from a whitelist ───────────────────────────
@@ -35,7 +35,7 @@
  *                         inherited PADDOCK_* vars — never names or values), and
  *                         `mcpSecretEnvCount` (M9.5: inherited MANAGERS_MCP_* vars,
  *                         which the server's boot sequester makes 0).
- *   HOST=127.0.0.1        forced, whatever pm or the caller exported — unless
+ *   HOST=127.0.0.1        forced, whatever the caller exported — unless
  *                         `--public` is passed (0.0.0.0 + MANAGERS_DANGEROUSLY_ALLOW_OPEN),
  *                         for a LAN-viewable demo of the synthetic fixtures only.
  *
@@ -179,7 +179,7 @@ export async function startFakePaddock(serverPort) {
 
 /**
  * Spawn the built server and resolve once /api/health answers. Server output goes
- * to `logFile` and, when `echo` is set, to our own stdout/stderr too (so `pm logs`
+ * to `logFile` and, when `echo` is set, to our own stdout/stderr too (so a process manager's logs
  * shows it).
  */
 export async function startServer({ dataDir, port, home, fakeScript, invocationLog, leakEnv, logFile, echo = false, paddockMcpUrl, publicBind = false }) {
@@ -239,7 +239,7 @@ export async function startServer({ dataDir, port, home, fakeScript, invocationL
   };
 }
 
-// Standalone: the pm wrapper's entry point.
+// Standalone: the rig wrapper's entry point.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const arg = (name, dflt) => {
     const i = process.argv.indexOf(`--${name}`);

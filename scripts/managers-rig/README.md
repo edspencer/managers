@@ -7,8 +7,9 @@ credentials, and an isolated `HOME`. Nothing it runs calls Anthropic.
 Forked from `scripts/demo-gif/` (Paddock's README-GIF rig). Its README's
 "Things that will bite you" section still applies and is worth reading once.
 
-**Never point any of this at `/data/projects`, `/data/.claude`, `/data/claude-home`
-or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it.
+**Never point any of this at a real Managers or Paddock data dir, or at a real
+Claude home (`~/.claude`).** `seed.mjs` refuses a few known production paths, but
+don't rely on it.
 
 ## The pieces
 
@@ -53,43 +54,38 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
   spawn, including its `--mcp-config`, its `--setting-sources` (`settingSources`,
   M3) and `paddockEnvCount`, a count and never names).
 
-Server output goes to `<rig>/server.log` and to `pm logs`.
+Server output goes to `<rig>/server.log` and to stdout.
 
-## Running it under pm (`managers-qa`)
+## Running it
 
-The wrapper lives at `/data/paddock-servers/managers-qa/run.sh`, outside the
-repo, and re-seeds from scratch on every start:
+Build first (`scripts/clean-env.sh npm run build`; the rig serves `dist/`), then
+seed a scratch dir and serve it. A wrapper like this re-seeds from scratch on
+every start; keep it and the rig state **outside** the repo:
 
 ```bash
 #!/usr/bin/env bash
-# Credential-free Managers QA rig. NEVER point at /data/projects or /data/.claude.
+# Credential-free Managers QA rig. Never point RIG at real data.
 set -euo pipefail
-REPO=/data/projects/clones/managers
-RIG=/data/paddock-servers/managers-qa/state
-: "${PORT:?pm must export PORT}"
+REPO=/path/to/managers          # this checkout
+RIG=/path/to/scratch/managers-qa # throwaway; wiped on every start
+PORT="${PORT:-7300}"
 NODE_BIN="$(dirname "$(command -v node)")"
 rm -rf "$RIG" && mkdir -p "$RIG"
 env -u NODE_ENV node "$REPO/scripts/managers-rig/seed.mjs" --out "$RIG"
-# exec: serve.mjs becomes pm's child and already forwards SIGTERM/SIGINT/SIGHUP to the server.
+# exec: serve.mjs forwards SIGTERM/SIGINT/SIGHUP to the server.
 exec env -i PATH="$NODE_BIN:/usr/local/bin:/usr/bin:/bin" HOME="$RIG/home" \
   node "$REPO/scripts/managers-rig/serve.mjs" --data "$RIG/data" --port "$PORT" --home "$RIG/home"
 ```
 
-| | |
-| --- | --- |
-| Build first | `scripts/clean-env.sh npm run build` (the rig serves `dist/`) |
-| Start | `pm start managers-qa --cwd /data/projects/clones/managers -- /data/paddock-servers/managers-qa/run.sh` |
-| Port | `pm status managers-qa` (or `--json`); drive `http://127.0.0.1:<port>` |
-| After a rebuild | `pm stop managers-qa && pm start managers-qa` — `pm restart` can lose `PORT` |
-| Logs | `pm logs managers-qa --lines 200`, or `/data/paddock-servers/managers-qa/state/server.log` |
-| Finish | `pm stop managers-qa && pm rm managers-qa` |
+Run it directly or under any process manager, then open `http://127.0.0.1:<port>`.
+`HOST` is `127.0.0.1` by default, so the rig is not reachable from other machines
+(the opt-in `--public` flag on `serve.mjs` binds all interfaces for a LAN demo
+of the synthetic fixtures; it is still unauthenticated). Logs are in
+`$RIG/server.log`. Every start wipes `$RIG`, so anything QA created is gone after
+a restart. The seeded chats' session ids are in `$RIG/manifest.json`.
 
-Every start wipes `state/`, so anything QA created is gone after a restart. The
-seeded chats' session ids are in `state/manifest.json`.
-
-Finding the server's pid (it is serve.mjs's child, not pm's): serve.mjs prints
-`Managers rig up: … (server pid N)` to `pm logs`. Or take pm's pid (the serve.mjs
-process) and read `/proc/<pid>/task/<pid>/children`.
+Finding the server's pid (it is serve.mjs's child): serve.mjs prints
+`Managers rig up: … (server pid N)`. Or read `/proc/<serve.mjs pid>/task/<pid>/children`.
 
 Prove the server is your build before trusting a screenshot: grep the served
 bundle or an API response for something you just added.
@@ -108,7 +104,7 @@ QA [[MCP managers.list_projects {}]]
 
 The state tools (M5) write the data repo and are auto-committed as `managers-bot`
 (10 s debounce, or at once when the turn ends): check with
-`git -C /data/paddock-servers/managers-qa/state/data/projects log -1 --format=%an`.
+`git -C "$RIG/data/projects" log -1 --format=%an`.
 
 - It is repeatable; calls run in prompt order, before the reply.
 - `<json-args>` is an optional JSON object (default `{}`). A `]]` inside it is fine.
@@ -127,7 +123,7 @@ The full list of the fake's directives is in the header of `test/bin/claude`.
 
 ## Proving isolation
 
-The pm wrapper runs under `env -i`, and `rigEnv` scrubs `PADDOCK_*` too. So finding
+The wrapper above runs under `env -i`, and `rigEnv` scrubs `PADDOCK_*` too. So finding
 no `PADDOCK_*` in the rig server's `/proc/<pid>/environ` proves only that the
 *wrapper* is clean, not that the *server* would cope with a leaked Paddock
 environment. That is the plan's QA check, and it is worth doing, but it can't fail.
@@ -145,11 +141,11 @@ and so on. Then it checks:
    `[[MCP managers.list_projects {}]]` call succeeded.
 
 ```bash
-node scripts/managers-rig/leak-check.mjs --out /data/paddock-servers/managers-qa/leak-check --port 5098
+node scripts/managers-rig/leak-check.mjs --out /path/to/scratch/leak-check --port 7310
 ```
 
 It prints PASS/FAIL per check, exits non-zero on any failure, and stops its server
-when it's done. Choose a port that `pm status` shows as free.
+when it's done. Choose a free port.
 
 ## Extending the fixtures
 
@@ -214,7 +210,7 @@ behaviours at `/projects/widget-lib/settings` → Behaviours (or `PATCH
 ### Connections fixture (M9)
 
 `serve.mjs` also starts **`fake-paddock-mcp.mjs`**, a streamable-HTTP MCP server on
-**PORT+1** (any free port when that one is taken; `pm logs managers-qa` prints
+**PORT+1** (any free port when that one is taken; the server log prints
 `Fake Paddock MCP up: <url>`). It answers only `Authorization: Bearer rig-token`
 (401 otherwise) and serves canned `list_projects`, `list_chats`, `create_chat` and
 `read_chat`. It is killed with the server. `rigEnv` points the connections at it with

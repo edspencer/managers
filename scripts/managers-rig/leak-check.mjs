@@ -4,7 +4,7 @@
  *
  *   node scripts/managers-rig/leak-check.mjs --out <scratch-dir> [--port <N>]
  *
- * Why this exists (M1 finding): the pm wrapper runs under `env -i` and serve.mjs
+ * Why this exists (M1 finding): the rig wrapper runs under `env -i` and serve.mjs
  * scrubs `PADDOCK_*` itself, so reading the rig server's /proc/<pid>/environ and
  * finding no `PADDOCK_*` proves nothing about the server — the vars never reached
  * it. This script seeds a throwaway rig and boots the server with synthetic,

@@ -2,9 +2,10 @@
 
 **Managers** is a fork of [Paddock](https://github.com/edspencer/paddock) (forked
 at v0.74.1) that turns it into a set of scheduled, per-project **manager agents**
-which track Ed's long-running objectives. The plan lives outside this repo, in the
-Managers notes project (`IMPLEMENTATION-PLAN.md`); this file covers how to work in
-the code.
+which track a person's long-running objectives. The human they work for is called
+"Ed" throughout the code (task status `awaiting-ed`, episode `source: ed`, the
+`ed` write actor): read it as "the user". This file covers how to work in the
+code; the milestone labels (M1…M14.5) below name the build steps of v1.
 
 What changed from Paddock, and what did not:
 
@@ -14,7 +15,7 @@ What changed from Paddock, and what did not:
   **7234** (so it runs beside Paddock's 7233), the in-project config dir is
   `.managers/`, and the in-process MCP servers are `managers` (self-management +
   state tools) and `managers_files` (send_file). The name `paddock` is left free on
-  purpose: it becomes a per-project MCP *connection* to Ed's real Paddock.
+  purpose: it becomes a per-project MCP *connection* to a real Paddock.
 - **Boot isolation.** `start.ts` calls `env-scrub.ts` first, which deletes every
   inherited `PADDOCK_*` variable from `process.env` (logging the count only), so
   none reaches a keeper, sweeper or trigger child. `test/unit/no-paddock-env.test.ts`
@@ -299,7 +300,7 @@ What changed from Paddock, and what did not:
   that flag (`resolveProjectDriveMode`, the ONE resolver) and the PATCH is a 400
   `batch_drive_disabled`. Every opted-in danger (plus `trusted-header`) is a `SECURITY:` boot
   warning, a `warnings[]` entry of `GET /api/security`, and a persistent `SecurityBanner` in the
-  shell. The rig, E2E server, docs-media/demo-gif rigs and `test/helpers/app.ts` set the opt-ins.
+  shell. The rig, E2E server, demo-gif rig and `test/helpers/app.ts` set the opt-ins.
   `installHerdctlBridgeLoopbackBind` (buildApp) makes `http.Server.prototype.listen` rewrite
   exactly `listen(0, "0.0.0.0")` from herdctl's `mcp-http-bridge` (not `container-runner`) to
   `127.0.0.1`. Also M14.5: a project with an unreadable `project.yaml` is collated on Home's
@@ -311,18 +312,19 @@ What changed from Paddock, and what did not:
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
-  the CSS palette names. `website/` and `docs/` are **frozen upstream Paddock
-  reference** — not maintained, and their env names are Paddock's.
+  the CSS palette names. `docs/` is **frozen upstream Paddock reference** — not
+  maintained, and its env names are Paddock's. Paddock's docs site (`website/`)
+  was removed; its content lives upstream in
+  [edspencer/paddock](https://github.com/edspencer/paddock/tree/main/website/src/content/docs).
 
 Everything below this point is inherited from Paddock and still accurate for the
 code, with the renames above applied; where it says "Paddock", read "Managers".
 
 ## Monorepo layout
 
-Two `private` packages, versioned and released **together** (one number = "the
-Paddock version"). Neither is published under its own name — releases synthesize
-a single public **`@edspencer/paddock`** package from their built output
-(`scripts/make-npm-package.mjs`), so the workspace manifests stay `private`:
+Two `private` packages, versioned together (`0.1.0`; Managers is not published
+anywhere yet). Paddock's npm packaging (`scripts/make-npm-package.mjs`, `npm run
+pack:npm`) and `Dockerfile` are inherited and unexercised:
 
 - **`packages/server`** (`@managers/server`) — **Fastify 4 + `@fastify/websocket`**
   backend. Wraps herdctl's `FleetManager`, the Project layer, sidecar stores, the
@@ -334,8 +336,8 @@ a single public **`@edspencer/paddock`** package from their built output
 
 ## Architecture pointers
 
-Read [`website/src/content/docs/architecture/overview.md`](website/src/content/docs/architecture/overview.md)
-for depth (every claim there is cited to `packages/server/src`, by file + symbol,
+Read Paddock's [architecture overview](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/architecture/overview.md)
+(upstream; read `PADDOCK_` as `MANAGERS_`) for depth (every claim there is cited to `packages/server/src`, by file + symbol,
 never by line number). The essentials:
 
 - **Three storage classes** (ARCHITECTURE §3) — keep them straight: (1) **transcript
@@ -367,9 +369,9 @@ never by line number). The essentials:
 
 Config resolves **env > YAML file > default** (`config.ts`; the file is
 `<dataDir>/managers.config.yaml`) — see
-[`environment.md`](website/src/content/docs/configuration/environment.md) for every
-variable and [`config-file.md`](website/src/content/docs/configuration/config-file.md)
-for the file. The `claude:` block there says what an instance shares with the host's
+Paddock's upstream [`environment.md`](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/configuration/environment.md) for every
+variable (renamed to `MANAGERS_*`; `.env.example` lists the Managers-only ones) and
+[`config-file.md`](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/configuration/config-file.md) for the file. The `claude:` block there says what an instance shares with the host's
 Claude Code (`transcripts`, `credentials`, `instructions`, `hooks`, `mcpServers` — each
 `own|host`, #691); paddock ALWAYS owns its Claude home (`<dataDir>/claude-home`) and
 refuses to start if it resolves to the user's `~/.claude`. `credentials` is the one key defaulting
@@ -439,10 +441,10 @@ Runbooks inherited from Paddock: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEV.md`
 
 - **Run everything through `scripts/clean-env.sh`.** It strips every inherited
   `PADDOCK_*`/`MANAGERS_*` var, `NODE_ENV`, `CLAUDE_CODE_OAUTH_TOKEN`,
-  `ANTHROPIC_API_KEY` and `CLAUDE_CONFIG_DIR` before exec'ing the command. The dev
-  box exports production Paddock's config and a real Claude credential into every
-  shell; either one reaching a test false-fails it, and reaching a server can
-  point it at production data or spend real API credit.
+  `ANTHROPIC_API_KEY` and `CLAUDE_CONFIG_DIR` before exec'ing the command. A
+  shell that also runs a real Paddock or Managers, or holds a real Claude
+  credential, leaks config into tests (false failures) and servers (pointing them
+  at real data, or spending real API credit).
 
   ```bash
   NODE_ENV=development npm install --include=dev    # NODE_ENV=production prunes devDeps
@@ -458,18 +460,17 @@ Runbooks inherited from Paddock: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEV.md`
   `HOME` and `CLAUDE_CONFIG_DIR`, and unset the Claude credentials so no real API
   call can happen. The data-dir guard is a backstop, not a licence.
 - **QA rig.** The credential-free rig is `scripts/managers-rig/` (read its
-  README): synthetic fixtures, run under `pm` as `managers-qa` via
-  `/data/paddock-servers/managers-qa/run.sh`, re-seeded on every start, with
-  `HOST=127.0.0.1` forced. The fake `claude`'s `[[MCP <server>.<tool> <json>]]`
+  README): synthetic fixtures, served by a small wrapper script kept outside the
+  repo that re-seeds on every start, with `HOST=127.0.0.1`. The fake `claude`'s `[[MCP <server>.<tool> <json>]]`
   directive makes a turn really call an MCP tool, with no model involved.
   `scripts/managers-rig/leak-check.mjs` is the isolation proof that can actually
   fail. Add new fixtures to `fixtures.mjs` and never remove one. Screenshots and
   scratch go in `.playwright-mcp/` or `qa-scratch/` (both gitignored) and are
   never committed.
-- **Commits.** Work on `main`, Conventional Commits (`type(scope): summary`), one
-  lightweight tag `m<N>` per milestone. **There is no remote to push to — never
-  push**, never force anything, and leave the `paddock` remote's config alone.
-- **No changesets, no releases.** `.changeset/` and `release.yml` were removed;
+- **Commits.** Conventional Commits (`type(scope): summary`); v1 was built as
+  lightweight tags `m1`…`m14.5` on `main`. Never force-push. The upstream Paddock
+  is not merged from: ideas are ported across by hand when wanted.
+- **No changesets, no releases.** `.changeset/`, `release.yml` and the docs site were removed;
   versions are `0.1.0`. `@herdctl/core` and `@herdctl/chat` are pinned to exact
   versions (the fork depends on herdctl internals; bump deliberately).
 - After large edits run `npm run check:nul` — edits have been known to insert NUL
@@ -480,52 +481,31 @@ Runbooks inherited from Paddock: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEV.md`
 
 ## Where to find things
 
-**The documentation website is the source of truth**, and its content is plain
-markdown checked into this repo under `website/src/content/docs/` — read those
-files directly, no fetching. The handful of root files below (`AUTH.md`,
-`CONTRIBUTING.md`, `DEV.md`, `DOCS-UPDATE-RUNBOOK.md`, `RELEASING.md`) are
-contributor runbooks the website does not own, and stay canonical here.
+The root runbooks (`AUTH.md`, `CONTRIBUTING.md`, `DEV.md`) are inherited from
+Paddock and still describe this code (read `PADDOCK_` as `MANAGERS_`). `AUTH.md`
+is maintained for Managers. The deeper architecture and reference docs are
+Paddock's, upstream.
 
-**`docs/` is three different things** — see [`docs/README.md`](docs/README.md),
-which is the index it lacked:
-
-1. **Superseded forks** (`ARCHITECTURE.md`, `CONFIGURATION.md`, `API.md`,
-   `INTEGRATION.md`, `TESTING.md`, `concepts/`) — each has a maintained website
-   twin and now carries a banner naming it. Don't read them, and **fix the
-   website copy** rather than the fork; patching one just makes it look
-   maintained. They are kept only because inbound links still point at them.
-2. **Originals with no twin** (`DESIGN-backing-store.md`, `DESIGN-testing.md`,
-   `HISTORY.md`, `archive/CONTRACT-v{2,3}.md`) — the website links *out* to
-   these by URL, so `docs/` is their **permanent** address. They are
-   point-in-time records, not stale forks.
-3. **Live assets** — `docs/demo/` is load-bearing (`scripts/demo-gif/make.mjs`
-   hard-codes the path). `docs/screenshots/` is rendered by nothing, but
-   `HISTORY.md` cites specific files in it as a milestone record.
-
-So `docs/` as a whole is **not** deletable, and saying it was slated for deletion
-without marking a single file in it is what let three of the forks drift into
-advice that breaks a server (`CLAUDE_HOME=$HOME/.claude`, removed in #691).
+**`docs/` is frozen upstream material** — see [`docs/README.md`](docs/README.md).
+The superseded forks there (`ARCHITECTURE.md`, `CONFIGURATION.md`, `API.md`,
+`INTEGRATION.md`, `TESTING.md`, `concepts/`) point at Paddock's docs site; the
+originals (`DESIGN*.md`, `HISTORY.md`, `archive/`) are point-in-time records.
+`docs/DESIGN.md` is the one that is current (the visual language).
 
 | For… | Read |
 |---|---|
-| How the code fits together | [`website/src/content/docs/architecture/overview.md`](website/src/content/docs/architecture/overview.md) |
-| What a project/agent/chat/sweeper *is* | [`website/src/content/docs/concepts/`](website/src/content/docs/concepts/) |
+| How the code fits together | Paddock's [architecture overview](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/architecture/overview.md) |
+| What a project/agent/chat/sweeper *is* | Paddock's [concepts](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/concepts/) |
 | Running the full stack locally | [`DEV.md`](DEV.md) |
 | Contributing, tests, gotchas | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
-| Every `MANAGERS_*` env var | [`website/src/content/docs/configuration/environment.md`](website/src/content/docs/configuration/environment.md) |
-| REST endpoints | [`openapi-site/open-api.json`](openapi-site/open-api.json) — the OpenAPI 3 spec, generated from the Fastify route schemas (published at `/api/`; live on an instance at `/open-api` when `MANAGERS_OPENAPI_ENABLED=1`) |
-| WebSocket (`/ws`) frame contract | [`website/src/content/docs/reference/websocket.md`](website/src/content/docs/reference/websocket.md) — hand-maintained; OpenAPI cannot describe it |
-| Test strategy & layers | [`website/src/content/docs/contributing/testing.md`](website/src/content/docs/contributing/testing.md) |
+| Every env var | [`.env.example`](.env.example), and Paddock's [environment reference](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/configuration/environment.md) with `PADDOCK_` read as `MANAGERS_` |
+| REST endpoints | [`openapi-site/open-api.json`](openapi-site/open-api.json) — the OpenAPI 3 spec, generated from the Fastify route schemas (`node scripts/dump-openapi.mjs`; live on an instance at `/open-api` when `MANAGERS_OPENAPI_ENABLED=1`) |
+| WebSocket (`/ws`) frame contract | Paddock's [websocket reference](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/reference/websocket.md) |
+| Test strategy & layers | Paddock's [testing guide](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/contributing/testing.md) |
 | Auth modes & secrets | [`AUTH.md`](AUTH.md) |
-| Release pipeline | [`RELEASING.md`](RELEASING.md) |
-| herdctl API contract Paddock depends on | [`website/src/content/docs/architecture/herdctl-integration.md`](website/src/content/docs/architecture/herdctl-integration.md) |
-| Regenerating the README/docs demo reel | [`scripts/demo-gif/README.md`](scripts/demo-gif/README.md) |
+| herdctl API contract | Paddock's [herdctl integration](https://github.com/edspencer/paddock/blob/main/website/src/content/docs/architecture/herdctl-integration.md) |
+| The credential-free QA rig | [`scripts/managers-rig/README.md`](scripts/managers-rig/README.md) |
 
-**The demo reel is generated, not hand-made.** `docs/demo/paddock-demo.gif` (and
-its copy under `website/public/demo/`) comes out of `npm run demo:gif` — a
-committed seed/shoot/build pipeline that stages a synthetic instance, drives it,
-and photographs it. Never edit or hand-replace those files; change
-`scripts/demo-gif/beats.mjs` (the storyboard) or `fixtures.mjs` (the content) and
-re-run. It went 26 minor versions stale once because the original was ad-hoc and
-undiscoverable — worth refreshing whenever a release changes what the UI looks
-like.
+`scripts/demo-gif/` is Paddock's README-reel pipeline (it still produces
+`docs/demo/paddock-demo.gif`, which shows Paddock, not Managers); the Managers rig
+was forked from it.

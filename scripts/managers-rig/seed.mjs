@@ -33,10 +33,11 @@
  * We do NOT create `~/.claude/projects/<mangled-cwd>` symlinks: the server makes
  * them itself for every workspace at boot.
  *
- * NEVER point --out at /data/projects, /data/.claude or anything under a real
+ * NEVER point --out at a real Claude home or anything under a real
  * Paddock/Managers data dir. The script refuses the obvious ones.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -64,7 +65,15 @@ if (Number.isNaN(NOW.getTime())) {
 
 // Belt and braces: `rm -rf` of the out dir is the first thing we do. Refuse any
 // out dir that is, contains, or sits inside production data or a Claude home.
-const PROTECTED = ["/data/projects", "/data/.claude", "/data/claude-home", "/var/lib/paddock"];
+// The home-relative entries are the defaults everywhere; the absolute ones are
+// the production paths on the box this fork was developed on.
+const PROTECTED = [
+  ...[".claude", ".managers", ".paddock"].map((d) => path.join(os.homedir(), d)),
+  "/data/projects",
+  "/data/.claude",
+  "/data/claude-home",
+  "/var/lib/paddock",
+];
 const real = (p) => {
   // Resolve the deepest existing ancestor, so a not-yet-created dir under a
   // symlinked prod path is still caught.
