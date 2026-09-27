@@ -90,7 +90,7 @@ export function renderUnit(spec: ServiceSpec): string {
   const exec = [spec.nodePath, spec.scriptPath, ...spec.args].join(" ");
   return `[Unit]
 Description=Managers — persistent, resumable Claude Code sessions, by project
-Documentation=https://paddock.edspencer.net
+Documentation=https://github.com/edspencer/managers
 
 [Service]
 Type=simple

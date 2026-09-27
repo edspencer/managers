@@ -176,15 +176,15 @@ fs.copyFileSync(
 );
 
 const manifest = {
-  name: "@edspencer/paddock",
+  name: "@edspencer/managers", // unpublished; inherited from Paddock's release tooling
   version,
   description:
-    "Project-first launchpad for Claude Code: server-hosted, persistent, resumable sessions organized by project.",
-  keywords: ["claude", "claude-code", "anthropic", "ai", "agents", "paddock"],
-  homepage: "https://github.com/edspencer/paddock#readme",
-  bugs: { url: "https://github.com/edspencer/paddock/issues" },
+    "Scheduled per-project manager agents that track long-running objectives. A fork of Paddock, built on herdctl.",
+  keywords: ["claude", "claude-code", "anthropic", "ai", "agents", "managers"],
+  homepage: "https://github.com/edspencer/managers#readme",
+  bugs: { url: "https://github.com/edspencer/managers/issues" },
   // Must match, case-sensitively, the repo provenance is generated from.
-  repository: { type: "git", url: "git+https://github.com/edspencer/paddock.git" },
+  repository: { type: "git", url: "git+https://github.com/edspencer/managers.git" },
   license,
   author: "Ed Spencer",
   type: "module",
@@ -223,7 +223,7 @@ const size = Number(
     : execSizeOf(outDir),
 );
 
-console.log(`staged @edspencer/paddock@${version} -> ${path.relative(repoRoot, outDir)}`);
+console.log(`staged @edspencer/managers@${version} -> ${path.relative(repoRoot, outDir)}`);
 console.log(`  server dist: ${server.files} files (${server.mapsSkipped} sourcemaps dropped)`);
 console.log(`  web dist:    ${web.files} files (${web.mapsSkipped} sourcemaps dropped)`);
 console.log(`  deps pinned: ${Object.keys(manifest.dependencies).length} + ${Object.keys(manifest.optionalDependencies).length} optional`);

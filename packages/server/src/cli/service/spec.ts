@@ -140,7 +140,7 @@ export const NPX_REFUSAL =
   "`service install` needs an install path that will still be there at your\n" +
   "         next login, and this copy is running from npx's cache — a hash-keyed\n" +
   "         directory that `npm cache clean` removes.\n\n" +
-  "  npm i -g @edspencer/paddock && managers service install\n";
+  "  npm link -w packages/server && managers service install   (from a built checkout)\n";
 
 /**
  * The port a generated unit will actually serve on, read back out of its own

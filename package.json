@@ -4,6 +4,14 @@
   "private": true,
   "description": "Managers: scheduled per-project manager agents that track long-running objectives. A fork of Paddock, built on herdctl.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edspencer/managers.git"
+  },
+  "homepage": "https://github.com/edspencer/managers#readme",
+  "bugs": {
+    "url": "https://github.com/edspencer/managers/issues"
+  },
   "type": "module",
   "workspaces": [
     "packages/*"

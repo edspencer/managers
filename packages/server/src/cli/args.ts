@@ -320,7 +320,7 @@ export function explainListenError(err: unknown, host: string, port: string): st
 export const USAGE = `managers — run a Managers instance locally
 
 Usage
-  npx @edspencer/paddock [options]        start the server (the default)
+  managers [options]                       start the server (the default)
   managers start [options]                 the same thing, said out loud
   managers service <install|uninstall|status>
                                           run it in the background from login
@@ -437,7 +437,7 @@ Notes
   expose it on a network, set MANAGERS_AUTH_MODE first — Managers refuses to bind
   a routable interface wide open. See AUTH.md.
 
-Docs: https://github.com/edspencer/paddock`;
+Docs: https://github.com/edspencer/managers`;
 
 export const SERVICE_USAGE = `managers service — keep Managers running in the background
 
@@ -488,16 +488,16 @@ Installed from npx?
   it, so the unit would work until it silently didn't, at some future login.
   Install properly first:
 
-    npm i -g @edspencer/paddock && managers service install
+    npm link -w packages/server && managers service install   (from a built checkout)
 
 A note on access
-  Managers binds loopback with authentication off, which is right for a laptop.
-  A service is up for as long as you are logged in rather than as long as a
-  terminal tab, so that window is longer — but it is not wider: any local
-  process that could reach the port could already read the same Claude login as
-  you. Set MANAGERS_AUTH_MODE if you want a credential on it anyway.
+  Managers binds loopback, and refuses to start with authentication off unless
+  MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1 is set: with no auth, the agents it runs
+  on this host can act as you over its API. Use MANAGERS_AUTH_MODE=jwt for
+  anything but a throwaway rig (see AUTH.md). A service is up for as long as
+  you are logged in rather than as long as a terminal tab.
 
-Docs: https://github.com/edspencer/paddock`;
+Docs: https://github.com/edspencer/managers`;
 
 export const CONFIG_USAGE = `managers config — what this instance's configuration actually resolved to
 
@@ -594,4 +594,4 @@ Reading nothing, writing nothing
   Managers keeps secrets out of this surface entirely, so there is no API key or
   JWT signing material here to hide or reveal.
 
-Docs: https://github.com/edspencer/paddock`;
+Docs: https://github.com/edspencer/managers`;
