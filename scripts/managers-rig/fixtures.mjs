@@ -305,6 +305,14 @@ export const PROJECTS = [
     startedDaysAgo: 45,
     summary: "The marketing site for a fictional hardware company: copy, pages and launch posts.",
     state: acmeDomain,
+    // M10: the built-in `status` report type, left UNSCHEDULED (no `enabled`), with
+    // a prompt file so "Refresh now" has something for the fake claude to do: it
+    // calls write_report, including a model-written "Needs you" the server drops.
+    yaml: {
+      reports: {
+        status: { promptFile: "status-report.md" },
+      },
+    },
     files: {
       "OVERVIEW.md": [
         "# Acme Site — Overview",
@@ -347,8 +355,26 @@ export const PROJECTS = [
         run: { prompt: "Wake. [[TOOL]]", session: "new" },
         enabled: false,
       },
+      // M10 unhappy path: a report of a type this project does not have. The
+      // tool call errors and nothing is written. Disabled: QA fires it by hand.
+      "bogus-report": {
+        trigger: { type: "schedule", cron: "0 3 1 1 *" },
+        run: {
+          prompt: 'Write a bogus report. [[MCP managers.write_report {"type":"bogus","body":"## Notes\\n- this must not be written"}]]',
+          session: "new",
+        },
+        enabled: false,
+      },
     },
     triggerPrompts: {
+      // M10: the status report run's prompt (reports.status.promptFile).
+      "status-report.md": [
+        "# Status report",
+        "",
+        "Write the status report from the briefing.",
+        "",
+        '[[MCP managers.write_report {"type":"status","body":"## Needs you\\n- (the model\'s own list; the server replaces it)\\n\\n## In flight\\n- Pricing rewrite: the copy is done; the enterprise price waits on Ed.\\n- Blog cadence: post seven is drafted, post eight needs a title.\\n- Next scheduled: publish-check (armed).\\n\\n## Notes\\n- The publish check has not had a met run inside its window."}]]',
+      ].join("\n"),
       "morning-check.md": [
         "# Morning check",
         "",

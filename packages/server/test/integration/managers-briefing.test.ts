@@ -189,7 +189,11 @@ describe("integration: the wake briefing (M7)", () => {
     expect((await get<{ objective: string }>(`${api(acme.slug)}/briefing?trigger=wake`)).objective).toBe("burn-down");
     expect((await get<{ objective: string }>(`${api(acme.slug)}/briefing?objective=grow`)).objective).toBe("grow");
     await get(`${api(acme.slug)}/briefing?objective=Not%20Kebab`, 400);
-    await get(`${api(acme.slug)}/briefing?kind=report`, 400);
+    // M10: `kind=report` is a preview of the report briefing; an unknown kind is still a 400.
+    await get(`${api(acme.slug)}/briefing?kind=digest`, 400);
+    await get(`${api(acme.slug)}/briefing?kind=report&report=Not%20Kebab`, 400);
+    const rep = await get<{ sections: { name: string }[] }>(`${api(acme.slug)}/briefing?kind=report`);
+    expect(rep.sections.map((x) => x.name)).toContain("Previous report");
     await get(`${api(acme.slug)}/briefing?trigger=nope`, 404);
     await get(`${api("no-such-project")}/briefing`, 404);
     // Home, on the root mount.

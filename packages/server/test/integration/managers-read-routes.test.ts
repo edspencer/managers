@@ -139,7 +139,10 @@ describe("integration: Managers read routes", () => {
     expect((await get("/api/projects/bare/managers/objectives")).body).toEqual({ objectives: [] });
     expect((await get("/api/projects/bare/managers/tasks")).body).toEqual({ tasks: [], doneMonths: [] });
     expect((await get("/api/projects/bare/managers/runs")).body).toEqual({ runs: [], months: [], nextBefore: null });
-    expect((await get("/api/projects/bare/managers/reports")).body).toEqual({ reports: [] });
+    // M10: the built-in `status` type is defined everywhere; nothing is written yet.
+    expect((await get("/api/projects/bare/managers/reports")).body).toEqual({
+      reports: [expect.objectContaining({ type: "status", defined: true, enabled: false, current: null, dates: [] })],
+    });
   });
 
   it("objectives: list, detail with sections and a paged journal, 404", async () => {

@@ -233,5 +233,21 @@ fake `claude` enforces `--disallowedTools` / `--allowedTools` for MCP calls sinc
 and `list_projects` succeeds; switch the behaviour on and Run now again to see a
 canned `fake-chat-new-0001`. The run record's `mcpCalls` counts both attempts.
 
+### Reports fixture (M10)
+
+Every workspace has the built-in `status` report type, and so the derived trigger
+`report-status` (never in `project.yaml`; its schedule is armed only when the
+project's own `reports.status.enabled` is `true`, which no fixture sets).
+`acme-site` sets `reports.status.promptFile: status-report.md`, whose body is a
+`[[MCP managers.write_report {"type":"status",…}]]` that also writes its own
+"## Needs you" (the server drops it and renders the real one from the two
+awaiting-ed tasks, plus "## Alerts" with `stale:publish-check`). Fire it with
+`POST /api/projects/acme-site/managers/reports/status/refresh` (202 `{runId,
+sessionId}`), then poll `…/managers/runs/<runId>`.
+
+`acme-site` also has a **disabled** `bogus-report` trigger that calls
+`write_report {"type":"bogus",…}`: the tool call errors and nothing is written.
+`empty-project` lists `status` with `current: null`.
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

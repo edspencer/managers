@@ -185,6 +185,32 @@ What changed from Paddock, and what did not:
   counts calls that went through; errored/denied ones go to `mcpErrors`. The
   `bypass-permissions` alert warns when a narrowed connection or gated tool meets
   `bypassPermissions`. History titles strip the preload (`runs.ts` `runPrompt`).
+- **The report primitive (M10, `managers/reports.ts`, `managers/effective-triggers.ts`).**
+  `project.yaml` `reports:` maps a kebab-case type to `{enabled, schedule: {cron|interval},
+  promptFile?, model?, description?}`; definitions merge built-in < Home < project and
+  `enabled` counts only in the workspace's own file (the behaviours rule). The built-in
+  `status` type exists everywhere, unscheduled. File-only (not in `PATCHABLE_KEYS`).
+  Each effective type is a DERIVED trigger `report-<type>` — never persisted, computed by
+  `effectiveTriggers(project, root)` wherever triggers are armed/registered/fired
+  (`HerdctlService.effectiveTriggersOf` for the keeper `schedules`, the scoped trigger
+  agents and the chat listing; `effectiveTriggersFor` on the fire path, the schedule
+  handler, Run now, alerts and briefings). Its capability is fixed: its own scoped agent,
+  `tools: [Read, Grep, Glob]` + the injected `managers` tools, `maxTurns: 20`, `expect:
+  {kind: report, report: <type>}`, the `briefing` kind `report` (standard sections plus
+  Schedule, the previous report and what changed since it). `report-*` and `consolidate`
+  are RESERVED: `ProjectStore.setTrigger` refuses them for everyone, the agent trigger
+  guard refuses `remove_trigger` too. Derived triggers go through the same behaviour gate
+  (arming and every fire, Refresh included); a declared trigger under a derived name is
+  replaced but its `run.behaviour` is carried; the `derived` marker (which makes the run
+  kind `report`) is not in the trigger schema, so nothing in `project.yaml` can claim it.
+  `write_report` validates the type against the workspace's effective types, strips any
+  model-written `## Needs you` / `## Alerts` section and leading title, and composes
+  `{type, generated, run, previous}` frontmatter + `# <Type>: <project>, <date>` + the
+  server-rendered Needs you (awaiting-ed tasks, linked `/projects/:slug/tasks#<id>`) and
+  Alerts + the body, into `YYYY-MM-DD.md` and `current.md`. `POST
+  …/managers/reports/:type/refresh` fires the derived trigger ignoring `enabled` → 202
+  `{runId, sessionId}`; `GET …/managers/reports` lists every effective type with its
+  config and current report.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
