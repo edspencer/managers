@@ -35,7 +35,9 @@
  *                         inherited PADDOCK_* vars — never names or values), and
  *                         `mcpSecretEnvCount` (M9.5: inherited MANAGERS_MCP_* vars,
  *                         which the server's boot sequester makes 0).
- *   HOST=127.0.0.1        forced, whatever pm or the caller exported.
+ *   HOST=127.0.0.1        forced, whatever pm or the caller exported — unless
+ *                         `--public` is passed (0.0.0.0 + MANAGERS_DANGEROUSLY_ALLOW_OPEN),
+ *                         for a LAN-viewable demo of the synthetic fixtures only.
  *
  * ── The fake Paddock /mcp (M9) ──────────────────────────────────────────────
  * `fake-paddock-mcp.mjs` is spawned beside the server on PORT+1 (a free port if
@@ -75,14 +77,17 @@ export function isScrubbed(key) {
  * it, checking the server's environ is vacuous: this function already stripped
  * everything. Never pass real values through it.
  */
-export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl }) {
+export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl, publicBind = false }) {
   const env = {};
   for (const [k, v] of Object.entries(process.env)) if (!isScrubbed(k)) env[k] = v;
 
   env.HOME = home;
   env.PATH = `${path.join(REPO_ROOT, "test", "bin")}${path.delimiter}${env.PATH ?? "/usr/bin:/bin"}`;
   env.PORT = String(port);
-  env.HOST = "127.0.0.1";
+  // Loopback unless `--public` (a LAN-viewable demo of synthetic data only). The
+  // server refuses a non-loopback bind under auth=none without ALLOW_OPEN.
+  env.HOST = publicBind ? "0.0.0.0" : "127.0.0.1";
+  if (publicBind) env.MANAGERS_DANGEROUSLY_ALLOW_OPEN = "1";
   env.MANAGERS_DATA_DIR = dataDir;
   env.MANAGERS_PROJECTS_DIR = path.join(dataDir, "projects");
   env.MANAGERS_WEB_DIST = path.join(REPO_ROOT, "packages", "web", "dist");
@@ -177,7 +182,7 @@ export async function startFakePaddock(serverPort) {
  * to `logFile` and, when `echo` is set, to our own stdout/stderr too (so `pm logs`
  * shows it).
  */
-export async function startServer({ dataDir, port, home, fakeScript, invocationLog, leakEnv, logFile, echo = false, paddockMcpUrl }) {
+export async function startServer({ dataDir, port, home, fakeScript, invocationLog, leakEnv, logFile, echo = false, paddockMcpUrl, publicBind = false }) {
   const entry = path.join(REPO_ROOT, "packages", "server", "dist", "index.js");
   if (!fs.existsSync(entry)) {
     throw new Error(`Server build missing at ${entry}\nRun:  scripts/clean-env.sh npm run build`);
@@ -186,7 +191,7 @@ export async function startServer({ dataDir, port, home, fakeScript, invocationL
 
   const log = logFile ? fs.createWriteStream(logFile, { flags: "w" }) : null;
   const child = spawn(process.execPath, [entry], {
-    env: rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl }),
+    env: rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl, publicBind }),
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });
@@ -266,6 +271,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       invocationLog: path.join(rigDir, "invocations.jsonl"),
       logFile: path.join(rigDir, "server.log"),
       echo: true,
+      publicBind: process.argv.includes("--public"),
     });
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
