@@ -144,7 +144,7 @@ export function JournalTimeline({
                   data-testid="journal-entry"
                   className={cx(
                     "relative scroll-mt-24 rounded-xl px-3 py-2 motion-base transition-colors",
-                    e.id === target ? "bg-accent-soft" : "bg-surface-raised",
+                    e.id === target ? "bg-accent-soft ring-1 ring-accent" : "bg-surface-raised",
                   )}
                 >
                   <span
@@ -197,7 +197,7 @@ export function JournalTimeline({
                           type="button"
                           onClick={() => void openRun(e.run!)}
                           disabled={opening === e.run}
-                          className="inline-flex items-center gap-1 rounded-sm text-accent hover:underline focus-ring disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-sm text-accent hover:underline focus-visible:focus-ring disabled:opacity-50"
                           title="Open the chat of the run that recorded this"
                           data-testid="journal-run-link"
                         >
@@ -208,7 +208,7 @@ export function JournalTimeline({
                       {e.chat && (
                         <Link
                           to={chatUrl(slug, e.chat)}
-                          className="inline-flex items-center gap-1 rounded-sm text-accent hover:underline focus-ring"
+                          className="inline-flex items-center gap-1 rounded-sm text-accent hover:underline focus-visible:focus-ring"
                         >
                           <ChatIcon width={10} height={10} />
                           chat

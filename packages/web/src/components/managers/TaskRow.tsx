@@ -96,7 +96,7 @@ export function TaskChips({
       {task.objective && (
         <Link
           to={objectivesUrl(base, task.objective)}
-          className="min-w-0 max-w-full rounded-md focus-ring"
+          className="min-w-0 max-w-full rounded-md focus-visible:focus-ring"
           title={`Objective: ${objectiveTitle ?? task.objective}`}
         >
           <Chip tone="lineage" className="max-w-full">
@@ -155,7 +155,7 @@ export function TaskRow({
       data-testid={`task-row-${task.id}`}
       className={cx(
         "scroll-mt-24 px-4 py-3 motion-base transition-colors",
-        highlighted && "bg-accent-soft",
+        highlighted && "bg-accent-soft ring-1 ring-inset ring-accent",
       )}
     >
       <div className="flex items-start gap-2">
@@ -163,7 +163,7 @@ export function TaskRow({
           <Link
             to={tasksUrl(base, task.id)}
             className={cx(
-              "block break-words text-sm font-medium hover:text-accent focus-ring rounded-sm",
+              "block break-words text-sm font-medium hover:text-accent focus-visible:focus-ring rounded-sm",
               closed ? "text-fg-muted" : "text-fg",
               task.status === "dropped" && "line-through",
             )}

@@ -15,7 +15,7 @@ import { relativeTime } from "../../lib/format";
 import type { ManagersParseError, ObjectiveSummary } from "../../lib/types";
 import { objectivesUrl } from "../../routes/ProjectView/urls";
 import { Button, Callout, Card, Chip, EmptyState } from "../ui";
-import { PlusIcon, SparkIcon } from "../icons";
+import { PinIcon, PlusIcon } from "../icons";
 import { NewObjectiveModal } from "./NewObjectiveModal";
 import { ObjectiveDetailView } from "./ObjectiveDetail";
 import {
@@ -32,7 +32,7 @@ function ObjectiveCard({ base, o }: { base: string; o: ObjectiveSummary }) {
   return (
     <Link
       to={objectivesUrl(base, o.id)}
-      className="block rounded-2xl focus-ring"
+      className="block rounded-2xl focus-visible:focus-ring"
       data-testid={`objective-card-${o.id}`}
     >
       <Card interactive className="flex h-full flex-col">
@@ -132,7 +132,7 @@ export function ObjectivesPane({
           {objectives.length === 0 ? (
             <EmptyState
               variant="panel"
-              icon={<SparkIcon width={24} height={24} />}
+              icon={<PinIcon width={24} height={24} />}
               title="No objectives yet"
               body="An objective is a long-running goal. The manager works toward it on its schedule and keeps a journal of what it did."
               action={

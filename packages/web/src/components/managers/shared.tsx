@@ -129,7 +129,8 @@ export function timeLabel(iso: string): string {
 
 /** What an answer did, in one line for the toast. */
 export function answeredMessage(result: TaskAnswerResult, answer: string, wakeRequested: boolean): string {
-  const head = answer ? `Answered “${answer}”.` : "Answered.";
+  const said = answer.trim().replace(/[.!?…]+$/, "");
+  const head = said ? `Answered “${said}”.` : "Answered.";
   if (result.wake?.fired) return `${head} The manager has been woken.`;
   if (wakeRequested && result.wake && !result.wake.fired) {
     return `${head} The manager was not woken: ${result.wake.reason ?? "the wake trigger did not start"}.`;

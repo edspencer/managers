@@ -93,7 +93,7 @@ export function ObjectiveDetailView({
   const back = (
     <Link
       to={objectivesUrl(base)}
-      className="mb-3 inline-flex items-center gap-1 rounded-sm text-xs text-fg-muted hover:text-accent focus-ring"
+      className="mb-3 inline-flex items-center gap-1 rounded-sm text-xs text-fg-muted hover:text-accent focus-visible:focus-ring"
     >
       <ChevronRightIcon width={12} height={12} className="rotate-180" />
       All objectives
@@ -152,7 +152,7 @@ export function ObjectiveDetailView({
           {o.triggers.length > 0 && <span>Woken by {o.triggers.join(", ")}</span>}
           <Link
             to={filesUrl(base, o.file)}
-            className="inline-flex items-center gap-1 rounded-sm text-accent hover:underline focus-ring"
+            className="inline-flex items-center gap-1 rounded-sm text-accent hover:underline focus-visible:focus-ring"
           >
             <FileIcon width={11} height={11} />
             Edit in Files
@@ -165,15 +165,27 @@ export function ObjectiveDetailView({
           <Markdown>{o.preamble}</Markdown>
         </div>
       )}
-      <Section title="Where we are">
-        <Prose text={o.whereWeAre} empty="The manager hasn't summarised progress yet." />
-      </Section>
-      <Section title="Strategy">
-        <Prose text={o.strategy} empty="No strategy written yet." />
-      </Section>
-      <Section title="Lessons">
-        <Prose text={o.lessons} empty="No lessons recorded yet." />
-      </Section>
+      {!o.whereWeAre.trim() && !o.strategy.trim() && !o.lessons.trim() ? (
+        // A brand-new objective: one line, not three identical empty cards.
+        <Section title="Where we are">
+          <EmptyState
+            title="The manager hasn't written anything here yet"
+            body="On its next run it summarises where the objective stands, its strategy and what it has learned."
+          />
+        </Section>
+      ) : (
+        <>
+          <Section title="Where we are">
+            <Prose text={o.whereWeAre} empty="The manager hasn't summarised progress yet." />
+          </Section>
+          <Section title="Strategy">
+            <Prose text={o.strategy} empty="No strategy written yet." />
+          </Section>
+          <Section title="Lessons">
+            <Prose text={o.lessons} empty="No lessons recorded yet." />
+          </Section>
+        </>
+      )}
       {o.otherSections.map((s) => (
         <Section key={s.heading} title={s.heading}>
           <Prose text={s.body} empty="Empty." />
@@ -203,7 +215,7 @@ export function ObjectiveDetailView({
               <li key={t.id} className="flex items-center gap-2 px-4 py-2.5">
                 <Link
                   to={tasksUrl(base, t.id)}
-                  className="min-w-0 flex-1 truncate rounded-sm text-sm text-fg hover:text-accent focus-ring"
+                  className="min-w-0 flex-1 truncate rounded-sm text-sm text-fg hover:text-accent focus-visible:focus-ring"
                 >
                   {t.title}
                 </Link>

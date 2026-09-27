@@ -56,7 +56,7 @@ export function TaskDetailView({
   const back = (
     <Link
       to={tasksUrl(base)}
-      className="mb-3 inline-flex items-center gap-1 rounded-sm text-xs text-fg-muted hover:text-accent focus-ring"
+      className="mb-3 inline-flex items-center gap-1 rounded-sm text-xs text-fg-muted hover:text-accent focus-visible:focus-ring"
     >
       <ChevronRightIcon width={12} height={12} className="rotate-180" />
       All tasks

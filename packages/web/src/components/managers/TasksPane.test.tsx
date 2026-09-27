@@ -27,6 +27,8 @@ vi.mock("../../lib/api", async () => {
   };
 });
 
+Element.prototype.scrollIntoView = vi.fn();
+
 const AWAIT_1 = task({ id: "t-260922-t1tl", title: "Pick the title", status: "awaiting-ed", objective: "blog-cadence", ask: "Which title?", options: ["A", "B"] });
 const AWAIT_2 = task({ id: "t-260829-entp", title: "Decide the price", status: "awaiting-ed", objective: "pricing", ask: "Price?", options: ["contact-us", "show-price"] });
 const DOING = task({ id: "t-260904-rvw2", title: "Two-day review window", status: "doing", objective: "blog-cadence" });
@@ -122,6 +124,24 @@ describe("TasksPane (Managers M11)", () => {
     expect(groupTitles()).toHaveLength(4);
   });
 
+  it("a filter that matches only unloaded closed tasks offers Show done beside Clear filters", async () => {
+    renderPane("/projects/acme/tasks?objective=links");
+    expect(await screen.findByText("No tasks match")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show done" }));
+    expect(managersTasks).toHaveBeenCalledWith("acme", { month: "2026-09" });
+    // DONE has no objective, so it still does not match: the state stays, and the month is loaded.
+    expect(await screen.findByText("No tasks match")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show done" })).toBeNull();
+  });
+
+  it("a #<task-id> link (a report's Needs you) scrolls to and marks that row", async () => {
+    renderPane(`/projects/acme/tasks#${AWAIT_2.id}`);
+    const row = await screen.findByTestId(`task-row-${AWAIT_2.id}`);
+    expect(row.className).toContain("ring-accent");
+    expect(screen.getByTestId(`task-row-${AWAIT_1.id}`).className).not.toContain("ring-accent");
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
   it("filters by status (multi-select) from a deep link", async () => {
     renderPane("/projects/acme/tasks?status=doing,blocked");
     await screen.findByTestId("task-group-doing");
@@ -191,6 +211,16 @@ describe("TasksPane (Managers M11)", () => {
     expect(await screen.findByText("No tasks yet")).toBeInTheDocument();
     expect(screen.queryByTestId("task-filters")).toBeNull();
     expect(screen.getAllByRole("button", { name: "New task" }).length).toBeGreaterThan(0);
+  });
+
+  it("the toast never doubles the answer's own punctuation", async () => {
+    const { answeredMessage } = await import("./shared");
+    const r = { task: AWAIT_1, episode: { id: "e", file: "f", importance: 5, objective: null } };
+    expect(answeredMessage(r, "Yes, go ahead.", false)).toBe("Answered “Yes, go ahead”. The manager will see it on its next run.");
+    expect(answeredMessage({ ...r, wake: { fired: true } }, "merge", true)).toBe("Answered “merge”. The manager has been woken.");
+    expect(answeredMessage({ ...r, wake: { fired: false, reason: "the wake trigger is disabled" } }, "", true)).toBe(
+      "Answered. The manager was not woken: the wake trigger is disabled.",
+    );
   });
 
   it("a failed load shows an error with Retry, which recovers", async () => {

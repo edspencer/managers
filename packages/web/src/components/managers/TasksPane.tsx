@@ -168,7 +168,6 @@ export function TasksPane({
   const [objMenu, setObjMenu] = useState(false);
   const [statusMenu, setStatusMenu] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
-  const [highlight, setHighlight] = useState<string | null>(null);
   const dismissToast = useCallback(() => setToast(null), []);
   const filters = useTaskFilters();
   const location = useLocation();
@@ -237,17 +236,13 @@ export function TasksPane({
     if (wantsClosed && list && done.length === 0 && list.doneMonths.length && !doneLoading) void loadNextDone();
   }, [wantsClosed, list, done.length, doneLoading, loadNextDone]);
 
-  // `#<task-id>`: scroll to the row and flash it once the list is in.
+  // `#<task-id>` (a status report's "Needs you" link): scroll to the row once
+  // the list is in, and mark it for as long as the URL addresses it.
+  const highlight = location.hash.replace(/^#/, "") || null;
   useEffect(() => {
-    const id = location.hash.replace(/^#/, "");
-    if (!id || !list) return;
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.scrollIntoView({ block: "center" });
-    setHighlight(id);
-    const t = setTimeout(() => setHighlight(null), 2500);
-    return () => clearTimeout(t);
-  }, [location.hash, list]);
+    if (!highlight || !list) return;
+    document.getElementById(highlight)?.scrollIntoView({ block: "center" });
+  }, [highlight, list]);
 
   const afterChange = useCallback(async () => {
     await load();
@@ -315,15 +310,11 @@ export function TasksPane({
     <PaneScroll testId="tasks-pane">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-lg font-semibold tracking-tight text-fg">Tasks</h2>
-        <Button
-          size="sm"
-          variant="primary"
-          icon={<PlusIcon width={13} height={13} />}
-          onClick={() => setNewOpen(true)}
-          disabled={list === null}
-        >
-          New task
-        </Button>
+        {list !== null && !nothingAtAll && (
+          <Button size="sm" variant="primary" icon={<PlusIcon width={13} height={13} />} onClick={() => setNewOpen(true)}>
+            New task
+          </Button>
+        )}
       </div>
 
       {list !== null && !nothingAtAll && (
@@ -404,11 +395,22 @@ export function TasksPane({
             <EmptyState
               variant="panel"
               title="No tasks match"
-              body="Nothing here fits these filters. Try a different objective or status."
+              body={
+                moreDone
+                  ? "Nothing open fits these filters. Closed tasks are loaded a month at a time: show them, or clear the filters."
+                  : "Nothing here fits these filters. Try a different objective or status."
+              }
               action={
-                <Button variant="ghost" onClick={() => filters.update({ objective: null, statuses: [] })}>
-                  Clear filters
-                </Button>
+                <>
+                  {moreDone && (
+                    <Button variant="subtle" loading={doneLoading} loadingLabel="Loading…" onClick={() => void loadNextDone()}>
+                      {done.length ? `Load older · ${monthLabel(moreDone)}` : "Show done"}
+                    </Button>
+                  )}
+                  <Button variant="ghost" onClick={() => filters.update({ objective: null, statuses: [] })}>
+                    Clear filters
+                  </Button>
+                </>
               }
             />
           ) : (

@@ -143,7 +143,9 @@ describe("ObjectiveDetailView (Managers M11)", () => {
     renderDetail();
     expect(await screen.findByText("No journal entries yet")).toBeInTheDocument();
     expect(screen.getByText("No open tasks for this objective")).toBeInTheDocument();
-    expect(screen.getByText("The manager hasn't summarised progress yet.")).toBeInTheDocument();
+    // One invitation for the three empty sections, not three identical cards.
+    expect(screen.getByText("The manager hasn't written anything here yet")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Strategy" })).toBeNull();
   });
 
   it("an unknown objective is a not-found page with a way back", async () => {

@@ -249,5 +249,20 @@ sessionId}`), then poll `…/managers/runs/<runId>`.
 `write_report {"type":"bogus",…}`: the tool call errors and nothing is written.
 `empty-project` lists `status` with `current: null`.
 
+### Objectives and Tasks UI fixture (M11)
+
+No new files: the M4 domain fixtures drive the Objectives and Tasks tabs.
+`acme-site` has three objectives (`blog-cadence` and `pricing-rewrite` active,
+`fix-broken-links` done and with no tasks, which is the zero-results filter),
+journals spanning two months (so "Load older" has a month to load), two
+awaiting-ed tasks with options, and closed tasks in two `done/` months (so "Show
+done" then "Load older" both have something). The one change: the `morning-check`
+run of yesterday (`r-…-wk`, the run the `blog-cadence` "Morning wake" journal
+entry names) now carries `sessionId` = the seeded `acme-site:morning` chat, so
+the journal's run link opens a chat. Home has one awaiting-ed task and no
+objectives. No fixture has an ENABLED `wake`, so the answer form's "Wake the
+manager now" switch is disabled with its reason; enable `acme-site`'s `wake` in
+the Triggers tab to exercise the enabled path (its cron is 07:00 UTC).
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

@@ -211,6 +211,22 @@ What changed from Paddock, and what did not:
   …/managers/reports/:type/refresh` fires the derived trigger ignoring `enabled` → 202
   `{runId, sessionId}`; `GET …/managers/reports` lists every effective type with its
   config and current report.
+- **Objectives and Tasks UI (M11, `packages/web/src/components/managers/`).** Two tabs
+  after Home, on both mounts: `…/objectives[/:objectiveId]` and `…/tasks[/:taskId]`
+  (`ProjectViewTab` `objectives|tasks`, `deriveView` matches whole segments, sticky
+  last tab knows them). `ObjectivesPane` (cards: status, the `excerpt` of "Where we
+  are" and `openTasks`, both added to the list DTO server-side) → `ObjectiveDetail`
+  (sections as Markdown, open tasks, "Edit in Files", `JournalTimeline`: by UTC day,
+  `id="ep-…"` anchors, "Load older" one month at a time, and a `#ep-…` in an older
+  month pages back until it is loaded; the run link resolves the run's chat).
+  `TasksPane`: open tasks grouped Awaiting you → Doing → Open → Blocked, filters in
+  the URL query (`?objective=<id>|none&status=a,b`), closed months lazy behind "Show
+  done", `#<task-id>` marks a row (the report's Needs-you link), a row `Menu` moves
+  the status (never to awaiting-ed), `/tasks/:taskId` is `TaskDetailView`.
+  `TaskAnswer` (self-contained, for M13's reuse) posts `…/answer`; its "Wake the
+  manager now" switch reads `GET …/managers/wake` `{available, reason}`, the same
+  check the answer route uses. Every pane has a skeleton, an error `Callout` with
+  Retry and an empty state; tokens and `ui/` primitives only.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
