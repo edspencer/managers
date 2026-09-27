@@ -39,8 +39,8 @@ environment. See [`managers-rig/README.md`](managers-rig/README.md).
 
 `npm run demo:gif` seeds a throwaway synthetic Paddock instance, boots it, drives
 a couple of live turns, photographs eight beats with Playwright, and encodes the
-result to GIF (plus MP4/WebM). It writes both committed copies of the asset —
-`docs/demo/paddock-demo.gif` and `website/public/demo/paddock-demo.gif`.
+result to GIF (plus MP4/WebM). It writes the committed asset,
+`docs/demo/paddock-demo.gif` (Paddock's reel; it shows Paddock, not Managers).
 
 Everything it shows is invented: no production data, no real repositories. See
 [`demo-gif/README.md`](demo-gif/README.md) for how to change the storyboard, and

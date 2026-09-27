@@ -3,15 +3,9 @@ name: Managers CI
 on:
   push:
     branches: [main]
-  # `chore/**` covers long-lived integration branches (e.g. chore/retire-keeper):
-  # without it, child PRs targeting one get only the external checks (Cloudflare,
-  # GitGuardian) and NO typecheck/tests/E2E — a green tick that proves nothing.
-  #
-  # `feat/**` is here for the same reason and was found the same way (#878): a
-  # stacked PR based on a feature branch is a normal way to split a large issue,
-  # and every one of them was landing with zero typecheck, zero tests and zero
-  # E2E. Note this filters on the BASE branch, so it adds only the stacked case —
-  # a feat/** branch targeting main already ran CI.
+  # `chore/**` / `feat/**` cover stacked PRs whose BASE is an integration or
+  # feature branch; without them such PRs would land with no typecheck, tests
+  # or E2E at all.
   pull_request:
     branches: [main, "chore/**", "feat/**"]
 
@@ -43,46 +37,6 @@ jobs:
       - name: Unit + integration tests
         run: npm test
 
-  website:
-    name: Docs site build
-    runs-on: ubuntu-latest
-    # paths-filter reads the PR's changed-file list through the API.
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@v7
-      # `website/` is deliberately outside the root npm workspaces and Cloudflare
-      # Pages builds it on its own, so nothing else here would catch a sidebar
-      # `slug` that doesn't resolve or a relative image path that doesn't exist.
-      # Only worth the runner time when the docs actually change — `openapi-site/**`
-      # counts because website's `prebuild` copies it into `public/api/`.
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            docs:
-              - 'website/**'
-              - 'openapi-site/**'
-      - uses: actions/setup-node@v7
-        if: steps.filter.outputs.docs == 'true'
-        with:
-          node-version: 22
-          cache: npm
-      # No lockfile by design, and the build deps live in `dependencies` (not
-      # `devDependencies`) so a NODE_ENV=production install still gets them —
-      # `npm install` is exactly what Cloudflare Pages runs. rehype-mermaid uses
-      # the `pre-mermaid` strategy (diagrams render client-side), so the build
-      # needs no Playwright browser download.
-      - name: Install docs-site deps
-        if: steps.filter.outputs.docs == 'true'
-        run: npm install
-        working-directory: website
-      - name: Build docs site
-        if: steps.filter.outputs.docs == 'true'
-        run: npm run build
-        working-directory: website
-
   e2e:
     name: E2E (Playwright, fake-claude)
     runs-on: ubuntu-latest
@@ -99,15 +53,14 @@ jobs:
         run: npm run build
       # Drives the built SPA against the real server + fake-claude binary across
       # a standard + a git-enabled Playwright server (no Anthropic calls).
-      # MANAGERS_E2E_TMP/_GIT_TMP pin the run's temp dirs (#774). Left unset the
-      # config mkdtemps under os.tmpdir(), so the HTML report + traces landed at
-      # a path nothing downstream could name — and the upload step below pointed
-      # at test/e2e/playwright-report/, which nothing has ever written.
+      # MANAGERS_E2E_TMP/_GIT_TMP pin the run's temp dirs. Left unset the
+      # config mkdtemps under os.tmpdir(), and the upload step below could not
+      # name the HTML report + traces.
       - name: Browser E2E journeys
         id: e2e
         env:
-          MANAGERS_E2E_TMP: ${{ runner.temp }}/paddock-e2e
-          MANAGERS_E2E_GIT_TMP: ${{ runner.temp }}/paddock-e2e-git
+          MANAGERS_E2E_TMP: ${{ runner.temp }}/managers-e2e
+          MANAGERS_E2E_GIT_TMP: ${{ runner.temp }}/managers-e2e-git
         run: npm run test:e2e
       # Only when the E2E step itself failed: an earlier step failing (npm ci,
       # build) would leave nothing to upload, and `if-no-files-found: error` is
@@ -120,7 +73,7 @@ jobs:
           # report/ is the HTML reporter's outputFolder; test-results/ is
           # `outputDir` — the failure screenshots, traces and videos.
           path: |
-            ${{ runner.temp }}/paddock-e2e/report/
-            ${{ runner.temp }}/paddock-e2e/test-results/
+            ${{ runner.temp }}/managers-e2e/report/
+            ${{ runner.temp }}/managers-e2e/test-results/
           retention-days: 7
           if-no-files-found: error

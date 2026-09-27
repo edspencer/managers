@@ -94,12 +94,11 @@ if (!argv.includes("--skip-shoot")) {
 run("build.mjs");
 
 // ── install into the repo ───────────────────────────────────────────────────
-// Two copies on purpose: the README reads the docs/ path on GitHub, and the
-// Astro site serves its own public/ tree. They must stay byte-identical.
+// (Paddock also copied it into its docs site's public/ tree; Managers has no
+// docs site.)
 const dist = path.join(OUT, "dist");
 const targets = [
   ["paddock-demo.gif", "docs/demo/paddock-demo.gif"],
-  ["paddock-demo.gif", "website/public/demo/paddock-demo.gif"],
 ];
 for (const [src, rel] of targets) {
   const from = path.join(dist, src);

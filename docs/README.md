@@ -1,8 +1,12 @@
 # `docs/` — what is actually in here
 
-**The documentation website is the source of truth.** Read
-**[paddock.edspencer.net](https://paddock.edspencer.net)**, whose content is plain
-markdown in this repo under [`website/src/content/docs/`](../website/src/content/docs/).
+**This directory is frozen material inherited from Paddock.** Managers does not
+maintain it. Paddock's documentation site,
+**[paddock.edspencer.net](https://paddock.edspencer.net)** (source in
+[edspencer/paddock](https://github.com/edspencer/paddock/tree/main/website/src/content/docs)),
+is the reference for the inherited machinery; read `PADDOCK_` there as
+`MANAGERS_`. The Managers-specific concepts are in the root
+[`README.md`](../README.md), [`CLAUDE.md`](../CLAUDE.md) and [`AUTH.md`](../AUTH.md).
 
 This directory is **not** one thing. It is three, and the difference matters
 because part of it is stale enough to break a server if you follow it:
@@ -25,13 +29,11 @@ They are not updated against releases, and they have been wrong in ways that
 cost real time — until #691 was reflected here they told readers to set
 `CLAUDE_HOME=$HOME/.claude`, a variable that no longer exists and a value that
 now makes Paddock **refuse to boot**. If you find something else wrong in one of
-them, fix the **website** copy; correcting a fork nobody should be reading just
-makes it look maintained.
+them, it is Paddock's upstream docs that are maintained, not these.
 
 ## 2. Originals that live here permanently
 
-These have **no** website twin. The website links *out* to them by URL, so
-`docs/` is their address and they are not going anywhere. Each is a
+These have **no** website twin. Each is a
 **point-in-time** record — accurate when written, deliberately not tracked
 against later releases.
 
@@ -42,14 +44,9 @@ against later releases.
 
 ## 3. Live assets
 
-- `demo/` — the demo GIF frames and script. **Load-bearing**: the path is
-  hard-coded in [`scripts/demo-gif/make.mjs`](../scripts/demo-gif/make.mjs), and
-  the README embeds from here.
+- `demo/` — Paddock's demo GIF frames and script (they show Paddock, not
+  Managers). The path is hard-coded in
+  [`scripts/demo-gif/make.mjs`](../scripts/demo-gif/make.mjs).
 - `screenshots/` — historical UI captures. Nothing *renders* them, but
   `HISTORY.md` names specific files here nine times as the record of what each
   milestone captured, so they are not free to delete.
-
-The contributor runbook that used to sit here has moved to
-[`DOCS-UPDATE-RUNBOOK.md`](../DOCS-UPDATE-RUNBOOK.md) at the repo root, alongside
-`CONTRIBUTING.md` and `RELEASING.md` — it is a live process document and should
-not share a fate with the forks above.

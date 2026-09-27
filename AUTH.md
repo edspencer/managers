@@ -37,7 +37,7 @@ as the same user. So `none` is an explicit, loud opt-in:
 
 - **Boot refuses `MANAGERS_AUTH_MODE=none`** unless
   `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1` is also set. Only the credential-free test
-  rigs (`scripts/managers-rig/`, the E2E server, `tools/docs-media/`,
+  rigs (`scripts/managers-rig/`, the E2E server and
   `scripts/demo-gif/`) and the integration-test harness set it.
 - When it is set, boot logs a `SECURITY:` warning, every page shows a persistent
   red banner, **"No authentication: agents on this host can act as you"**, and
@@ -127,10 +127,10 @@ Kubernetes probes both do).
 
 ### Safe-by-default binding
 
-Because `none` is fully open, Paddock **won't let you expose it unauthenticated
-by accident**. This is what makes `npx @edspencer/paddock` on a laptop safe with no
-configuration: it binds loopback, so "no authentication" means "reachable only from
-this machine". You need to read the rest of this file when you put Paddock somewhere
+Because `none` is fully open, Managers **won't let you expose it unauthenticated
+by accident** (and, since M14.5, won't start in `none` at all without
+`MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1`). Even with that opt-in it binds loopback,
+so "no authentication" means "reachable only from this machine". You need to read the rest of this file when you put Paddock somewhere
 other people can reach.
 
 The bind host defaults to **`127.0.0.1`** (loopback only), and if
@@ -294,7 +294,8 @@ Practical consequences:
 
 Setup, the scope grammar, and the per-tool reference live in
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md#management-api-mcp-external-callers)
-and on the [documentation site](https://paddock.edspencer.net/reference/mcp/).
+and in the upstream [Paddock documentation](https://paddock.edspencer.net/reference/mcp/)
+(read `PADDOCK_` there as `MANAGERS_`).
 
 ---
 

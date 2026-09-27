@@ -1,6 +1,10 @@
-# Contributing to Paddock
+# Contributing to Managers
 
-Thanks for hacking on Paddock. This is a short operational guide — how to get the
+> Inherited from Paddock and still accurate for this code; where it says
+> "Paddock", read "Managers". Managers has no changesets and no release
+> pipeline yet, so skip the changeset section.
+
+Thanks for hacking on Managers. This is a short operational guide — how to get the
 stack running, the conventions we follow, and the environment gotchas that will
 otherwise cost you an afternoon. For deeper material, follow the links rather than
 re-reading it here:
@@ -11,7 +15,6 @@ re-reading it here:
   with its default.
 - **[docs/API.md](docs/API.md)** — the REST + WebSocket contract.
 - **[docs/TESTING.md](docs/TESTING.md)** — the test strategy and layers.
-- **[RELEASING.md](RELEASING.md)** — the changesets + release pipeline.
 - **[AUTH.md](AUTH.md)** — authentication modes and secret handling.
 
 ## Prerequisites
@@ -135,5 +138,4 @@ git add .changeset && git commit -m "chore: add changeset"
 
 No changeset is needed for pure-internal changes (tests, CI, refactors with no
 observable effect, or **docs-only** changes to root/`docs/` files that don't ship
-in a package). The full release flow — how the "chore: version packages" PR cuts a
-Docker image + tarball — is in [RELEASING.md](RELEASING.md).
+in a package). (Paddock's release flow is in its own repo's `RELEASING.md`.)

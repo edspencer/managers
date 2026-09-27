@@ -1,8 +1,7 @@
 # `scripts/demo-gif/` — the README / docs demo GIF
 
-Regenerates `docs/demo/paddock-demo.gif` (and the byte-identical copy at
-`website/public/demo/paddock-demo.gif`), plus MP4/WebM versions of the same
-timeline. Eleven beats, about 22 seconds.
+Regenerates `docs/demo/paddock-demo.gif` (inherited from Paddock; it shows the
+Paddock UI), plus MP4/WebM versions of the same timeline. Eleven beats, about 22 seconds.
 
 Everything it shows is **synthetic** — invented projects, invented chats, an
 invented git repo. No production data, no real repositories, no credentials.

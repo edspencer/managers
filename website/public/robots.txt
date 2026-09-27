@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://paddock.edspencer.net/sitemap-index.xml
