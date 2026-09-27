@@ -275,5 +275,10 @@ export const RECORD_ARTIFACT_DESC =
   "Only works inside a trigger run.";
 
 export const MEMORY_OP_DESC =
-  "Edit semantic memory (add, update or supersede a fact). Only available while Ed is present " +
-  "(a chat he started) or in a consolidation run; elsewhere it refuses. Not implemented yet.";
+  "Edit semantic memory: one fact per call — `add` a new one, `update` (refine or confirm) an active " +
+  "one, `supersede` one that is no longer true (it is kept, with `until`, never deleted), or `noop` " +
+  "(already captured). Cite the episode ids behind the op in `evidence`; each must exist, and a " +
+  "`pattern` needs at least 2. The server regenerates memory/MEMORY.md's index (Ed's text above its " +
+  "marker is kept). Only available while Ed is present (a message he just sent) or in a consolidation " +
+  "run; anywhere else it refuses. " +
+  UNTRUSTED_TEXT_RULE;

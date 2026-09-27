@@ -309,5 +309,27 @@ Additions only:
   `mkdir -p <rig>/data/projects/broken-conn/tasks && ln -s open <rig>/data/projects/broken-conn/tasks/open`
   (ELOOP). `broken-conn`'s group then shows an error row and the others render.
 
+### Consolidation fixture (M14)
+
+Additions only. Consolidation **ships off** everywhere, the rig included.
+- `acme-site`'s `project.yaml` has `behaviours.consolidate-memory.config.promptFile:
+  consolidate.md` and **no** `enabled`. Switch it on in Settings → Behaviours; the
+  Memory tab then shows "Run consolidation now".
+- `.managers/triggers/consolidate.md` calls `memory_op add qa-pattern` (a
+  `pattern`) citing two REAL seeded journal entries (`…-af`, `…-aj` in
+  `blog-cadence`), so a run writes `memory/facts/qa-pattern.md`, regenerates
+  `memory/MEMORY.md` under the marker (the "Acme Site memory" preamble stays) and
+  ends with a server-written `#reflection` episode in `log/`.
+- `.managers/triggers/consolidate-one-evidence.md` is the unhappy path (a pattern
+  with ONE evidence id): copy it over `consolidate.md` in the rig and run again —
+  the Memory op tool block is an error and nothing is written.
+- `acme-site`'s disabled `memory-wake` trigger calls `memory_op` from a wake: Run
+  now shows the "not available in this turn" error.
+- Ed's own chat message may call `memory_op` (the fake `claude` runs a
+  `[[MCP managers.memory_op …]]` typed in the composer); a wake or a replay of
+  that chat may not.
+- The rig's scheduler reports no `nextRunAt` for any schedule, so "armed" is read
+  from the keeper's `schedules` (or `/managers/consolidation` `enabled`).
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

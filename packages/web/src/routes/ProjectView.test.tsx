@@ -88,6 +88,24 @@ vi.mock("../lib/api", async () => {
       getAdoptableChats: (...a: unknown[]) => apiFns.getAdoptableChats(...a),
       adoptChats: (...a: unknown[]) => apiFns.adoptChats(...a),
       unadoptChats: (...a: unknown[]) => apiFns.unadoptChats(...a),
+      // Managers fetchers the Home overview makes (M12+) are not under test here: keep them
+      // pending rather than undefined, which threw "api.managersTasks is not a function"
+      // as unhandled rejections and failed the run's exit code (seen since M13).
+      ...Object.fromEntries(
+        [
+          "managersTasks",
+          "managersAlerts",
+          "managersReport",
+          "managersReports",
+          "managersObjectives",
+          "managersRuns",
+          "managersWake",
+          "managersNeedsYou",
+          "managersBehaviours",
+          "managersConsolidation",
+          "managersMemory",
+        ].map((k) => [k, () => new Promise(() => undefined)]),
+      ),
     },
   };
 });

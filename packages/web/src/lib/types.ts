@@ -2309,6 +2309,50 @@ export interface Behaviour {
   inherited: boolean;
   overridden: boolean;
   boundTriggers: BehaviourBoundTrigger[];
+  /** M14: behaviour-specific settings (consolidate-memory's schedule, threshold, …). */
+  config?: BehaviourSettings;
+}
+
+/** M14: a behaviour's `config:` (only consolidate-memory reads any today). */
+export interface BehaviourSettings {
+  schedule?: string;
+  threshold?: number;
+  minGapHours?: number;
+  model?: string;
+  promptFile?: string;
+}
+
+/** M14: one consolidation run, briefly. */
+export interface ConsolidationRunBrief {
+  id: string;
+  status: "running" | "succeeded" | "failed" | "cancelled";
+  started: string | null;
+  finished: string | null;
+  error: string | null;
+}
+
+/** M14: `GET …/managers/consolidation`. */
+export interface ConsolidationState {
+  behaviour: string;
+  trigger: string;
+  /** ON here (this workspace's own switch, and an open gate). */
+  enabled: boolean;
+  settings: { schedule: string; threshold: number; minGapHours: number; model: string | null; promptFile: string | null };
+  nextRunAt: string | null;
+  lastRun: ConsolidationRunBrief | null;
+  lastSucceeded: ConsolidationRunBrief | null;
+  running: boolean;
+  since: string;
+  episodesSince: number;
+  importanceSince: number;
+}
+
+/** M14: `POST …/managers/consolidation/run`. */
+export interface ConsolidationRunResult {
+  ok: true;
+  trigger: string;
+  runId: string | null;
+  sessionId: string;
 }
 
 export interface BehaviourList {

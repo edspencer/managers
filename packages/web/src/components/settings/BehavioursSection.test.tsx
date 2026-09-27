@@ -120,6 +120,31 @@ describe("BehavioursSection (Managers M8)", () => {
     expect(managersAcknowledgeBehaviours).toHaveBeenCalledWith("widget-lib");
   });
 
+  it("M14: consolidate-memory shows its schedule, early-fire threshold and model", async () => {
+    managersBehaviours.mockResolvedValue(
+      list([
+        beh({
+          name: "consolidate-memory",
+          origin: "builtin",
+          triggers: ["consolidate"],
+          tools: [],
+          boundTriggers: [{ name: "consolidate", exists: true, enabled: false, type: "schedule" }],
+          config: { schedule: "30 3 * * *", threshold: 40, minGapHours: 6, model: "claude-sonnet-5" },
+        }),
+        beh(),
+      ]),
+    );
+    render(<BehavioursSection slug="acme-site" />);
+    const sched = await screen.findByTestId("behaviour-consolidate-memory-schedule");
+    expect(sched).toHaveTextContent("schedule 30 3 * * *");
+    expect(sched).toHaveTextContent("early at importance 40, 6h apart");
+    expect(sched).toHaveTextContent("claude-sonnet-5");
+    // A derived trigger is not "missing".
+    expect(within(screen.getByTestId("behaviour-consolidate-memory")).getByText(/trigger consolidate/)).not.toHaveTextContent("missing");
+    // A behaviour with no config shows no schedule row.
+    expect(screen.queryByTestId("behaviour-triage-external-prs-schedule")).toBeNull();
+  });
+
   it("a load failure is shown, not a blank card", async () => {
     const { ApiError } = await import("../../lib/api");
     managersBehaviours.mockRejectedValue(new ApiError("boom", 500));

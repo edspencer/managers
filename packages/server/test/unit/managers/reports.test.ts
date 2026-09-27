@@ -140,7 +140,8 @@ describe("reports: the definition merge (§2.2)", () => {
 describe("derived triggers", () => {
   it("one report-<type> per effective type: fixed capability, expect report, prompt = template", () => {
     const d = derivedTriggers({ slug: "p" }, null);
-    expect(Object.keys(d)).toEqual(["report-status"]);
+    // M14: `consolidate` is derived everywhere too (unarmed while its behaviour is off).
+    expect(Object.keys(d)).toEqual(["report-status", "consolidate"]);
     const t = d["report-status"]!;
     expect(t).toMatchObject({
       trigger: { type: "schedule", cron: "0 8 * * *" },

@@ -12,20 +12,24 @@
  * A filter switches between Active (no `until`, or an `until` still ahead),
  * Superseded (an `until` that has passed) and All. The header says whether
  * consolidation — the run that writes facts — is on, and links to where it is
- * switched (Settings → Behaviours). Facts are read-only in v1: edits go through
- * a chat with the manager, or the file.
+ * switched (Settings → Behaviours). M14: when it is on, the header also says when
+ * memory was last consolidated and offers "Run consolidation now" (Ed's manual
+ * fire; no agent can start one), polling the run and re-reading the facts when it
+ * ends. Facts are read-only in v1: edits go through a chat with the manager
+ * (`memory_op` while Ed is present), or the file.
  *
  * `…/memory/:fact` renders {@link FactDetailView} instead of the list.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../../lib/api";
-import type { Behaviour, EvidenceLink, FactDetail, FactSummary, MemoryScope, MemoryView } from "../../lib/types";
+import type { ConsolidationState, EvidenceLink, FactDetail, FactSummary, MemoryScope, MemoryView } from "../../lib/types";
+import { relativeTime } from "../../lib/format";
 import { memoryUrl } from "../../routes/ProjectView/urls";
 import { Markdown } from "../Markdown";
 import { Button, Callout, Card, Chip, EmptyState, cx } from "../ui";
 import { SparkIcon } from "../icons";
-import { ListSkeleton, PaneError, PaneScroll, errorText, useInternalLinks } from "./shared";
+import { ListSkeleton, PaneError, PaneScroll, Spinner, errorText, useInternalLinks } from "./shared";
 
 export type FactFilter = "active" | "superseded" | "all";
 
@@ -166,8 +170,8 @@ function FactSection({
   );
 }
 
-function ConsolidationState({ base, behaviour, failed }: { base: string; behaviour: Behaviour | null | undefined; failed: boolean }) {
-  const label = failed ? "unknown" : behaviour === undefined ? "…" : behaviour?.enabled ? "on" : "off";
+function ConsolidationChip({ base, state, failed }: { base: string; state: ConsolidationState | null | undefined; failed: boolean }) {
+  const label = failed ? "unknown" : state === undefined ? "…" : state?.enabled ? "on" : "off";
   return (
     <Link
       to={`${base}/settings#behaviours`}
@@ -175,10 +179,128 @@ function ConsolidationState({ base, behaviour, failed }: { base: string; behavio
       title="Consolidation turns recent journal entries into facts. Switch it in Settings → Behaviours."
       data-testid="consolidation-state"
     >
-      <Chip tone={behaviour?.enabled ? "success" : "neutral"} shape="pill" dot className="can-hover:hover:underline">
+      <Chip tone={state?.enabled ? "success" : "neutral"} shape="pill" dot className="can-hover:hover:underline">
         Consolidation: {label}
       </Chip>
     </Link>
+  );
+}
+
+/** How often "Run consolidation now" polls its run, and for how long at most. */
+export const CONSOLIDATION_POLL_MS = 1500;
+const CONSOLIDATION_GIVE_UP_MS = 10 * 60 * 1000;
+
+type RunPhase =
+  | { phase: "idle" }
+  | { phase: "running" }
+  | { phase: "done" }
+  | { phase: "failed"; message: string };
+
+/**
+ * M14: "Last consolidated …" and "Run consolidation now", shown only while
+ * consolidation is on. The button POSTs Ed's manual fire and polls the run.
+ */
+function ConsolidationBar({
+  slug,
+  state,
+  pollMs,
+  onFinished,
+}: {
+  slug: string;
+  state: ConsolidationState;
+  pollMs: number;
+  onFinished: () => Promise<void>;
+}) {
+  const [run, setRun] = useState<RunPhase>(state.running ? { phase: "running" } : { phase: "idle" });
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const runNow = async () => {
+    setRun({ phase: "running" });
+    let runId: string | null = null;
+    try {
+      runId = (await api.managersRunConsolidation(slug)).runId;
+    } catch (e) {
+      if (!alive.current) return;
+      const message =
+        e instanceof ApiError && e.code === "behaviour_off"
+          ? `Consolidation is switched off: ${e.message}`
+          : e instanceof ApiError && e.code === "already_running"
+            ? "A consolidation run is already in flight."
+            : `Consolidation did not start: ${errorText(e, "unknown error")}`;
+      setRun({ phase: "failed", message });
+      return;
+    }
+    const started = Date.now();
+    let status = "running";
+    let error: string | null = null;
+    while (runId && alive.current && Date.now() - started < CONSOLIDATION_GIVE_UP_MS) {
+      await new Promise((res) => setTimeout(res, pollMs));
+      if (!alive.current) return;
+      try {
+        const r = await api.managersRun(slug, runId);
+        status = r.status;
+        error = r.error;
+        if (status !== "running") break;
+      } catch {
+        /* a blip; keep polling */
+      }
+    }
+    if (!alive.current) return;
+    await onFinished();
+    if (!alive.current) return;
+    if (status === "running") setRun({ phase: "failed", message: "The consolidation run is still going after ten minutes." });
+    else if (status !== "succeeded") setRun({ phase: "failed", message: `The consolidation run ${status}${error ? `: ${error}` : "."}` });
+    else setRun({ phase: "done" });
+  };
+
+  const busy = run.phase === "running";
+  const last = state.lastSucceeded?.finished ?? state.lastSucceeded?.started ?? null;
+  return (
+    <div className="mb-4" data-testid="consolidation-bar">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="mr-auto text-xs text-fg-muted" data-testid="consolidation-last">
+          {busy ? (
+            <span>Consolidating…</span>
+          ) : last ? (
+            <span title={new Date(last).toLocaleString()}>Last consolidated {relativeTime(last)}</span>
+          ) : (
+            <span>Never consolidated</span>
+          )}
+          <span className="text-fg-subtle">
+            {" · "}
+            {state.episodesSince === 0
+              ? "nothing new since"
+              : `${state.episodesSince} ${state.episodesSince === 1 ? "entry" : "entries"} since (importance ${state.importanceSince} of ${state.settings.threshold} for an early run)`}
+          </span>
+        </p>
+        <Button
+          size="sm"
+          variant="subtle"
+          onClick={() => void runNow()}
+          loading={busy}
+          icon={busy ? <Spinner /> : undefined}
+          loadingLabel="Consolidating…"
+        >
+          Run consolidation now
+        </Button>
+      </div>
+      {run.phase === "failed" && (
+        <Callout tone="danger" className="mt-2">
+          <span className="break-words">{run.message}</span>
+        </Callout>
+      )}
+      {run.phase === "done" && (
+        <p className="mt-2 text-xs text-success" role="status">
+          Consolidation finished. The facts below are up to date; its #reflection entry in the log lists what changed.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -193,6 +315,7 @@ export function MemoryPane({
   base,
   root,
   factName,
+  pollMs = CONSOLIDATION_POLL_MS,
 }: {
   slug: string;
   base: string;
@@ -200,10 +323,12 @@ export function MemoryPane({
   root: boolean;
   /** `…/memory/:fact`: that fact's page instead of the list. */
   factName?: string;
+  /** How often "Run consolidation now" polls (tests shorten it). */
+  pollMs?: number;
 }) {
   const [view, setView] = useState<MemoryView | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [consolidation, setConsolidation] = useState<Behaviour | null | undefined>(undefined);
+  const [consolidation, setConsolidation] = useState<ConsolidationState | null | undefined>(undefined);
   const [consolidationFailed, setConsolidationFailed] = useState(false);
   const [params, setParams] = useSearchParams();
   const filter: FactFilter = (FILTERS.find((f) => f.id === params.get("show"))?.id ?? "active") as FactFilter;
@@ -227,14 +352,20 @@ export function MemoryPane({
     }
   }, [slug]);
 
+  const loadConsolidation = useCallback(async () => {
+    try {
+      setConsolidation(await api.managersConsolidation(slug));
+      setConsolidationFailed(false);
+    } catch {
+      setConsolidationFailed(true);
+    }
+  }, [slug]);
+
   useEffect(() => {
     if (factName) return;
     void load();
-    api
-      .managersBehaviours(slug)
-      .then((b) => setConsolidation(b.behaviours.find((x) => x.name === CONSOLIDATION_BEHAVIOUR) ?? null))
-      .catch(() => setConsolidationFailed(true));
-  }, [load, slug, factName]);
+    void loadConsolidation();
+  }, [load, loadConsolidation, factName]);
 
   const project = useMemo(() => view?.facts.filter((f) => f.scope === "project") ?? [], [view]);
   const shared = useMemo(() => view?.facts.filter((f) => f.scope === "root") ?? [], [view]);
@@ -255,11 +386,21 @@ export function MemoryPane({
     <PaneScroll testId="memory-pane">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <h2 className="mr-auto text-lg font-semibold tracking-tight text-fg">Memory</h2>
-        <ConsolidationState base={base} behaviour={consolidation} failed={consolidationFailed} />
+        <ConsolidationChip base={base} state={consolidation} failed={consolidationFailed} />
       </div>
       <p className="mb-4 text-sm text-fg-muted">
         Facts the manager has learned, with the journal entries behind them. Change one by telling the manager in a chat.
       </p>
+      {consolidation?.enabled && (
+        <ConsolidationBar
+          slug={slug}
+          state={consolidation}
+          pollMs={pollMs}
+          onFinished={async () => {
+            await Promise.all([load(), loadConsolidation()]);
+          }}
+        />
+      )}
 
       <div role="group" aria-label="Which facts" className="mb-5 inline-flex rounded-lg bg-surface-active p-0.5">
         {FILTERS.map((f) => (

@@ -333,6 +333,15 @@ describe("Managers state tools (M5)", () => {
         )!,
       ),
     ).toBe("status report for 2026-09-26");
+    // M14: memory_op.
+    const add = parsePaddockManage(
+      "mcp__managers__memory_op",
+      out({ op: "add", name: "qa-pattern", type: "pattern", file: "memory/facts/qa-pattern.md", index: "memory/MEMORY.md", evidence: ["ep-1", "ep-2"], until: null }),
+    )!;
+    expect(add).toMatchObject({ tool: "memory_op", op: "add", name: "qa-pattern", evidence: ["ep-1", "ep-2"] });
+    expect(paddockManageSummary(add)).toBe("Fact qa-pattern added (pattern)");
+    expect(paddockManageSummary(parsePaddockManage("mcp__managers__memory_op", out({ op: "supersede", name: "old" }))!)).toBe("Fact old superseded");
+    expect(paddockManageSummary(parsePaddockManage("mcp__managers__memory_op", out({ op: "noop", name: "x", exists: true }))!)).toBe("No change: x");
     expect(
       paddockManageSummary(
         parsePaddockManage("mcp__managers__list_tasks", out({ count: 2, tasks: [{ id: "t-1", title: "a", status: "open" }] }))!,

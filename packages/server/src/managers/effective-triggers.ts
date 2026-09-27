@@ -2,8 +2,11 @@
  * effective-triggers — a workspace's declared triggers plus the ones the server
  * DERIVES (M10, plan §5 M10).
  *
- * Today the derived set is one `report-<type>` per effective report type
- * (`reports.ts`); M14 adds `consolidate`. They are never written to
+ * The derived set is one `report-<type>` per effective report type
+ * (`reports.ts`), plus `consolidate` (M14), derived from the built-in
+ * `consolidate-memory` behaviour in every workspace — armed only while that
+ * behaviour is ON here (and, like every trigger it names, gated by it at every
+ * fire). They are never written to
  * `project.yaml` — they are computed from the `reports:` config (and the
  * built-ins) wherever triggers are armed, registered or fired:
  *
@@ -39,6 +42,13 @@
  */
 import { sanitizeTrigger, type PaddockTrigger } from "../trigger-config.js";
 import {
+  CONSOLIDATE_MEMORY_BEHAVIOUR,
+  effectiveBehaviours,
+  type BehaviourConfig,
+} from "./behaviours.js";
+import { consolidationBehaviour, consolidationSettings, type ConsolidationSettings } from "./consolidation.js";
+import { CONSOLIDATE_TEMPLATE } from "./templates/consolidate.js";
+import {
   effectiveReportTypes,
   reportTemplate,
   REPORT_TRIGGER_PREFIX,
@@ -59,13 +69,19 @@ export const RESERVED_TRIGGER_MESSAGE =
   "(report schedules come from project.yaml `reports:`; consolidation from the consolidate-memory behaviour)";
 
 /** What marks a derived trigger (never persisted). */
-export interface DerivedTriggerInfo {
-  kind: "report";
-  /** The report type. */
-  report: string;
-  /** The prompt to fall back on when the configured `promptFile` cannot be read. */
-  template: string;
-}
+export type DerivedTriggerInfo =
+  | {
+      kind: "report";
+      /** The report type. */
+      report: string;
+      /** The prompt to fall back on when the configured `promptFile` cannot be read. */
+      template: string;
+    }
+  | {
+      /** M14: the reflection run, the one run kind that unlocks `memory_op`. */
+      kind: "consolidation";
+      template: string;
+    };
 
 export type EffectiveTrigger = PaddockTrigger & { derived?: DerivedTriggerInfo };
 
@@ -73,7 +89,14 @@ export type EffectiveTrigger = PaddockTrigger & { derived?: DerivedTriggerInfo }
 export const REPORT_TRIGGER_TOOLS: readonly string[] = ["Read", "Grep", "Glob"];
 export const REPORT_TRIGGER_MAX_TURNS = 20;
 
-type Workspace = ReportWorkspaceLike & { triggers?: Record<string, PaddockTrigger> };
+/** M14: the fixed capability of a consolidation run. */
+export const CONSOLIDATE_TRIGGER_TOOLS: readonly string[] = ["Read", "Grep", "Glob"];
+export const CONSOLIDATE_TRIGGER_MAX_TURNS = 30;
+
+type Workspace = ReportWorkspaceLike & {
+  triggers?: Record<string, PaddockTrigger>;
+  behaviours?: Record<string, BehaviourConfig>;
+};
 
 /** One report type's derived trigger, or null if it would not validate. */
 export function reportTrigger(
@@ -98,12 +121,41 @@ export function reportTrigger(
 }
 
 /**
+ * M14: the derived `consolidate` trigger. `enabled` (its schedule is armed) is
+ * the workspace's OWN `consolidate-memory` flag; every fire is still gated by
+ * the behaviour (built-in `triggers: [consolidate]`), which is where an
+ * unreadable config here or at Home fails closed. The capability is fixed:
+ * Read, Grep, Glob + the injected `managers` tools, `maxTurns` 30, no expectation.
+ * The config picks only the schedule, the prompt file and the model.
+ */
+export function consolidateTrigger(
+  settings: ConsolidationSettings,
+  enabled: boolean,
+  collidingBehaviour?: string,
+): EffectiveTrigger | null {
+  const rec = sanitizeTrigger({
+    trigger: { type: "schedule", cron: settings.schedule },
+    run: {
+      ...(settings.promptFile ? { promptFile: settings.promptFile } : { prompt: CONSOLIDATE_TEMPLATE }),
+      session: "new",
+      tools: [...CONSOLIDATE_TRIGGER_TOOLS],
+      maxTurns: CONSOLIDATE_TRIGGER_MAX_TURNS,
+      expect: { kind: "none" },
+      ...(settings.model ? { model: settings.model } : {}),
+      ...(collidingBehaviour ? { behaviour: collidingBehaviour } : {}),
+    },
+    enabled,
+  });
+  return rec ? { ...rec, derived: { kind: "consolidation", template: CONSOLIDATE_TEMPLATE } } : null;
+}
+
+/**
  * `project.triggers` plus the derived triggers, keyed by name. A declared trigger
  * whose name a derived one takes is replaced (keeping its `run.behaviour`).
  */
 export function effectiveTriggers(
   project: Workspace,
-  root: ReportWorkspaceLike | null,
+  root: (ReportWorkspaceLike & { behaviours?: Record<string, BehaviourConfig> }) | null,
 ): Record<string, EffectiveTrigger> {
   const out: Record<string, EffectiveTrigger> = { ...(project.triggers ?? {}) };
   for (const t of effectiveReportTypes(project, root)) {
@@ -111,6 +163,18 @@ export function effectiveTriggers(
     const rec = reportTrigger(t, colliding);
     if (rec) out[t.trigger] = rec;
   }
+  // M14: `consolidate`, from the merged consolidate-memory definition. Armed only
+  // on this workspace's own flag (never Home's for a project) and a readable file.
+  const own = project.behaviours?.[CONSOLIDATE_MEMORY_BEHAVIOUR]?.enabled === true && !project.configError;
+  const behaviour = consolidationBehaviour(
+    effectiveBehaviours({ slug: project.slug, behaviours: project.behaviours }, root ? { slug: "", behaviours: root.behaviours } : null),
+  );
+  const consolidate = consolidateTrigger(
+    consolidationSettings(behaviour),
+    own,
+    project.triggers?.[CONSOLIDATE_TRIGGER_NAME]?.run.behaviour,
+  );
+  if (consolidate) out[CONSOLIDATE_TRIGGER_NAME] = consolidate;
   return out;
 }
 

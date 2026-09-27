@@ -814,6 +814,9 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
       // #301) and cancels any in-flight watch, so the retry cap counts auto re-drives
       // BETWEEN human messages and a later real hang is recovered fresh.
       if (sessionId) recoveryEngine.onHumanMessage(sessionId);
+      // Managers M14: Ed's message drives THIS turn, and only this one. Cleared the
+      // moment the turn's foreground drive settles (success, failure or Stop).
+      let humanTurnLive = true;
       let jobId: string | null = null;
       let resolvedSession: string | null = sessionId ?? null;
       // One-shot guard: a brand-new chat is attributed to its agent the instant
@@ -1003,14 +1006,21 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
         // and the write tools the write opt-in, exactly as the whole server used
         // to. A HUMAN turn is the ROOT of any spawn tree (origin human, depth 0), so
         // its children are depth 1 — the same builder the spawned path uses, just
-        // seeded with HUMAN_ROOT. `origin: "human"` is what makes memory_op
-        // available: Ed is present.
+        // seeded with HUMAN_ROOT.
+        //
+        // Managers M14: `humanPresent` is what makes memory_op available — Ed is
+        // present — and it is true ONLY while this turn (driven by the message he
+        // just sent) runs. These very server defs are remembered for the chat's
+        // wakes (wakeInjection.remember below) and stay attached through a
+        // session-mode background re-invocation, so the origin alone would let a
+        // self-scheduled wake of Ed's chat edit memory with nobody there.
         injectedMcpServers[SELF_MCP_SERVER_KEY] = buildSelfMcpServerDef(selfMcpCtx, {
           currentProjectSlug: slug,
           currentSessionId: () => resolvedSession ?? sessionId ?? null,
           parentProvenance: HUMAN_ROOT,
           includeRead: deps.cfg.selfMcpEnabled,
           origin: "human",
+          humanPresent: () => humanTurnLive,
           includeWrite: deps.cfg.selfMcpEnabled && deps.cfg.selfMcpWriteEnabled,
           includeTriggers: deps.cfg.selfMcpEnabled && includeTriggers,
           // Project provisioning (#467) rides on the write block behind its own
@@ -1114,6 +1124,8 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
             await translate(m as unknown as ChatSDKMessage);
           },
         });
+        // M14: the turn Ed's message drove is over; nothing after this is his.
+        humanTurnLive = false;
 
         // #404: session-mode turns that produced a real reply routinely end with a
         // trailing `error_*` / `success:false` result frame (the #380/#394 banner
@@ -1195,6 +1207,7 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
           recoveryEngine.armWatch({ slug, sessionId: finalSession });
         }
       } catch (err) {
+        humanTurnLive = false;
         const error = err instanceof Error ? err.message : String(err);
         // The origin socket always gets the plain chat:error (its shape predates
         // the hub and existing clients/tests rely on it). If the turn had already

@@ -59,6 +59,8 @@ import {
   type RunRecord,
   type RunDetail,
   type BehaviourList,
+  type ConsolidationState,
+  type ConsolidationRunResult,
   type ConnectionProbeResult,
   type ManagersConnection,
   type BehaviourSwitchResult,
@@ -1217,6 +1219,16 @@ export const api = {
       method: "POST",
       body: "{}",
     });
+  },
+
+  /** M14: the workspace's consolidation state (on?, settings, last runs, what piled up). */
+  async managersConsolidation(slug: string): Promise<ConsolidationState> {
+    return req<ConsolidationState>(`${mgr(slug)}/consolidation`);
+  },
+
+  /** M14: Ed's "Run consolidation now". Poll the run. 409 `behaviour_off` / `already_running`. */
+  async managersRunConsolidation(slug: string): Promise<ConsolidationRunResult> {
+    return req<ConsolidationRunResult>(`${mgr(slug)}/consolidation/run`, { method: "POST", body: "{}" });
   },
 
   // --- Managers domain state writes (M5) --------------------------------------

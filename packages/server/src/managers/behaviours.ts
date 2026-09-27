@@ -41,6 +41,26 @@ export interface BehaviourConfig {
   triggers?: string[];
   tools?: string[];
   instructions?: string;
+  /**
+   * M14: behaviour-specific settings. Only the built-in `consolidate-memory`
+   * reads any (its schedule, early-fire threshold, gap, model and prompt file);
+   * merged key by key, built-in < Home < project, like the other fields.
+   */
+  config?: BehaviourSettings;
+}
+
+/** M14: the settings a behaviour may carry (see {@link BehaviourConfig.config}). */
+export interface BehaviourSettings {
+  /** A cron expression for the behaviour's derived trigger. */
+  schedule?: string;
+  /** Summed episode importance that fires the derived trigger early. */
+  threshold?: number;
+  /** The least time, in hours, between two early fires. */
+  minGapHours?: number;
+  /** The model the derived trigger runs on. */
+  model?: string;
+  /** A prompt file under `.managers/triggers/` replacing the built-in prompt. */
+  promptFile?: string;
 }
 
 /** Where an effective behaviour's definition comes from. */
@@ -57,6 +77,8 @@ export interface EffectiveBehaviour {
   /** The tools it gates (Claude Code tool names / permission patterns). */
   tools: string[];
   instructions: string;
+  /** M14: the merged behaviour-specific settings (`{}` for most). */
+  config: BehaviourSettings;
   /** The lowest level that defines it: built-in, Home (the root), or this project. */
   origin: BehaviourOrigin;
   /** Defined above this workspace (built in, or by Home for a project). */
@@ -71,20 +93,26 @@ export function isBehaviourName(name: unknown): name is string {
   return typeof name === "string" && name.length <= BEHAVIOUR_NAME_MAX && NAME_RE.test(name);
 }
 
+/** The built-in behaviour whose derived `consolidate` trigger writes memory (M14). */
+export const CONSOLIDATE_MEMORY_BEHAVIOUR = "consolidate-memory";
+
 /**
  * Built-in definitions, available in every workspace (off until enabled there).
- * `consolidate-memory` is only a definition until M14 wires its trigger.
+ * `consolidate-memory` (M14) derives the `consolidate` trigger: nightly, plus an
+ * early fire once enough important episodes pile up.
  * Deliberately NO tools: `memory_op` is also Ed's in human turns, so denying it
- * whenever consolidation is off would take it from him too.
+ * whenever consolidation is off would take it from him too. Its gate is the
+ * run marker instead (state-ops.ts).
  */
 export const BUILTIN_BEHAVIOURS: Readonly<Record<string, Readonly<BehaviourConfig>>> = {
-  "consolidate-memory": {
+  [CONSOLIDATE_MEMORY_BEHAVIOUR]: {
     description:
-      "Periodically consolidate recent episodes into semantic memory facts (the reflection run; lands in M14).",
+      "Consolidate recent journal entries into memory facts: a nightly reflection run, plus an early one when enough happens.",
     triggers: ["consolidate"],
     tools: [],
     instructions:
       "Only add, update or retire facts that recent episodes support; cite the episode ids as evidence.",
+    config: { schedule: "30 3 * * *", threshold: 40, minGapHours: 6, model: "claude-sonnet-5" },
   },
 };
 
@@ -137,7 +165,37 @@ export function sanitizeBehaviour(raw: unknown): BehaviourConfig | null {
   if (tools !== undefined) out.tools = tools;
   const instructions = str(r.instructions, 2_000);
   if (instructions !== undefined) out.instructions = instructions;
+  const config = sanitizeSettings(r.config);
+  if (config !== undefined) out.config = config;
   return out;
+}
+
+/** M14: a behaviour's `config:`, leniently (an unusable key is dropped, never the map). */
+export function sanitizeSettings(raw: unknown): BehaviourSettings | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: BehaviourSettings = {};
+  const schedule = str(r.schedule, 100);
+  if (schedule !== undefined) out.schedule = schedule;
+  if (typeof r.threshold === "number" && Number.isInteger(r.threshold) && r.threshold >= 1 && r.threshold <= 10_000) {
+    out.threshold = r.threshold;
+  }
+  if (typeof r.minGapHours === "number" && Number.isFinite(r.minGapHours) && r.minGapHours >= 0 && r.minGapHours <= 24 * 90) {
+    out.minGapHours = r.minGapHours;
+  }
+  const model = str(r.model, 100);
+  if (model !== undefined) out.model = model;
+  // A relative `.md` path with no traversal (the fire path re-checks containment).
+  const promptFile = str(r.promptFile, 200);
+  if (
+    promptFile !== undefined &&
+    !promptFile.startsWith("/") &&
+    !promptFile.split(/[\\/]/).includes("..") &&
+    promptFile.toLowerCase().endsWith(".md")
+  ) {
+    out.promptFile = promptFile;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -235,7 +293,9 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
     const pick = <K extends (typeof DEFINITION_KEYS)[number]>(k: K): BehaviourConfig[K] =>
       o?.[k] !== undefined ? o[k] : h?.[k] !== undefined ? h[k] : b?.[k];
     const inherited = origin === "builtin" || (origin === "home" && !isHome);
-    const overridden = inherited && !!o && DEFINITION_KEYS.some((k) => o[k] !== undefined);
+    const overridden =
+      inherited && !!o && (DEFINITION_KEYS.some((k) => o[k] !== undefined) || o.config !== undefined);
+    const config: BehaviourSettings = { ...(b?.config ?? {}), ...(h?.config ?? {}), ...(o?.config ?? {}) };
     return {
       name,
       enabled: !broken && o?.enabled === true,
@@ -243,6 +303,7 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
       triggers: [...(pick("triggers") ?? [])],
       tools: [...(pick("tools") ?? [])],
       instructions: pick("instructions") ?? "",
+      config,
       origin,
       inherited,
       overridden,
@@ -260,6 +321,7 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
     triggers: unknown ? [ALL_TRIGGERS] : [],
     tools: [],
     instructions: "",
+    config: {},
     origin: broken.slug === "" ? "home" : "project",
     inherited: broken !== project,
     overridden: false,

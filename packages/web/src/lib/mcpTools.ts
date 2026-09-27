@@ -117,6 +117,19 @@ export type PaddockManage =
   | { tool: "update_objective"; project: string; id: string; file: string; status: string; created: boolean }
   | { tool: "write_report"; project: string; type: string; date: string; file: string; currentFile: string }
   | { tool: "record_artifact"; project: string; run: string; file: string; artifacts: number }
+  // M14: one semantic-memory edit.
+  | {
+      tool: "memory_op";
+      project: string;
+      op: string;
+      name: string;
+      type?: string;
+      file?: string;
+      index?: string;
+      until?: string | null;
+      evidence: string[];
+      exists?: boolean;
+    }
   | { tool: "list_tasks"; project: string; count: number; tasks: PmTask[] }
   | { tool: "list_objectives"; project: string; count: number; objectives: PmObjective[] }
   | { tool: "read_task"; project: string; task: PmTask }
@@ -320,6 +333,21 @@ export function parsePaddockManage(
         artifacts: num(data.artifacts, 0),
       };
     }
+    case "memory_op": {
+      if (typeof data.op !== "string" || typeof data.name !== "string") return null;
+      return {
+        tool,
+        project: String(data.project ?? ""),
+        op: data.op,
+        name: data.name,
+        type: str(data.type),
+        file: str(data.file),
+        index: str(data.index),
+        until: typeof data.until === "string" ? data.until : null,
+        evidence: Array.isArray(data.evidence) ? data.evidence.map(String) : [],
+        ...(typeof data.exists === "boolean" ? { exists: data.exists } : {}),
+      };
+    }
     case "list_tasks": {
       if (!Array.isArray(data.tasks)) return null;
       const tasks = data.tasks as PmTask[];
@@ -406,6 +434,14 @@ export function paddockManageSummary(pm: PaddockManage): string {
       return `${pm.type} report for ${pm.date}`;
     case "record_artifact":
       return `Artifact recorded on ${pm.run}`;
+    case "memory_op":
+      return pm.op === "add"
+        ? `Fact ${pm.name} added${pm.type ? ` (${pm.type})` : ""}`
+        : pm.op === "update"
+          ? `Fact ${pm.name} updated`
+          : pm.op === "supersede"
+            ? `Fact ${pm.name} superseded`
+            : `No change: ${pm.name}`;
     case "list_tasks":
       return `${pm.count} ${pm.count === 1 ? "task" : "tasks"}`;
     case "list_objectives":

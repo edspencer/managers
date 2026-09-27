@@ -45,6 +45,8 @@ export interface BeginTriggerRunParams {
  */
 export function runKindOf(trigger: TriggerDto): RunWrite["kind"] {
   if (trigger.derived?.kind === "report") return "report";
+  // M14: the derived `consolidate` fire (the marker is never read from disk).
+  if (trigger.derived?.kind === "consolidation") return "consolidation";
   return trigger.trigger.type === "schedule" ? "wake" : "event";
 }
 

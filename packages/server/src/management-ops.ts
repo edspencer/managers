@@ -64,6 +64,7 @@ import {
 } from "./management-policy.js";
 import type { TurnOrigin } from "./run-provenance.js";
 import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
+import { CONSOLIDATE_TRIGGER_NAME } from "./managers/effective-triggers.js";
 import { loadAlerts } from "./managers/alerts.js";
 import { effectiveTriggersFor, reportTypesFor } from "./managers/effective-triggers.js";
 import { behavioursFor } from "./managers/behaviours.js";
@@ -167,6 +168,12 @@ export interface ManagementOpsParams {
   origin?: TurnOrigin | "external";
   /** The Managers run the calling turn belongs to (M6). Defaults to `() => null`. */
   currentRunId?: () => string | null;
+  /**
+   * M14: whether a message Ed just sent through the UI drives the calling turn,
+   * right now. Only the human `chat:send` path supplies it; absent = never. With
+   * a live consolidation run (the in-memory marker), it is what unlocks `memory_op`.
+   */
+  humanPresent?: () => boolean;
   includeWrite: boolean;
   includeTriggers: boolean;
   /**
@@ -218,6 +225,8 @@ export function buildManagementOps(
         currentSessionId,
         currentRunId: params.currentRunId ?? (() => null),
         origin: params.origin ?? "external",
+        ...(params.humanPresent ? { humanPresent: params.humanPresent } : {}),
+        consolidations: deps.managers.consolidations,
         botAuthor: deps.cfg.botGitAuthor,
         loadAlerts: async (slug) => {
           const project = await deps.projects.get(slug);
@@ -588,6 +597,15 @@ export function buildManagementOps(
     },
     runTrigger: async (projectSlug, name) => {
       if (!deps.triggers) return null;
+      // Managers M14: a consolidation run is the one unattended writer of memory,
+      // so no agent (keeper, trigger or external /mcp client) may start one. Its
+      // schedule, the early fire and Ed's "Run consolidation now" are the ways in.
+      if (name === CONSOLIDATE_TRIGGER_NAME) {
+        throw new Error(
+          "the consolidate trigger cannot be run by an agent: consolidation runs on its schedule, fires early " +
+            "when enough happens, or when Ed clicks \"Run consolidation now\" on the Memory tab",
+        );
+      }
       // Reject the post-turn curator up front with a clear message (the generic
       // fire path can't run it — it has no scoped agent; see fireTrigger).
       const p = await deps.projects.get(projectSlug).catch(() => null);

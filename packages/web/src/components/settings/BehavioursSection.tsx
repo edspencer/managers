@@ -53,6 +53,24 @@ function BehaviourRow({
           )}
         </div>
         {b.description && <p className="mt-0.5 text-sm text-fg-muted">{b.description}</p>}
+        {b.config?.schedule && (
+          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-2xs text-fg-subtle" data-testid={`behaviour-${b.name}-schedule`}>
+            <Chip size="sm" title="When its trigger runs (cron)">
+              schedule <span className="font-mono">{b.config.schedule}</span>
+            </Chip>
+            {b.config.threshold !== undefined && (
+              <Chip size="sm" title="Also runs early once this much episode importance has piled up since the last run">
+                early at importance {b.config.threshold}
+                {b.config.minGapHours !== undefined ? `, ${b.config.minGapHours}h apart` : ""}
+              </Chip>
+            )}
+            {b.config.model && (
+              <Chip size="sm" title="The model its runs use">
+                <span className="font-mono">{b.config.model}</span>
+              </Chip>
+            )}
+          </p>
+        )}
         {(b.boundTriggers.length > 0 || b.tools.length > 0) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {b.boundTriggers.map((t) => (

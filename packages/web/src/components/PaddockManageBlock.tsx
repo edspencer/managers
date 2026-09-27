@@ -249,6 +249,18 @@ export function PaddockManageBody({ data }: { data: PaddockManage }) {
         </div>
       );
 
+    case "memory_op":
+      return (
+        <div className={wrap}>
+          <Row label="fact"><Mono>{data.name}</Mono></Row>
+          <Row label="op"><Chip>{data.op}</Chip>{data.type && <span className={`ml-2 ${rowKey}`}>{data.type}</span>}</Row>
+          {data.evidence.length > 0 && <Row label="evidence"><Mono>{data.evidence.join(", ")}</Mono></Row>}
+          {data.until && <Row label="until">{data.until}</Row>}
+          {data.file && <Row label="file"><Mono>{data.file}</Mono></Row>}
+          {data.index && <Row label="index"><Mono>{data.index}</Mono></Row>}
+        </div>
+      );
+
     case "list_tasks":
       return (
         <div className={wrap}>

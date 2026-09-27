@@ -13,6 +13,7 @@ import { MemoryStore } from "./memory-store.js";
 import { RunsStore } from "./runs-store.js";
 import { ReportsStore } from "./reports-store.js";
 import { StateWriter } from "./state-writes.js";
+import { ConsolidationTracker } from "./consolidation.js";
 import { sharedMemoryLayout, workspaceLayout, type WorkspaceLayout } from "./layout.js";
 
 export class ManagersState {
@@ -23,7 +24,12 @@ export class ManagersState {
   readonly runs = new RunsStore();
   readonly reports = new ReportsStore();
   /** Every write (MCP state tools and write REST) goes through this (M5). */
-  readonly writer = new StateWriter(this.episodes);
+  readonly writer = new StateWriter(this.episodes, undefined, this.memory);
+  /**
+   * M14: the consolidation runs in flight in THIS process (the run marker that
+   * unlocks `memory_op`) and the per-workspace early-fire claim.
+   */
+  readonly consolidations = new ConsolidationTracker();
 
   constructor(readonly projectsRoot: string) {}
 

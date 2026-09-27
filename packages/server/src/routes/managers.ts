@@ -46,6 +46,11 @@
  *   PATCH managers/behaviours/:name              {enabled}: writes project.yaml, re-arms, #autonomy episode, commit
  *   POST  managers/behaviours/acknowledge        accept an out-of-UI change (clears the alert)
  *
+ * Consolidation (M14): the reflection run that turns episodes into memory facts (ships OFF).
+ *
+ *   GET   managers/consolidation                 on?, settings, next fire, last runs, what piled up since
+ *   POST  managers/consolidation/run             Ed's "Run consolidation now" → 202 { runId, sessionId }
+ *
  * Connections (M9): the project's `mcp:` block, secret-free.
  *
  *   GET   managers/connections                   name, redacted url, header KEYS, env var names + set?, allowlist, errors
@@ -70,6 +75,7 @@ import { briefingForWorkspace } from "../managers/briefing.js";
 import { boundObjective } from "../managers/trigger-runs.js";
 import {
   CONFIG_UNREADABLE_BEHAVIOUR,
+  CONSOLIDATE_MEMORY_BEHAVIOUR,
   behavioursFor,
   isBehaviourName,
   triggerGate,
@@ -83,9 +89,18 @@ import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } 
 import { probeConnection } from "../managers/mcp-probe.js";
 import { EvidenceResolver } from "../managers/evidence-links.js";
 import { collectNeedsYou } from "../managers/needs-you.js";
-import { effectiveTriggersFor, reportTypesFor } from "../managers/effective-triggers.js";
+import { CONSOLIDATE_TRIGGER_NAME, effectiveTriggersFor, reportTypesFor } from "../managers/effective-triggers.js";
+import {
+  consolidationBehaviour,
+  consolidationHistory,
+  consolidationSettings,
+  consolidationWindow,
+  importanceSum,
+  isReflection,
+} from "../managers/consolidation.js";
 import { BehaviourOffError } from "../managers/behaviours.js";
 import type { Project } from "../projects.js";
+import type { PaddockTrigger } from "../trigger-config.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { isDate, isMonth, isName, isRunId, isTaskId, type WorkspaceLayout } from "../managers/layout.js";
@@ -727,7 +742,10 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           properties: {
             objective: { type: "string", description: "Objective id to brief on in full." },
             trigger: { type: "string", description: "Trigger name to brief as." },
-            kind: { type: "string", description: "`wake` (default), `chat`, or `report` (M10; with `report`)." },
+            kind: {
+              type: "string",
+              description: "`wake` (default), `chat`, `report` (M10; with `report`) or `consolidation` (M14).",
+            },
             report: { type: "string", description: "Report type for `kind=report` (default `status`)." },
           },
         },
@@ -738,8 +756,8 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       withWorkspace(req, reply, async () => {
         const q = req.query;
         if (q.objective !== undefined && !isName(q.objective)) throw new Invalid(`Invalid objective id: ${q.objective}`);
-        if (q.kind !== undefined && q.kind !== "wake" && q.kind !== "chat" && q.kind !== "report") {
-          throw new Invalid(`kind must be wake, chat or report, got ${JSON.stringify(q.kind)}`);
+        if (q.kind !== undefined && !["wake", "chat", "report", "consolidation"].includes(q.kind)) {
+          throw new Invalid(`kind must be wake, chat, report or consolidation, got ${JSON.stringify(q.kind)}`);
         }
         if (q.report !== undefined && !isName(q.report)) throw new Invalid(`Invalid report type: ${q.report}`);
         const project = await projects.get(req.params.slug);
@@ -752,8 +770,13 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           { state, projects, herdctl: ctx.herdctl },
           req.params.slug,
           {
-            kind: (q.kind as "wake" | "chat" | "report" | undefined) ?? "wake",
-            trigger: q.kind === "report" ? (q.trigger ?? `report-${q.report ?? "status"}`) : (q.trigger ?? null),
+            kind: (q.kind as "wake" | "chat" | "report" | "consolidation" | undefined) ?? "wake",
+            trigger:
+              q.kind === "report"
+                ? (q.trigger ?? `report-${q.report ?? "status"}`)
+                : q.kind === "consolidation"
+                  ? (q.trigger ?? CONSOLIDATE_TRIGGER_NAME)
+                  : (q.trigger ?? null),
             report: q.kind === "report" ? (q.report ?? "status") : null,
             objective,
             now: new Date(),
@@ -926,6 +949,108 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           return reply.code(502).send({ error: "The report run did not start a chat", code: "trigger_failed", runId });
         }
         return reply.code(202).send({ ok: true, type, trigger: t.trigger, runId, sessionId });
+      }),
+  );
+
+  // --- consolidation (M14) ----------------------------------------------------------------
+
+  /** The workspace's consolidation state: switch, settings, last runs, what has piled up. */
+  async function consolidationView(slug: string) {
+    const project = await projects.get(slug);
+    const layout = state.layout(project.dir);
+    const behaviours = await behavioursFor(projects, project);
+    const behaviour = consolidationBehaviour(behaviours);
+    const trig = (await effectiveTriggersFor(projects, project).catch(() => null))?.[CONSOLIDATE_TRIGGER_NAME];
+    const gate = triggerGate(CONSOLIDATE_TRIGGER_NAME, trig, behaviours);
+    const settings = consolidationSettings(behaviour);
+    const history = await consolidationHistory(state, layout);
+    const now = new Date();
+    const window = consolidationWindow(history, now);
+    const episodes = await state.episodes.since(layout, Date.parse(window.sinceIso)).catch(() => []);
+    const schedules = await ctx.herdctl.listAgentSchedules(project).catch(() => []);
+    const armed = schedules.find((x) => x.name === CONSOLIDATE_TRIGGER_NAME);
+    const brief = (r: typeof history.last) =>
+      r ? { id: r.id, status: r.status, started: r.started, finished: r.finished, error: r.error } : null;
+    return {
+      behaviour: CONSOLIDATE_MEMORY_BEHAVIOUR,
+      trigger: CONSOLIDATE_TRIGGER_NAME,
+      // ON here: this workspace's own flag AND an open gate (an unreadable config fails closed).
+      enabled: trig?.enabled === true && gate.open,
+      settings,
+      nextRunAt: armed?.nextRunAt ?? null,
+      lastRun: brief(history.last),
+      lastSucceeded: brief(history.lastSucceeded),
+      running: !!history.running || state.consolidations.hasActive(slug),
+      since: window.sinceIso,
+      episodesSince: episodes.filter((e) => !isReflection(e)).length,
+      importanceSince: importanceSum(episodes),
+    };
+  }
+
+  app.get<{ Params: { slug: string } }>(
+    "/managers/consolidation",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "The workspace's memory consolidation state",
+        description:
+          "M14: whether consolidation (the built-in `consolidate-memory` behaviour and its derived `consolidate` " +
+          "trigger) is ON here, its settings (`schedule`, `threshold`, `minGapHours`, `model`, `promptFile`), the " +
+          "armed schedule's `nextRunAt`, the last consolidation run and the last succeeded one (`{ id, status, " +
+          "started, finished, error }`), whether one is `running`, and what has piled up since the last one " +
+          "(`since`, `episodesSince`, `importanceSince`, reflections excluded). It ships OFF.",
+        params: paramsSchema(),
+        response: ok200("`{ behaviour, trigger, enabled, settings, nextRunAt, lastRun, lastSucceeded, running, since, episodesSince, importanceSince }`."),
+      },
+    },
+    (req, reply) => withWorkspace(req, reply, () => consolidationView(req.params.slug)),
+  );
+
+  app.post<{ Params: { slug: string } }>(
+    "/managers/consolidation/run",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Run consolidation now",
+        description:
+          "M14: Ed's \"Run consolidation now\". Fires the derived `consolidate` trigger through the one trigger " +
+          "fire path. A HUMAN route: no agent tool can start a consolidation (`run_trigger consolidate` is " +
+          "refused), because the run is what unlocks `memory_op`. 202 `{ ok, trigger, runId, sessionId }`; poll " +
+          "`managers/runs/:runId`. 409 `behaviour_off` while consolidation is off here, 409 `already_running` " +
+          "while a consolidation run is in flight, 502 when no chat started, 503 when firing is unavailable.",
+        params: paramsSchema(),
+        response: {
+          202: { description: "`{ ok, trigger, runId, sessionId }`.", type: "object", additionalProperties: true },
+        },
+      },
+    },
+    (req, reply) =>
+      withWorkspace(req, reply, async () => {
+        const { slug } = req.params;
+        if (!ctx.fireTrigger) return reply.code(503).send({ error: "Trigger firing is unavailable", code: "unavailable" });
+        const view = await consolidationView(slug);
+        if (view.running) {
+          return reply.code(409).send({ error: "A consolidation run is already in flight here.", code: "already_running" });
+        }
+        let runId: string | null = null;
+        let sessionId: string | null;
+        try {
+          sessionId = await ctx.fireTrigger(slug, CONSOLIDATE_TRIGGER_NAME, {
+            why: "Run consolidation now (Ed, from the Memory tab)",
+            onRun: (id) => {
+              runId = id;
+            },
+          });
+        } catch (err) {
+          if (err instanceof BehaviourOffError) {
+            return reply.code(409).send({ error: err.message, code: "behaviour_off", behaviours: err.gate.off });
+          }
+          throw err;
+        }
+        if (!sessionId) {
+          return reply.code(502).send({ error: "The consolidation run did not start a chat", code: "trigger_failed", runId });
+        }
+        return reply.code(202).send({ ok: true, trigger: CONSOLIDATE_TRIGGER_NAME, runId, sessionId });
       }),
   );
 
@@ -1143,8 +1268,9 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
   // --- behaviours (M8) -----------------------------------------------------------------
 
   /** A behaviour plus the triggers it gates (by its list or their `run.behaviour`). */
-  function behaviourView(b: EffectiveBehaviour, project: Project) {
-    const t = project.triggers ?? {};
+  /** M14: `triggers` is the EFFECTIVE map, so a derived trigger (consolidate, report-*) is not "missing". */
+  function behaviourView(b: EffectiveBehaviour, project: Project, triggers?: Record<string, PaddockTrigger>) {
+    const t = triggers ?? project.triggers ?? {};
     const names = [
       ...new Set([...b.triggers, ...Object.entries(t).filter(([, v]) => v.run.behaviour === b.name).map(([n]) => n)]),
     ].sort();
@@ -1183,8 +1309,9 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           changed: false,
           since: null,
         }));
+        const eff = await effectiveTriggersFor(projects, project).catch(() => project.triggers ?? {});
         return {
-          behaviours: list.map((b) => behaviourView(b, project)),
+          behaviours: list.map((b) => behaviourView(b, project, eff)),
           changedOutsideUi: drift.changed,
           changedSince: drift.changed ? drift.since : null,
         };
@@ -1240,7 +1367,10 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
     }
     const before = list.find((b) => b.name === name);
     if (!before) return notFound(reply, `No such behaviour: ${name}`);
-    if (before.enabled === enabled) return { behaviour: behaviourView(before, project), changed: false };
+    const effOf = (p: Project) => effectiveTriggersFor(projects, p).catch(() => p.triggers ?? {});
+    if (before.enabled === enabled) {
+      return { behaviour: behaviourView(before, project, await effOf(project)), changed: false };
+    }
 
     // M9.5 (audit #6): project.yaml edits that are not this switch (Triggers-tab
     // saves, an agent's set_trigger, hand edits) are committed on their own
@@ -1261,14 +1391,15 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
     const updated = await projects.setBehaviourEnabled(req.params.slug, name, enabled);
     const after = await behavioursFor(projects, updated);
     const now = after.find((b) => b.name === name)!;
+    const nowView = behaviourView(now, updated, await effOf(updated));
     // Re-arm schedules and re-deny tools from the new state. A registration
     // failure must not undo Ed's switch: the fire path re-checks the gate.
     await ctx.herdctl.ensureProjectAgent(updated).catch((err: unknown) => {
       req.log.warn({ err, behaviour: name }, "behaviour switched but agent re-registration failed");
     });
     const scope = [
-      now.triggers.length || behaviourView(now, updated).boundTriggers.length
-        ? `triggers: ${behaviourView(now, updated).boundTriggers.map((t) => t.name).join(", ")}`
+      now.triggers.length || nowView.boundTriggers.length
+        ? `triggers: ${nowView.boundTriggers.map((t) => t.name).join(", ")}`
         : null,
       now.tools.length ? `tools: ${now.tools.join(", ")}` : null,
     ]
@@ -1297,7 +1428,7 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       );
       await ctx.autocommit.flush(updated.dir).catch(() => null);
     }
-    return { behaviour: behaviourView(now, updated), changed: true, episode };
+    return { behaviour: nowView, changed: true, episode };
   }
 
   app.post<{ Params: { slug: string } }>(

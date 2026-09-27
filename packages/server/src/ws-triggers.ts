@@ -33,6 +33,16 @@ import { beginTriggerRun, boundObjective } from "./managers/trigger-runs.js";
 import { briefingForWorkspace, triggerWantsBriefing } from "./managers/briefing.js";
 import { BehaviourOffError, behavioursFor, triggerGate } from "./managers/behaviours.js";
 import { effectiveTriggersFor } from "./managers/effective-triggers.js";
+import {
+  CONSOLIDATE_TRIGGER_NAME,
+  REFLECTION_TAG,
+  consolidationBehaviour,
+  consolidationHistory,
+  consolidationSettings,
+  consolidationWindow,
+  earlyFireDecision,
+  reflectionEpisodeText,
+} from "./managers/consolidation.js";
 
 /** How a fire came about, for the briefing's "why woken" line. */
 export interface TriggerFireOpts {
@@ -121,6 +131,58 @@ deps.herdctl.onScheduleTrigger(async (info: TriggerInfo) => {
   // A fired keeper schedule with no matching enabled SCHEDULE trigger is ignored:
   // triggers are the only thing forwarded into the keeper's `schedules` block.
 });
+
+// --- consolidation early fire (Managers M14) ---------------------------
+
+/**
+ * After an AGENT records an episode (Ed's own — an answer, an autonomy switch —
+ * never starts a run), check whether this workspace's consolidation should fire
+ * early: the behaviour is on, the importance summed since the last consolidation
+ * reached its `threshold`, and the last one started at least `minGapHours` ago.
+ * A per-workspace claim debounces concurrent episodes; a run already in flight
+ * (in memory, or `running` on disk) blocks it. Never throws.
+ */
+async function maybeEarlyConsolidate(slug: string): Promise<void> {
+  const state = deps.managers;
+  if (!state || !state.consolidations.claim(slug)) return;
+  try {
+    const project = await deps.projects.get(slug).catch(() => null);
+    if (!project) return;
+    const behaviours = await behavioursFor(deps.projects, project);
+    const effective = await effectiveTriggersFor(deps.projects, project).catch(() => null);
+    const trig = effective?.[CONSOLIDATE_TRIGGER_NAME];
+    const enabled = !!trig && trig.enabled === true && triggerGate(CONSOLIDATE_TRIGGER_NAME, trig, behaviours).open;
+    if (!enabled) return;
+    const layout = state.layout(project.dir);
+    const history = await consolidationHistory(state, layout);
+    const now = new Date();
+    const window = consolidationWindow(history, now);
+    const episodes = await state.episodes.since(layout, Date.parse(window.sinceIso)).catch(() => []);
+    const decision = earlyFireDecision({
+      settings: consolidationSettings(consolidationBehaviour(behaviours)),
+      enabled,
+      episodes,
+      history,
+      inFlight: state.consolidations.hasActive(slug),
+      now,
+    });
+    if (!decision.fire) return;
+    await fireTrigger(slug, CONSOLIDATE_TRIGGER_NAME, { why: `Early consolidation: ${decision.reason}` }).catch(
+      () => null,
+    );
+  } catch {
+    /* the early fire is best effort; the nightly schedule still runs */
+  } finally {
+    state.consolidations.release(slug);
+  }
+}
+
+if (deps.managers) {
+  deps.managers.writer.onEpisode = (ws, _episode, actor) => {
+    if (actor.kind !== "agent") return;
+    void maybeEarlyConsolidate(ws.key);
+  };
+}
 
 // --- unified triggers (Epic T / T1) ------------------------------------
 
@@ -225,6 +287,33 @@ async function fireTriggerForProject(
         flush: deps.flushManagersCommit,
       })
     : null;
+  // Managers M14: a consolidation run is registered IN MEMORY (the one marker
+  // that unlocks memory_op in it), and at its end the server writes the run's
+  // #reflection episode from the ops it performed, before the record is
+  // finished and committed.
+  const isConsolidation = trigger.derived?.kind === "consolidation";
+  if (run && isConsolidation && deps.managers) {
+    const state = deps.managers;
+    state.consolidations.begin(run.runId, slug);
+    const finish = run.onComplete;
+    run.onComplete = async (r) => {
+      const ops = state.consolidations.end(run.runId);
+      await state.writer
+        .recordEpisode(
+          { key: slug, layout: state.layout(project.dir) },
+          {
+            text: reflectionEpisodeText(run.runId, ops, r.success ? "succeeded" : "failed"),
+            importance: 2,
+            tags: [REFLECTION_TAG],
+            refs: [run.runId],
+          },
+          { kind: "agent", name: "manager", author: deps.cfg.botGitAuthor, runId: run.runId },
+          { internal: true },
+        )
+        .catch(() => undefined);
+      await finish(r);
+    };
+  }
   if (run && opts.onRun) {
     try {
       opts.onRun(run.runId);
@@ -244,8 +333,9 @@ async function fireTriggerForProject(
         { state: deps.managers, projects: deps.projects, herdctl: deps.herdctl },
         slug,
         {
-          // M10: a derived report trigger gets the report briefing.
-          kind: trigger.derived?.kind === "report" ? "report" : "wake",
+          // M10: a derived report trigger gets the report briefing; M14: the
+          // consolidation run the consolidation briefing.
+          kind: trigger.derived?.kind === "report" ? "report" : isConsolidation ? "consolidation" : "wake",
           report: trigger.derived?.kind === "report" ? trigger.derived.report : null,
           trigger: trigger.name,
           runId: run?.runId ?? null,

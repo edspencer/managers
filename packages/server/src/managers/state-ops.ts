@@ -38,7 +38,10 @@ import {
   type WriteActor,
   type WriteReportInput,
   type WriteWorkspace,
+  type MemoryOpInput,
+  type MemoryOpResult,
 } from "./state-writes.js";
+import type { ConsolidationTracker } from "./consolidation.js";
 
 /** A single-file read's outcome: the record, absent, or a file that won't parse. */
 export type ReadOutcome<T> = T | null | { parseError: ParseError };
@@ -47,10 +50,11 @@ export interface ManagementStateOps {
   /** The workspace the calling turn runs in (`""` for Home, and for the external /mcp). */
   currentProjectSlug: string;
   /**
-   * Whether `memory_op` may run in this turn: only when Ed is present
-   * (a human-origin turn). M14 adds consolidation runs.
+   * Whether `memory_op` may run RIGHT NOW (M14): while Ed's own message drives
+   * the turn, or inside a consolidation run. Late-bound, so a wake that replays
+   * this turn's tools later sees false.
    */
-  memoryAvailable: boolean;
+  memoryAvailable(): boolean;
 
   listObjectives(project: string): Promise<{ objectives: ObjectiveSummary[]; parseErrors: ParseError[] }>;
   readObjective(project: string, id: string, journal?: PageOpts): Promise<ReadOutcome<ObjectiveDetail>>;
@@ -67,8 +71,8 @@ export interface ManagementStateOps {
   updateObjective(project: string, input: UpdateObjectiveInput): Promise<ObjectiveResult>;
   writeReport(project: string, input: WriteReportInput): Promise<ReportResult>;
   recordArtifact(project: string, input: RecordArtifactInput): Promise<ArtifactResult>;
-  /** Stub until M14: refuses unless {@link memoryAvailable}, then reports "not implemented". */
-  memoryOp(project: string, input: Record<string, unknown>): Promise<never>;
+  /** M14: add / update / supersede / noop one fact; refused unless {@link memoryAvailable}. */
+  memoryOp(project: string, input: MemoryOpInput): Promise<MemoryOpResult>;
 }
 
 /** What `get_briefing` / the REST preview may ask for. */
@@ -87,6 +91,18 @@ export interface StateOpsParams {
   currentRunId: () => string | null;
   /** How the calling turn started; `external` for the /mcp transport. */
   origin: TurnOrigin | "external";
+  /**
+   * M14: whether a message Ed sent through the UI is driving this turn right now
+   * (the human `chat:send` path sets it for the turn's duration only). Absent =
+   * never. The ORIGIN is not enough: a wake or background re-invocation of a chat
+   * Ed started replays its human-turn tools, and Ed is not there for it.
+   */
+  humanPresent?: () => boolean;
+  /**
+   * M14: the in-memory consolidation-run registry; `memory_op` also works inside
+   * a live consolidation run of THIS workspace (`currentRunId()`). Absent = never.
+   */
+  consolidations?: ConsolidationTracker;
   /** Commit identity for agent writes (`managers-bot`). */
   botAuthor: GitAuthor;
   /** Compute a workspace's alerts (M6; shared with the REST route). */
@@ -108,7 +124,7 @@ export interface ReportContext {
 
 export const MEMORY_OP_UNAVAILABLE =
   "memory_op is not available in this turn: memory is only edited while Ed is present " +
-  "(a chat he started) or in a consolidation run.";
+  "(a message he just sent in a chat) or in a consolidation run.";
 
 export function buildStateOps(p: StateOpsParams): ManagementStateOps {
   const { state } = p;
@@ -121,7 +137,13 @@ export function buildStateOps(p: StateOpsParams): ManagementStateOps {
     runId: p.currentRunId(),
     sessionId: p.currentSessionId(),
   });
-  const memoryAvailable = p.origin === "human";
+  // M14: two grants, both late-bound. The consolidation one is checked against
+  // the workspace the turn runs in; the op's own project is policed separately
+  // (enforceManagementPolicy: the internal keeper writes only its own project).
+  const humanNow = (): boolean => p.humanPresent?.() === true;
+  const consolidationNow = (): boolean =>
+    p.consolidations?.isActive(p.currentRunId(), p.currentProjectSlug) === true;
+  const memoryAvailable = (): boolean => humanNow() || consolidationNow();
 
   return {
     currentProjectSlug: p.currentProjectSlug,
@@ -184,9 +206,16 @@ export function buildStateOps(p: StateOpsParams): ManagementStateOps {
       );
     },
     recordArtifact: async (project, input) => state.writer.recordArtifact(await ws(project), input, actor()),
-    memoryOp: async () => {
-      if (!memoryAvailable) throw new StateWriteError("conflict", MEMORY_OP_UNAVAILABLE);
-      throw new StateWriteError("conflict", "memory_op is not implemented yet (it lands with consolidation, M14)");
+    memoryOp: async (project, input) => {
+      // Decide once, up front: the grant must hold when the op is asked for.
+      const inRun = consolidationNow();
+      if (!inRun && !humanNow()) throw new StateWriteError("conflict", MEMORY_OP_UNAVAILABLE);
+      const runId = inRun ? p.currentRunId() : null;
+      const session = p.currentSessionId();
+      const who = inRun ? `consolidation run ${runId}` : `the manager, as Ed asked${session ? ` (chat ${session})` : ""}`;
+      const result = await state.writer.memoryOp(await ws(project), input, actor(), who);
+      if (inRun) p.consolidations!.note(runId, { op: result.op, name: result.name, ...(result.type ? { type: result.type } : {}) });
+      return result;
     },
   };
 }

@@ -18,6 +18,7 @@
  * Reads only in M4 (M5 appends through the write queue using
  * {@link formatEpisode}).
  */
+import path from "node:path";
 import type { WorkspaceLayout } from "./layout.js";
 import { MONTH_RE, isName } from "./layout.js";
 import type { EpisodeWrite } from "./schemas.js";
@@ -248,6 +249,25 @@ export class EpisodesStore {
       if (hit) return { ...hit, objective, file: layout.rel(abs) };
     }
     return null;
+  }
+
+  /**
+   * M14: every episode in the workspace (the log and every journal) at or after
+   * `sinceMs`, newest first. Only month files from `sinceMs`'s month on are read.
+   */
+  async since(layout: WorkspaceLayout, sinceMs: number): Promise<Episode[]> {
+    const from = new Date(Number.isFinite(sinceMs) ? sinceMs : 0).toISOString().slice(0, 7);
+    const out: Episode[] = [];
+    for (const { abs, objective } of await this.allFiles(layout)) {
+      const month = path.basename(abs, ".md");
+      if (month < from) continue;
+      const got = await this.cache.get(abs);
+      if (!got) continue;
+      for (const e of this.decorate(layout, abs, objective, got).entries) {
+        if (Date.parse(e.at) >= sinceMs) out.push(e);
+      }
+    }
+    return out.sort(byNewest);
   }
 
   private async allFiles(layout: WorkspaceLayout): Promise<{ abs: string; objective: string | null }[]> {

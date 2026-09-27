@@ -215,6 +215,23 @@ function acmeDomain(clock) {
     ...ACME_TASKS.map((t) => renderTask(clock, t)),
     ...facts.map((f) => renderFact(clock, f)),
     renderMemoryIndex("# Acme Site memory\n\nWhat the Acme Site manager has learned.", facts),
+    // M14: the consolidation run's prompt (behaviours.consolidate-memory.config.promptFile).
+    // It cites two REAL seeded journal entries, so the pattern it adds is valid; the
+    // one-evidence variant is the unhappy path (copy it over consolidate.md).
+    {
+      ".managers/triggers/consolidate.md": [
+        "# Consolidation",
+        "",
+        "Turn recent journal entries into facts.",
+        "",
+        `[[MCP managers.memory_op {"op":"add","name":"qa-pattern","type":"pattern","description":"Short posts get published on time; long ones stall.","evidence":["${clock.episodeId(clock.at(29, 11), "af")}","${clock.episodeId(clock.at(20, 10), "aj")}"],"confidence":"medium"}]]`,
+      ].join("\n"),
+      ".managers/triggers/consolidate-one-evidence.md": [
+        "# Consolidation (unhappy path: a pattern with ONE evidence id)",
+        "",
+        `[[MCP managers.memory_op {"op":"add","name":"qa-one-evidence","type":"pattern","description":"This must not be written.","evidence":["${clock.episodeId(clock.at(29, 11), "af")}"]}]]`,
+      ].join("\n"),
+    },
     renderRun(clock, { ...wakeRun, trigger: "morning-check", status: "succeeded", minutes: 4, objective: "blog-cadence", expect: { kind: "episode", within: "48h" }, expectResult: "met", episodes: [clock.episodeId(clock.at(1, 7), "ap")] }),
     // M12: the failed run keeps its briefing, so the run drawer's "What the manager saw" has text.
     renderRun(clock, { daysAgo: 2, hh: 7, suffix: "fl", trigger: "morning-check", status: "failed", minutes: 1, error: "Turn ended early: the model returned an error.", expect: { kind: "episode", within: "48h" }, expectResult: "missing", briefing: ACME_FAILED_BRIEFING }),
@@ -346,6 +363,12 @@ export const PROJECTS = [
       reports: {
         status: { promptFile: "status-report.md" },
       },
+      // M14: consolidation ships OFF (no `enabled`); only its prompt file is set, so
+      // "Run consolidation now" has something for the fake claude to do once Ed
+      // switches it on in Settings → Behaviours.
+      behaviours: {
+        "consolidate-memory": { config: { promptFile: "consolidate.md" } },
+      },
     },
     files: {
       "OVERVIEW.md": [
@@ -387,6 +410,16 @@ export const PROJECTS = [
       wake: {
         trigger: { type: "schedule", cron: "0 7 * * *" },
         run: { prompt: "Wake. [[TOOL]]", session: "new" },
+        enabled: false,
+      },
+      // M14 gate: a WAKE calling memory_op is refused ("not available in this
+      // turn") — memory is edited only while Ed is present or in a consolidation run.
+      "memory-wake": {
+        trigger: { type: "schedule", cron: "0 3 1 1 *" },
+        run: {
+          prompt: 'Wake, and try to write memory. [[MCP managers.memory_op {"op":"add","name":"from-a-wake","type":"user","description":"This must not be written."}]]',
+          session: "new",
+        },
         enabled: false,
       },
       // M10 unhappy path: a report of a type this project does not have. The

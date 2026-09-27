@@ -4577,7 +4577,7 @@
             "in": "query",
             "name": "kind",
             "required": false,
-            "description": "`wake` (default), `chat`, or `report` (M10; with `report`)."
+            "description": "`wake` (default), `chat`, `report` (M10; with `report`) or `consolidation` (M14)."
           },
           {
             "schema": {
@@ -4777,6 +4777,74 @@
               "application/json": {
                 "schema": {
                   "description": "`{ ok, type, trigger, runId, sessionId }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/consolidation": {
+      "get": {
+        "summary": "The workspace's memory consolidation state",
+        "tags": [
+          "Managers"
+        ],
+        "description": "M14: whether consolidation (the built-in `consolidate-memory` behaviour and its derived `consolidate` trigger) is ON here, its settings (`schedule`, `threshold`, `minGapHours`, `model`, `promptFile`), the armed schedule's `nextRunAt`, the last consolidation run and the last succeeded one (`{ id, status, started, finished, error }`), whether one is `running`, and what has piled up since the last one (`since`, `episodesSince`, `importanceSince`, reflections excluded). It ships OFF.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ behaviour, trigger, enabled, settings, nextRunAt, lastRun, lastSucceeded, running, since, episodesSince, importanceSince }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ behaviour, trigger, enabled, settings, nextRunAt, lastRun, lastSucceeded, running, since, episodesSince, importanceSince }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/root/managers/consolidation/run": {
+      "post": {
+        "summary": "Run consolidation now",
+        "tags": [
+          "Managers"
+        ],
+        "description": "M14: Ed's \"Run consolidation now\". Fires the derived `consolidate` trigger through the one trigger fire path. A HUMAN route: no agent tool can start a consolidation (`run_trigger consolidate` is refused), because the run is what unlocks `memory_op`. 202 `{ ok, trigger, runId, sessionId }`; poll `managers/runs/:runId`. 409 `behaviour_off` while consolidation is off here, 409 `already_running` while a consolidation run is in flight, 502 when no chat started, 503 when firing is unavailable.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "`{ ok, trigger, runId, sessionId }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ ok, trigger, runId, sessionId }`.",
                   "type": "object",
                   "additionalProperties": true
                 }
@@ -8193,7 +8261,7 @@
             "in": "query",
             "name": "kind",
             "required": false,
-            "description": "`wake` (default), `chat`, or `report` (M10; with `report`)."
+            "description": "`wake` (default), `chat`, `report` (M10; with `report`) or `consolidation` (M14)."
           },
           {
             "schema": {
@@ -8393,6 +8461,74 @@
               "application/json": {
                 "schema": {
                   "description": "`{ ok, type, trigger, runId, sessionId }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/consolidation": {
+      "get": {
+        "summary": "The workspace's memory consolidation state",
+        "tags": [
+          "Managers"
+        ],
+        "description": "M14: whether consolidation (the built-in `consolidate-memory` behaviour and its derived `consolidate` trigger) is ON here, its settings (`schedule`, `threshold`, `minGapHours`, `model`, `promptFile`), the armed schedule's `nextRunAt`, the last consolidation run and the last succeeded one (`{ id, status, started, finished, error }`), whether one is `running`, and what has piled up since the last one (`since`, `episodesSince`, `importanceSince`, reflections excluded). It ships OFF.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ behaviour, trigger, enabled, settings, nextRunAt, lastRun, lastSucceeded, running, since, episodesSince, importanceSince }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ behaviour, trigger, enabled, settings, nextRunAt, lastRun, lastSucceeded, running, since, episodesSince, importanceSince }`.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{slug}/managers/consolidation/run": {
+      "post": {
+        "summary": "Run consolidation now",
+        "tags": [
+          "Managers"
+        ],
+        "description": "M14: Ed's \"Run consolidation now\". Fires the derived `consolidate` trigger through the one trigger fire path. A HUMAN route: no agent tool can start a consolidation (`run_trigger consolidate` is refused), because the run is what unlocks `memory_op`. 202 `{ ok, trigger, runId, sessionId }`; poll `managers/runs/:runId`. 409 `behaviour_off` while consolidation is off here, 409 `already_running` while a consolidation run is in flight, 502 when no chat started, 503 when firing is unavailable.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "description": "Project slug (absent on the /api/root mount)."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "`{ ok, trigger, runId, sessionId }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "`{ ok, trigger, runId, sessionId }`.",
                   "type": "object",
                   "additionalProperties": true
                 }

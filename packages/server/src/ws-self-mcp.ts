@@ -65,8 +65,13 @@ export function buildSelfMcpServerDef(
      * server itself — and its state block — is built on every turn regardless.
      */
     includeRead: boolean;
-    /** How this turn started; gates `memory_op` (only while Ed is present). */
+    /** How this turn started (child provenance; it no longer gates `memory_op`). */
     origin: TurnOrigin;
+    /**
+     * Managers M14: true only while a message Ed sent through the UI drives the
+     * turn. With a consolidation run, the only grant for `memory_op`.
+     */
+    humanPresent?: () => boolean;
     includeWrite: boolean;
     /**
      * Whether to additionally append the Epic T / T3 unified trigger-management

@@ -3,7 +3,8 @@
  *
  *   state-read   get_briefing, list_objectives, read_objective, list_tasks, read_task, list_memory, list_alerts
  *   state-write  record_episode, upsert_task, update_objective, write_report, record_artifact
- *   memory       memory_op (a stub until M14; refused unless Ed is present)
+ *   memory       memory_op (M14): add / update / supersede / noop one fact; refused unless Ed's own
+ *                message drives the turn, or the turn is a consolidation run
  *
  *   list_alerts  (M6) the dead-man's-switch alerts, computed fresh
  *
@@ -25,7 +26,15 @@ import type { InjectedMcpServerDef, McpToolCallResult } from "@herdctl/core";
 import type { ManagementStateOps } from "./managers/state-ops.js";
 import { ok, fail, errText, redactPaths, coerceToolList, coerceBoolean } from "./self-mcp-util.js";
 import { isMonth, isName, isTaskId } from "./managers/layout.js";
-import { OBJECTIVE_STATUSES, TASK_SOURCES, TASK_STATUSES, EPISODE_MAX_TEXT } from "./managers/schemas.js";
+import {
+  OBJECTIVE_STATUSES,
+  TASK_SOURCES,
+  TASK_STATUSES,
+  EPISODE_MAX_TEXT,
+  FACT_TYPES,
+  CONFIDENCE_LEVELS,
+} from "./managers/schemas.js";
+import type { MemoryOpInput } from "./managers/state-writes.js";
 import { isTaskStatus } from "./managers/tasks-store.js";
 import { isParseFailure } from "./managers/store-util.js";
 import type { TaskStatus, TaskSource, ObjectiveStatus } from "./managers/schemas.js";
@@ -445,15 +454,50 @@ export function stateTools(state: ManagementStateOps): ServerTools {
       inputSchema: {
         type: "object",
         properties: {
-          op: { type: "string", enum: ["add", "update", "supersede", "noop"], description: "The operation." },
-          name: { type: "string", description: "The fact's kebab-case name." },
+          op: {
+            type: "string",
+            enum: ["add", "update", "supersede", "noop"],
+            description:
+              "add: a new fact. update: refine or confirm an active one. supersede: an active fact is no longer " +
+              "true (it is kept, with `until`). noop: an episode is already captured by `name`.",
+          },
+          name: { type: "string", description: "The fact's kebab-case name (its file is memory/facts/<name>.md)." },
+          type: {
+            type: "string",
+            enum: [...FACT_TYPES],
+            description: "What kind of fact (required for add). A `pattern` needs at least 2 evidence episodes.",
+          },
+          description: { type: "string", description: "One line: what the fact says (required for add; ≤300 chars)." },
+          body: { type: "string", description: "The fact's text, in Markdown (no `## ` headings; use `###`)." },
+          evidence: {
+            type: "string",
+            description:
+              "Episode ids supporting the op (one per line, or comma-separated; a JSON array works too). Each must " +
+              "exist in this project's journals or log.",
+          },
+          since: { type: "string", description: "When the fact became true (YYYY-MM-DD; default today)." },
+          until: { type: "string", description: "supersede only: when it stopped being true (YYYY-MM-DD; default today)." },
+          confidence: { type: "string", enum: [...CONFIDENCE_LEVELS], description: "low, medium (default) or high." },
+          reason: { type: "string", description: "Why (one line, for the fact's History)." },
           ...projectProp,
         },
         required: ["op", "name"],
       },
       handler: guarded("memory_op", async (args) => {
         const project = projectOf(state, args);
-        return state.memoryOp(project, args);
+        const r = await state.memoryOp(project, {
+          op: (optStr(args.op)?.trim() ?? "") as MemoryOpInput["op"],
+          name: optStr(args.name) ?? "",
+          ...(optStr(args.type) ? { type: optStr(args.type)!.trim() as MemoryOpInput["type"] } : {}),
+          ...(optStr(args.description) !== undefined ? { description: optStr(args.description) } : {}),
+          ...(optStr(args.body) !== undefined ? { body: optStr(args.body) } : {}),
+          ...(optList(args.evidence) ? { evidence: optList(args.evidence) } : {}),
+          ...(optStr(args.since) ? { since: optStr(args.since)!.trim() } : {}),
+          ...(optStr(args.until) ? { until: optStr(args.until)!.trim() } : {}),
+          ...(optStr(args.confidence) ? { confidence: optStr(args.confidence)!.trim() as MemoryOpInput["confidence"] } : {}),
+          ...(optStr(args.reason) !== undefined ? { reason: optStr(args.reason) } : {}),
+        });
+        return ok({ project, ...r });
       }),
     },
   ];

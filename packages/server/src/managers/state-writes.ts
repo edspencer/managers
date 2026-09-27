@@ -48,6 +48,10 @@ import {
   type TaskStatus,
 } from "./schemas.js";
 import { formatEpisode, type EpisodesStore } from "./episodes-store.js";
+import { MemoryStore } from "./memory-store.js";
+import { memoryPreamble, renderMemoryFile, isSupersededFact } from "./memory-index.js";
+import { CONFIDENCE_LEVELS, FACT_TYPES, factWriteSchema, type FactType } from "./schemas.js";
+import { EPISODE_ID_RE } from "./layout.js";
 import { listDirsDesc, splitSections } from "./store-util.js";
 import type { GitAuthor } from "./autocommit.js";
 
@@ -144,6 +148,23 @@ export interface RecordArtifactInput {
   note?: string;
 }
 
+/** M14: one `memory_op`. */
+export interface MemoryOpInput {
+  op: "add" | "update" | "supersede" | "noop";
+  name: string;
+  type?: FactType;
+  description?: string;
+  /** The fact's text (above its `## History`). */
+  body?: string;
+  /** Episode ids that support the op; each must exist in this workspace. */
+  evidence?: string[];
+  since?: string;
+  until?: string;
+  confidence?: (typeof CONFIDENCE_LEVELS)[number];
+  /** Why, for the `## History` line (supersede, update, noop). */
+  reason?: string;
+}
+
 /** What a trigger fire knows when its run starts. */
 export interface StartRunInput {
   trigger: string;
@@ -195,6 +216,19 @@ export interface ReportResult {
   /** M10: the previous dated report's date, or null. */
   previous: string | null;
   generated: string;
+}
+export interface MemoryOpResult {
+  op: MemoryOpInput["op"];
+  name: string;
+  /** The fact file (absent for a noop). */
+  file?: string;
+  /** The regenerated index (absent for a noop). */
+  index?: string;
+  type?: FactType;
+  until?: string | null;
+  evidence?: string[];
+  /** noop only: whether a fact of that name exists. */
+  exists?: boolean;
 }
 export interface ArtifactResult {
   run: string;
@@ -268,6 +302,7 @@ export const TASK_KEYS = [
   "github", "dispatched", "shovel_ready", "due", "created", "updated",
 ] as const;
 const OBJECTIVE_KEYS = Object.keys(objectiveWriteSchema.shape);
+const FACT_KEYS = Object.keys(factWriteSchema.shape);
 const RUN_KEYS = Object.keys(runWriteSchema.shape);
 
 /** Split raw frontmatter into the schema's keys and the hand-added extras. */
@@ -343,6 +378,7 @@ export class StateWriter {
   constructor(
     private readonly episodes: EpisodesStore,
     private readonly now: () => Date = () => new Date(),
+    private readonly memory: MemoryStore = new MemoryStore(),
   ) {}
 
   private notify(ws: WriteWorkspace, actor: WriteActor, reason: string): void {
@@ -362,7 +398,18 @@ export class StateWriter {
 
   // --- episodes -----------------------------------------------------------------
 
-  async recordEpisode(ws: WriteWorkspace, input: RecordEpisodeInput, actor: WriteActor): Promise<EpisodeResult> {
+  /**
+   * M14: told after every episode written (outside the lock), except the
+   * server's own `internal` ones — the consolidation early-fire check hooks in here.
+   */
+  onEpisode: ((ws: WriteWorkspace, episode: EpisodeResult, actor: WriteActor) => void) | null = null;
+
+  async recordEpisode(
+    ws: WriteWorkspace,
+    input: RecordEpisodeInput,
+    actor: WriteActor,
+    opts: { internal?: boolean } = {},
+  ): Promise<EpisodeResult> {
     const text = typeof input.text === "string" ? input.text.trim() : "";
     if (!text) throw invalid("text is required");
     if (text.length > EPISODE_MAX_TEXT) {
@@ -377,7 +424,7 @@ export class StateWriter {
     const tags = (input.tags ?? []).map((t) => String(t).trim().replace(/^#/, "")).filter(Boolean);
     const refs = (input.refs ?? []).map((r) => String(r).trim()).filter(Boolean);
 
-    return this.locked(ws, actor, async () => {
+    const result = await this.locked(ws, actor, async () => {
       const now = this.now();
       const idx = await this.episodes.index(ws.layout);
       const id = await mintUnique(() => newEpisodeId(now), (x) => idx.has(x));
@@ -400,6 +447,14 @@ export class StateWriter {
       this.notify(ws, actor, "record_episode");
       return { id, file: ws.layout.rel(file), importance: r.data.importance, objective };
     });
+    if (!opts.internal && this.onEpisode) {
+      try {
+        this.onEpisode(ws, result, actor);
+      } catch {
+        /* a listener never fails the write */
+      }
+    }
+    return result;
   }
 
   // --- tasks ------------------------------------------------------------------------
@@ -734,6 +789,163 @@ export class StateWriter {
     });
   }
 
+
+  // --- semantic memory (M14) ----------------------------------------------------------
+
+  /**
+   * One `memory_op` on this workspace's `memory/facts/`, then the regenerated
+   * `MEMORY.md` index (Ed's preamble above the marker kept verbatim). Under the
+   * workspace lock. NEVER deletes: `supersede` sets `until` and appends to
+   * `## History`; `update` appends to it; `noop` writes nothing. Every evidence id
+   * must exist in this workspace's journals or log, and a `pattern` needs two.
+   * WHO may call it is the caller's business (state-ops.ts): only Ed's live turn
+   * and a consolidation run. `who` is the `## History` attribution.
+   */
+  async memoryOp(ws: WriteWorkspace, input: MemoryOpInput, actor: WriteActor, who: string): Promise<MemoryOpResult> {
+    const OPS = ["add", "update", "supersede", "noop"] as const;
+    const op = input.op;
+    if (!(OPS as readonly string[]).includes(op)) throw invalid(`op must be one of ${OPS.join(", ")}`);
+    const name = typeof input.name === "string" ? input.name.trim() : "";
+    if (!isName(name)) throw invalid(`name must be a kebab-case fact name, got ${JSON.stringify(input.name)}`);
+    if (input.type !== undefined && !(FACT_TYPES as readonly string[]).includes(input.type)) {
+      throw invalid(`type must be one of ${FACT_TYPES.join(", ")}`);
+    }
+    if (input.confidence !== undefined && !(CONFIDENCE_LEVELS as readonly string[]).includes(input.confidence)) {
+      throw invalid(`confidence must be one of ${CONFIDENCE_LEVELS.join(", ")}`);
+    }
+    const evidence = [...new Set((input.evidence ?? []).map((e) => String(e).trim()).filter(Boolean))];
+    const badId = evidence.find((e) => !EPISODE_ID_RE.test(e));
+    if (badId) throw invalid(`evidence must be episode ids (ep-YYMMDD-HHMM-xx), got ${JSON.stringify(badId)}`);
+    const description = input.description === undefined ? undefined : oneLine(String(input.description), 300);
+    const body = input.body === undefined ? undefined : String(input.body).replace(/\r\n?/g, "\n").trim();
+    if (body !== undefined) {
+      if (body.length > SECTION_MAX) throw invalid(`body exceeds ${SECTION_MAX} characters`);
+      assertNoH2(body, "body");
+    }
+    const reason = input.reason === undefined ? undefined : oneLine(String(input.reason), 300);
+    if (op === "add") {
+      if (!input.type) throw invalid("add needs a type");
+      if (!description) throw invalid("add needs a description (one line: what the fact says)");
+    }
+    if (op !== "supersede" && input.until !== undefined) throw invalid("until is set only by supersede");
+
+    return this.locked(ws, actor, async () => {
+      const now = this.now();
+      const today = dateOf(now);
+      const file = ws.layout.factFile(name);
+      const rel = ws.layout.rel(file);
+      const existing = (await exists(file)) ? rawDoc(await fs.readFile(file, "utf8"), rel) : null;
+
+      if (op === "noop") return { op, name, exists: existing !== null };
+
+      // Evidence must EXIST (an index lookup over this workspace's journals and log).
+      const idx = evidence.length ? await this.episodes.index(ws.layout) : new Map();
+      const missing = evidence.filter((e) => !idx.has(e));
+      if (missing.length) {
+        throw invalid(
+          `evidence not found in this workspace's journals or log: ${missing.join(", ")}. Cite episode ids from the briefing.`,
+        );
+      }
+      const stamp = `${isoMinute(now).slice(0, 10)} ${isoMinute(now).slice(11, 16)}Z`;
+      const cite = (ids: string[]) => (ids.length ? ` — evidence ${ids.join(", ")}` : "");
+
+      let fm: Record<string, unknown>;
+      let extra: Record<string, unknown> = {};
+      let text: string;
+      if (op === "add") {
+        if (existing) {
+          throw new StateWriteError("conflict", `Fact ${name} already exists; update or supersede it instead`);
+        }
+        fm = {
+          name,
+          description,
+          type: input.type,
+          since: input.since ?? today,
+          until: null,
+          confidence: input.confidence ?? "medium",
+          evidence,
+        };
+        text = `${body || description}\n\n## History\n- ${stamp} added by ${who}${cite(evidence)}\n`;
+      } else {
+        if (!existing) throw new StateWriteError("not_found", `No such fact: ${name} (add it instead)`);
+        const split = splitKnown(existing.data, FACT_KEYS);
+        extra = split.extra;
+        const known = split.known;
+        const prior = (listOr(known.evidence) as unknown[]).map(String);
+        const merged = [...new Set([...prior, ...evidence])];
+        const wasUntil = typeof known.until === "string" ? known.until : null;
+        if (wasUntil && isSupersededFact({ until: wasUntil }, today)) {
+          throw new StateWriteError(
+            "conflict",
+            `Fact ${name} was superseded on ${wasUntil.slice(0, 10)}; it is kept as history. Add a new fact instead`,
+          );
+        }
+        const { preamble: oldBody, history } = splitFactBody(existing.body);
+        const changed: string[] = [];
+        fm = {
+          name,
+          description: known.description,
+          type: known.type,
+          since: known.since ?? today,
+          until: known.until ?? null,
+          confidence: known.confidence ?? "medium",
+          evidence: merged,
+        };
+        if (op === "update") {
+          if (description !== undefined && description !== known.description) (fm.description = description), changed.push("description");
+          if (input.type !== undefined && input.type !== known.type) (fm.type = input.type), changed.push("type");
+          if (input.confidence !== undefined && input.confidence !== known.confidence) (fm.confidence = input.confidence), changed.push("confidence");
+          if (input.since !== undefined && input.since !== known.since) (fm.since = input.since), changed.push("since");
+          if (body !== undefined && body !== oldBody.trim()) changed.push("body");
+          const added = merged.length - prior.length;
+          if (added > 0) changed.push(`evidence +${added}`);
+        } else {
+          fm.until = input.until ?? today;
+        }
+        const line =
+          op === "update"
+            ? `- ${stamp} updated by ${who}${changed.length ? ` (${changed.join(", ")})` : " (confirmed, no change)"}${cite(evidence)}${reason ? `: ${reason}` : ""}`
+            : `- ${stamp} superseded by ${who}, until ${String(fm.until).slice(0, 10)}${cite(evidence)}${reason ? `: ${reason}` : ""}`;
+        const newBody = op === "update" && body !== undefined ? body : oldBody.trim();
+        text = `${newBody}\n\n## History\n${[...history, line].join("\n")}\n`;
+      }
+      if (fm.type === "pattern") {
+        // Every id cited by THIS op was checked above; an older id on the fact may dangle.
+        const existingIds = op === "add" ? evidence : await this.existingIds(ws, fm.evidence as string[]);
+        if (existingIds.length < 2) {
+          throw invalid(
+            `a pattern needs at least 2 evidence episodes that exist (it has ${existingIds.length}); cite the episodes it was seen in`,
+          );
+        }
+      }
+      const r = factWriteSchema.safeParse(fm);
+      if (!r.success) throw zodFail("fact", r.error);
+      await writeFileAtomic(file, stringifyFrontmatter({ ...r.data, ...extra }, text));
+      const index = await this.rewriteMemoryIndex(ws, today);
+      this.notify(ws, actor, `memory_op (${op} ${name})`);
+      return { op, name, file: rel, index, type: r.data.type, until: r.data.until, evidence: r.data.evidence };
+    });
+  }
+
+  /** The ids among `ids` that exist in the workspace's episode index. */
+  private async existingIds(ws: WriteWorkspace, ids: string[]): Promise<string[]> {
+    const idx = await this.episodes.index(ws.layout);
+    return ids.filter((e) => idx.has(e));
+  }
+
+  /** Regenerate `memory/MEMORY.md`'s index from `memory/facts/`. Call under the lock. */
+  private async rewriteMemoryIndex(ws: WriteWorkspace, today: string): Promise<string> {
+    const file = ws.layout.memoryIndexFile;
+    const current = await fs.readFile(file, "utf8").catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    });
+    const view = await this.memory.view({ project: null, root: ws.layout });
+    const facts = view.facts.filter((f) => f.scope === "root");
+    await writeFileAtomic(file, renderMemoryFile(memoryPreamble(current), facts, today));
+    return ws.layout.rel(file);
+  }
+
   // --- artifacts -------------------------------------------------------------------------
 
   async recordArtifact(ws: WriteWorkspace, input: RecordArtifactInput, actor: WriteActor): Promise<ArtifactResult> {
@@ -926,6 +1138,21 @@ export class StateWriter {
       return run;
     });
   }
+}
+
+/** A fact body → its text (everything but `## History`) and its history lines. */
+export function splitFactBody(body: string): { preamble: string; history: string[] } {
+  const { preamble, sections } = splitSections(body);
+  const rest = [preamble];
+  let history: string[] = [];
+  let seen = false;
+  for (const s of sections) {
+    if (!seen && s.heading.trim().toLowerCase() === "history") {
+      seen = true;
+      history = s.body.split("\n").filter((l) => /^\s*[-*] /.test(l)).map((l) => l.trimEnd());
+    } else rest.push(`## ${s.heading}\n${s.body}`);
+  }
+  return { preamble: rest.filter(Boolean).join("\n\n"), history };
 }
 
 /** A task body → its notes (everything but `## Log`) and its log lines. */

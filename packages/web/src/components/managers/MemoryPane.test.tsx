@@ -3,12 +3,14 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { ApiError } from "../../lib/api";
-import type { FactDetail, FactSummary, MemoryView } from "../../lib/types";
+import type { ConsolidationState, FactDetail, FactSummary, MemoryView } from "../../lib/types";
 import { MemoryPane, episodeLabel, isSuperseded } from "./MemoryPane";
 
 const managersMemory = vi.fn();
 const managersFact = vi.fn();
-const managersBehaviours = vi.fn();
+const managersConsolidation = vi.fn();
+const managersRunConsolidation = vi.fn();
+const managersRun = vi.fn();
 vi.mock("../../lib/api", async () => {
   const actual = await vi.importActual<typeof import("../../lib/api")>("../../lib/api");
   return {
@@ -16,7 +18,9 @@ vi.mock("../../lib/api", async () => {
     api: {
       managersMemory: (...a: unknown[]) => managersMemory(...a),
       managersFact: (...a: unknown[]) => managersFact(...a),
-      managersBehaviours: (...a: unknown[]) => managersBehaviours(...a),
+      managersConsolidation: (...a: unknown[]) => managersConsolidation(...a),
+      managersRunConsolidation: (...a: unknown[]) => managersRunConsolidation(...a),
+      managersRun: (...a: unknown[]) => managersRun(...a),
     },
   };
 });
@@ -62,6 +66,23 @@ function view(facts: FactSummary[]): MemoryView {
   return { indexes: { root: null, project: null }, facts, playbooks: [] };
 }
 
+function consolidation(over: Partial<ConsolidationState> = {}): ConsolidationState {
+  return {
+    behaviour: "consolidate-memory",
+    trigger: "consolidate",
+    enabled: true,
+    settings: { schedule: "30 3 * * *", threshold: 40, minGapHours: 6, model: null, promptFile: null },
+    nextRunAt: null,
+    lastRun: null,
+    lastSucceeded: null,
+    running: false,
+    since: "2026-08-28T00:00:00Z",
+    episodesSince: 3,
+    importanceSince: 12,
+    ...over,
+  };
+}
+
 function Probe() {
   const l = useLocation();
   return <span data-testid="location">{l.pathname + l.search + l.hash}</span>;
@@ -94,13 +115,11 @@ describe("MemoryPane (M12)", () => {
   beforeEach(() => {
     managersMemory.mockReset();
     managersFact.mockReset();
-    managersBehaviours.mockReset();
+    managersConsolidation.mockReset();
+    managersRunConsolidation.mockReset();
+    managersRun.mockReset();
     managersMemory.mockResolvedValue(view([fact(), SHARED]));
-    managersBehaviours.mockResolvedValue({
-      behaviours: [{ name: "consolidate-memory", enabled: false }],
-      changedOutsideUi: false,
-      changedSince: null,
-    });
+    managersConsolidation.mockResolvedValue(consolidation({ enabled: false }));
   });
 
   it("shows project and shared sections, fact chips, and the consolidation state linking to Settings", async () => {
@@ -116,6 +135,55 @@ describe("MemoryPane (M12)", () => {
     const state = await screen.findByTestId("consolidation-state");
     expect(state).toHaveTextContent("Consolidation: off");
     expect(state).toHaveAttribute("href", "/projects/acme/settings#behaviours");
+  });
+
+  it("M14: consolidation off shows no run button", async () => {
+    renderAt("/projects/acme/memory");
+    expect(await screen.findByTestId("consolidation-state")).toHaveTextContent("Consolidation: off");
+    await screen.findByTestId("memory-project");
+    expect(screen.queryByRole("button", { name: /Run consolidation now/ })).toBeNull();
+    expect(screen.queryByTestId("consolidation-bar")).toBeNull();
+  });
+
+  it("M14: on, it shows when memory was last consolidated and runs consolidation now (poll → re-read)", async () => {
+    const finished = new Date(Date.now() - 3 * 3_600_000).toISOString();
+    managersConsolidation.mockResolvedValue(
+      consolidation({ lastSucceeded: { id: "r-1", status: "succeeded", started: finished, finished, error: null } }),
+    );
+    managersRunConsolidation.mockResolvedValue({ ok: true, trigger: "consolidate", runId: "r-2", sessionId: "s" });
+    managersRun.mockResolvedValueOnce({ status: "running", error: null }).mockResolvedValue({ status: "succeeded", error: null });
+    render(
+      <MemoryRouter initialEntries={["/projects/acme/memory"]}>
+        <MemoryPane slug="acme" base="/projects/acme" root={false} pollMs={5} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId("consolidation-state")).toHaveTextContent("Consolidation: on");
+    expect(screen.getByTestId("consolidation-last")).toHaveTextContent("Last consolidated 3h ago");
+    expect(screen.getByTestId("consolidation-last")).toHaveTextContent("3 entries since (importance 12 of 40 for an early run)");
+    managersMemory.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: /Run consolidation now/ }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Consolidation finished");
+    expect(managersRunConsolidation).toHaveBeenCalledWith("acme");
+    expect(managersRun).toHaveBeenCalledWith("acme", "r-2");
+    expect(managersRun).toHaveBeenCalledTimes(2);
+    expect(managersMemory).toHaveBeenCalled(); // the facts were re-read
+  });
+
+  it("M14: never consolidated; a refusal and a failed run both say so", async () => {
+    managersConsolidation.mockResolvedValue(consolidation({ episodesSince: 0 }));
+    managersRunConsolidation.mockRejectedValueOnce(new ApiError("A consolidation run is already in flight here.", 409, "already_running"));
+    render(
+      <MemoryRouter initialEntries={["/projects/acme/memory"]}>
+        <MemoryPane slug="acme" base="/projects/acme" root={false} pollMs={5} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId("consolidation-last")).toHaveTextContent("Never consolidated · nothing new since");
+    await userEvent.click(screen.getByRole("button", { name: /Run consolidation now/ }));
+    expect(await screen.findByText("A consolidation run is already in flight.")).toBeInTheDocument();
+    managersRunConsolidation.mockResolvedValueOnce({ ok: true, trigger: "consolidate", runId: "r-3", sessionId: "s" });
+    managersRun.mockResolvedValue({ status: "failed", error: "Turn ended early." });
+    await userEvent.click(screen.getByRole("button", { name: /Run consolidation now/ }));
+    expect(await screen.findByText("The consolidation run failed: Turn ended early.")).toBeInTheDocument();
   });
 
   it("an evidence chip deep-links to the journal entry; an unresolved one is struck through", async () => {

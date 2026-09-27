@@ -77,7 +77,7 @@ What changed from Paddock, and what did not:
   depth gate. `enforceManagementPolicy` polices state ops for every principal —
   the in-process keeper may only WRITE its own project; external principals need
   explicit grants (`DEFAULT_READ_ONLY_SCOPE` no longer uses `list_*`).
-  `memory_op` is a stub that refuses outside human-origin turns (M14).
+  `memory_op` is real since M14 (see below).
 - **Runs and the dead-man's switch (M6).** Every trigger fire (the one path,
   `ws-triggers.ts` `fireTriggerForProject`) writes `runs/YYYY-MM/<run-id>.yaml`
   via `managers/trigger-runs.ts`: `status: running` before the turn, finished by
@@ -264,6 +264,31 @@ What changed from Paddock, and what did not:
   (EACCES for a non-root server, ELOOP, …). The full v1 loop is
   `test/e2e/journey-managers-loop.spec.ts`, which runs on the GIT e2e server
   (`chromium-git`; its UI author is "Ed" and its autocommit debounce 500 ms).
+- **Consolidation and `memory_op` (M14, `managers/consolidation.ts`, `managers/memory-index.ts`).**
+  The built-in `consolidate-memory` behaviour (OFF by default, config `{schedule "30 3 * *
+  *", threshold 40, minGapHours 6, model, promptFile}` in `behaviours.<name>.config`, merged
+  built-in < Home < project) derives the `consolidate` trigger in EVERY workspace
+  (`effectiveTriggers`; armed only on the workspace's own flag; gated by the behaviour at
+  every fire; fixed capability Read/Grep/Glob, `maxTurns` 30, `expect: none`, briefing kind
+  `consolidation` = the standard sections plus Memory protocol, Active facts in full, Superseded
+  facts and the episodes since the last consolidation). `memory_op` (`StateWriter.memoryOp`:
+  add/update/supersede/noop; evidence ids must EXIST in the workspace's episode index, a
+  `pattern` needs 2; never deletes — supersede sets `until`, update/supersede append `## History`;
+  every write regenerates `memory/MEMORY.md` below `<!-- managers:index -->`, keeping Ed's
+  preamble verbatim, grouped by type + `## Superseded`, ≤150 lines / 20KB) is allowed ONLY
+  (a) while a message Ed sent through the UI drives the turn — `ws.ts` onChatSend's
+  `humanTurnLive`, cleared when the foreground drive settles, so a wake or background
+  re-invocation replaying that chat's cached server defs is refused; the chat ORIGIN no longer
+  counts — and (b) inside a live consolidation run of the same workspace, recognised by the
+  IN-MEMORY `ConsolidationTracker` (`ManagersState.consolidations`), which only the fire path
+  fills: no file (project.yaml, a run record) can claim it. Everything else gets "not
+  available in this turn". Agents cannot `run_trigger consolidate` (any principal); the
+  schedule, the early fire (an AGENT episode pushing importance since the last succeeded
+  consolidation past `threshold`, ≥ `minGapHours` since the last one; per-workspace claim) and
+  Ed's `POST …/managers/consolidation/run` (Memory tab) start it. At run end the server writes
+  one `#reflection` episode listing the ops (never counted toward the threshold). `GET
+  …/managers/consolidation` feeds the Memory header ("Last consolidated …", "Run consolidation
+  now" when on); Settings → Behaviours shows its schedule chips.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

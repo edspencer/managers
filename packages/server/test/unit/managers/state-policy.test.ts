@@ -4,7 +4,7 @@
  *   • the internal keeper may READ any workspace but WRITE only its own;
  *   • an external principal sees and reaches the state tools only by explicit grant;
  *   • `managementToolFilter` covers the new ops;
- *   • `memory_op` refuses unless the turn is human-origin.
+ *   • `memory_op` refuses unless Ed's own message drives the turn (M14: the origin alone is not enough).
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
@@ -127,9 +127,11 @@ describe("the catalogue", () => {
 });
 
 describe("memory_op", () => {
-  it("is refused outside a human-origin turn", async () => {
-    await expect(ops("acme", "scheduled").memoryOp("acme", {})).rejects.toThrow(MEMORY_OP_UNAVAILABLE);
-    await expect(ops("acme", "human").memoryOp("acme", {})).rejects.toThrow(/not implemented yet/);
+  it("is refused outside a live human turn, even for a human-origin chat (M14)", async () => {
+    const add = { op: "add" as const, name: "x", type: "user" as const, description: "d" };
+    await expect(ops("acme", "scheduled").memoryOp("acme", add)).rejects.toThrow(MEMORY_OP_UNAVAILABLE);
+    // A wake replaying a human chat's tools carries origin "human" but no live flag.
+    await expect(ops("acme", "human").memoryOp("acme", add)).rejects.toThrow(MEMORY_OP_UNAVAILABLE);
   });
 
   it("surfaces as an error tool result, never a throw", async () => {
