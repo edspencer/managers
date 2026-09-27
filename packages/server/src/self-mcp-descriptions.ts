@@ -262,8 +262,11 @@ export const UPDATE_OBJECTIVE_DESC =
   UNTRUSTED_TEXT_RULE;
 
 export const WRITE_REPORT_DESC =
-  "Write a report of `type` (e.g. \"status\"): it becomes today's dated report and the type's " +
-  "current report. The last write of a day wins. Returns both file paths. " +
+  "Write a report of `type` (e.g. \"status\"; it must be one of this project's report types): it " +
+  "becomes today's dated report and the type's current report. The last write of a day wins. The " +
+  "server adds the title and renders the \"Needs you\" (awaiting-ed tasks) and \"Alerts\" sections " +
+  "itself, so do not write them: any you write are removed. Write the report's own sections (for " +
+  "status: \"## In flight\" and \"## Notes\"). Returns both file paths. " +
   UNTRUSTED_TEXT_RULE;
 
 export const RECORD_ARTIFACT_DESC =

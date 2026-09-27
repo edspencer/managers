@@ -148,7 +148,7 @@ export function registerChatWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx)
         readState.getLastSeen(user, keeper, s.sessionId);
       const unreadOf = (s: DiscoveredSession) => unread.isUnread(user, keeper, s.sessionId);
       const provenanceOf = (s: DiscoveredSession) => runProvenance.get(s.sessionId);
-      const triggerOf = makeTriggerResolver(project);
+      const triggerOf = makeTriggerResolver(project, herdctl.effectiveTriggersOf?.(project));
       // Parent edge for the nested chat list: an explicit detach (#508) wins, else
       // the recorded RunProvenance edge, else a backfill from who injected the
       // kickoff prompt. All three are in-memory sidecar reads.
@@ -262,7 +262,7 @@ export function registerChatWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx)
             readState.getLastSeen(user, keeper, s.sessionId);
           const unreadOf = (s: DiscoveredSession) => unread.isUnread(user, keeper, s.sessionId);
           const provenanceOf = (s: DiscoveredSession) => runProvenance.get(s.sessionId);
-          const triggerOf = makeTriggerResolver(p);
+          const triggerOf = makeTriggerResolver(p, herdctl.effectiveTriggersOf?.(p));
           const parentOf = makeParentResolver(runProvenance, messageProvenance, p.slug, (id) =>
             parentDetach.isDetached(keeper, id),
           );

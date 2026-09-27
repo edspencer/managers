@@ -13,7 +13,7 @@ import { getContextLimit, estimateCostUsdByModel } from "./models.js";
 import { type SessionTokenUsage } from "./usage.js";
 import type { RunProvenance, TurnOrigin } from "./run-provenance.js";
 import { toTriggerDto } from "./triggers.js";
-import { toChatTriggerInfo, type ChatTriggerInfo } from "./trigger-config.js";
+import { toChatTriggerInfo, type ChatTriggerInfo, type PaddockTrigger } from "./trigger-config.js";
 import { readFirstUserText } from "./transcripts.js";
 import { PRELOAD_CONTEXT_OPEN, stripPreloadWrapper } from "./preload.js";
 import { stripAttachmentsWrapper, ATTACHMENTS_OPEN } from "./attachments-hint.js";
@@ -397,9 +397,11 @@ export async function buildProjectChats(
  */
 export function makeTriggerResolver(
   project: Project,
+  /** Managers M10: the effective trigger map (declared + derived); `project.triggers` when absent. */
+  triggers?: Record<string, PaddockTrigger>,
 ): (s: DiscoveredSession) => Promise<ChatTriggerInfo | undefined> {
   const byAgentName = new Map<string, ChatTriggerInfo>();
-  for (const [name, trigger] of Object.entries(project.triggers ?? {})) {
+  for (const [name, trigger] of Object.entries(triggers ?? project.triggers ?? {})) {
     byAgentName.set(
       triggerAgentName(project.slug, name),
       toChatTriggerInfo(toTriggerDto(project.slug, name, trigger)),

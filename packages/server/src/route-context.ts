@@ -103,7 +103,11 @@ export interface RouteDeps {
    * project/trigger is gone or nothing started. Optional so tests that don't exercise
    * triggers can omit it.
    */
-  fireTrigger?: (slug: string, triggerName: string) => Promise<string | null>;
+  fireTrigger?: (
+    slug: string,
+    triggerName: string,
+    opts?: { why?: string; onRun?: (runId: string) => void },
+  ) => Promise<string | null>;
   /**
    * The shared Management API ops context (issue #312 M1) — the SAME bag the
    * in-process self-MCP is built from (`makeChatHandler(...).managementOpsContext`).

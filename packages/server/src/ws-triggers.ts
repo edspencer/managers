@@ -32,11 +32,14 @@ import type { ChatHandlerDeps, StartAgentTurn } from "./ws-context.js";
 import { beginTriggerRun, boundObjective } from "./managers/trigger-runs.js";
 import { briefingForWorkspace, triggerWantsBriefing } from "./managers/briefing.js";
 import { BehaviourOffError, behavioursFor, triggerGate } from "./managers/behaviours.js";
+import { effectiveTriggersFor } from "./managers/effective-triggers.js";
 
 /** How a fire came about, for the briefing's "why woken" line. */
 export interface TriggerFireOpts {
   /** Replaces the derived reason (e.g. "Run now (manual)"). */
   why?: string;
+  /** Told the Managers run id as soon as the run record exists (M10: the report Refresh route). */
+  onRun?: (runId: string) => void;
 }
 
 /**
@@ -55,8 +58,11 @@ export interface TriggerCluster {
   emitAfterTurn(slug: string, sessionId: string | null): void;
   /** Prepend the OVERVIEW+CHANGELOG preload block for a new chat (issues #1/#188). */
   composePreloadedPrompt(projectSlug: string, baseMessage: string): Promise<string>;
-  /** Fire a named trigger on demand (Run-now / run_trigger); resolves its chat id or null. */
-  fireTrigger(slug: string, triggerName: string): Promise<string | null>;
+  /**
+   * Fire a named trigger on demand (Run-now / run_trigger / report Refresh);
+   * resolves its chat id or null. Resolves DERIVED triggers too (M10).
+   */
+  fireTrigger(slug: string, triggerName: string, opts?: TriggerFireOpts): Promise<string | null>;
   /** Run one fire of a resolved trigger record as a first-class chat on the hub. */
   fireTriggerForProject(
     project: Awaited<ReturnType<ChatHandlerDeps["projects"]["get"]>>,
@@ -98,7 +104,9 @@ deps.herdctl.onScheduleTrigger(async (info: TriggerInfo) => {
   // Every armed keeper schedule belongs to a SCHEDULE-type trigger (forwarded into
   // the keeper `schedules` block under its trigger name). Resolve + fire it via the
   // single trigger fire path.
-  const trig = project.triggers?.[info.scheduleName];
+  // Managers M10: a derived `report-<type>` schedule resolves here too.
+  const effective = await effectiveTriggersFor(deps.projects, project).catch(() => project.triggers ?? {});
+  const trig = effective[info.scheduleName];
   if (trig && trig.trigger.type === "schedule" && trig.enabled === true) {
     // Managers M8: a schedule whose behaviour is off is not armed, but a stale
     // arming (a root definition edited since registration) is refused here too.
@@ -139,6 +147,8 @@ async function resolveTriggerPrompt(
       if (content !== null) body = content;
     }
   }
+  // Managers M10: a derived report trigger whose promptFile cannot be read runs its template.
+  if (!body.trim() && trigger.derived) body = trigger.derived.template;
   if (trigger.trigger.type === "event" && ctx) {
     const preamble =
       `A \`${trigger.trigger.on}\` event trigger fired for project \`${project.slug}\`: ` +
@@ -215,6 +225,13 @@ async function fireTriggerForProject(
         flush: deps.flushManagersCommit,
       })
     : null;
+  if (run && opts.onRun) {
+    try {
+      opts.onRun(run.runId);
+    } catch {
+      /* a listener never stops the fire */
+    }
+  }
 
   // Managers M7: brief the wake. The briefing rides in the SAME preload wrapper a
   // new chat uses, so the sidebar name stays the trigger body (stripPreloadWrapper),
@@ -227,7 +244,9 @@ async function fireTriggerForProject(
         { state: deps.managers, projects: deps.projects, herdctl: deps.herdctl },
         slug,
         {
-          kind: "wake",
+          // M10: a derived report trigger gets the report briefing.
+          kind: trigger.derived?.kind === "report" ? "report" : "wake",
+          report: trigger.derived?.kind === "report" ? trigger.derived.report : null,
           trigger: trigger.name,
           runId: run?.runId ?? null,
           objective: run ? run.objective : await boundObjective({ state: deps.managers, dir: project.dir, trigger }),
@@ -364,10 +383,12 @@ deps.events?.on("afterTurn", (payload) => {
  * {@link BehaviourOffError} when a behaviour gating the trigger is off — a manual
  * run is deliberate, but it does not override Ed's autonomy switch.
  */
-async function fireTrigger(slug: string, triggerName: string): Promise<string | null> {
+async function fireTrigger(slug: string, triggerName: string, opts: TriggerFireOpts = {}): Promise<string | null> {
   const project = await deps.projects.get(slug).catch(() => null);
   if (!project) return null;
-  const rec = project.triggers?.[triggerName];
+  // Managers M10: the effective map, so a derived `report-<type>` fires here too.
+  const effective = await effectiveTriggersFor(deps.projects, project).catch(() => project.triggers ?? {});
+  const rec = effective[triggerName];
   if (!rec) return null;
   // The post-turn CURATOR (any `event`/`afterTurn` trigger — the folded-in sweeper, T5)
   // is NOT fireable on the generic path: it registers no scoped `trigger-<slug>-<name>`
@@ -379,7 +400,7 @@ async function fireTrigger(slug: string, triggerName: string): Promise<string | 
     project,
     { name: triggerName, agentName: triggerAgentName(slug, triggerName), ...rec },
     undefined,
-    { why: "Run now (a manual fire)" },
+    { why: opts.why ?? "Run now (a manual fire)", ...(opts.onRun ? { onRun: opts.onRun } : {}) },
   );
 }
 

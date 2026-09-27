@@ -65,6 +65,7 @@ import {
 import type { TurnOrigin } from "./run-provenance.js";
 import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
 import { loadAlerts } from "./managers/alerts.js";
+import { effectiveTriggersFor, reportTypesFor } from "./managers/effective-triggers.js";
 import { behavioursFor } from "./managers/behaviours.js";
 import { agentTriggerGuard } from "./managers/trigger-guard.js";
 import { briefingForWorkspace } from "./managers/briefing.js";
@@ -222,14 +223,15 @@ export function buildManagementOps(
           const project = await deps.projects.get(slug);
           return loadAlerts({
             state: deps.managers!,
-            project,
+            // M10: alerts watch the derived report triggers too.
+            project: { ...project, triggers: await effectiveTriggersFor(deps.projects, project) },
             schedules: () => deps.herdctl.listAgentSchedules(project),
             behaviours: await behavioursFor(deps.projects, project),
           });
         },
         loadBriefing: async (slug, o) => {
           const project = await deps.projects.get(slug);
-          const trigger = o.trigger ? project.triggers?.[o.trigger] : undefined;
+          const trigger = o.trigger ? (await effectiveTriggersFor(deps.projects, project))[o.trigger] : undefined;
           return briefingForWorkspace(
             { state: deps.managers!, projects: deps.projects, herdctl: deps.herdctl },
             slug,
@@ -245,6 +247,14 @@ export function buildManagementOps(
             },
             project,
           );
+        },
+        // M10: `write_report` validates against the workspace's effective report types.
+        loadReportContext: async (slug) => {
+          const project = await deps.projects.get(slug);
+          return {
+            name: slug === "" ? project.name || "Home" : project.name || slug,
+            types: (await reportTypesFor(deps.projects, project)).map((t) => t.type),
+          };
         },
       })
     : undefined;

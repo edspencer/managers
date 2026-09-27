@@ -35,6 +35,7 @@ import path from "node:path";
 import type { PaddockTrigger } from "../trigger-config.js";
 import { ALL_TRIGGERS, behavioursFor, triggerGate, type EffectiveBehaviour, type GateResolver, type WorkspaceLike } from "./behaviours.js";
 import { writeFileAtomic } from "./write-queue.js";
+import { isReservedTriggerName, RESERVED_TRIGGER_MESSAGE } from "./effective-triggers.js";
 
 export const GATED_TRIGGERS_FILE = path.join(".managers", "state", "gated-triggers.json");
 
@@ -75,10 +76,12 @@ export async function recordGatedTombstones(dir: string, names: string[]): Promi
 /** The ops layer's refusal (a tool error for the agent). */
 export class GatedTriggerError extends Error {
   readonly code = "trigger_gated";
-  constructor(op: "set_trigger" | "remove_trigger", name: string, why: string) {
+  constructor(op: "set_trigger" | "remove_trigger", name: string, why: string, tail?: string) {
     super(
-      `${op} refused: trigger "${name}" ${why}. Agents cannot create, change or remove a behaviour-gated trigger ` +
-        `(or one that has been gated before); Ed edits it in the Triggers tab.`,
+      `${op} refused: trigger "${name}" ${why}. ` +
+        (tail ??
+          `Agents cannot create, change or remove a behaviour-gated trigger ` +
+            `(or one that has been gated before); Ed edits it in the Triggers tab.`),
     );
     this.name = "GatedTriggerError";
   }
@@ -97,6 +100,11 @@ type Workspace = WorkspaceLike & { dir: string; triggers?: Record<string, Paddoc
  */
 export function agentTriggerGuard(projects: Store, op: "set_trigger" | "remove_trigger", name: string) {
   return async (current: Workspace): Promise<void> => {
+    // M10: derived trigger names (`report-*`, `consolidate`) are the server's; no
+    // agent creates, changes or removes one (a human's set is refused by the store).
+    if (isReservedTriggerName(name)) {
+      throw new GatedTriggerError(op, name, "is reserved", `${RESERVED_TRIGGER_MESSAGE[0]!.toUpperCase()}${RESERVED_TRIGGER_MESSAGE.slice(1)}.`);
+    }
     const list = await behavioursFor(projects, current);
     const tombs = await recordGatedTombstones(current.dir, gatedTriggerNames(list, current.triggers)).catch(() =>
       readGatedTombstones(current.dir),

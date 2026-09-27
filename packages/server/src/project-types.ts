@@ -16,6 +16,7 @@ import { type CurationOverride } from "./curation-config.js";
 import { type AttachmentsOverride } from "./attachments-config.js";
 import { type BehaviourConfig } from "./managers/behaviours.js";
 import { type ProjectMcpConfig } from "./managers/project-mcp.js";
+import { type ReportConfig } from "./managers/reports.js";
 
 // Re-export the config types so importers reaching through projects.js (which
 // re-exports this module) keep finding them in one place, as before.
@@ -323,6 +324,16 @@ export interface ProjectYaml {
    * save and its error stays visible. Absent/empty ⇒ no connections.
    */
   mcp?: Record<string, ProjectMcpConfig>;
+  /**
+   * Managers M10: report types (`managers/reports.ts`), keyed by kebab-case type
+   * — `{ enabled, schedule: {cron|interval}, promptFile?, model?, description? }`.
+   * The ROOT's entries are definitions for every project (plus Home's own
+   * schedule switches); `enabled` counts only in the workspace's own file. Each
+   * effective type is a derived `report-<type>` trigger. Not patchable through
+   * the generic PATCH (a schedule is behaviour-like: edited in the file).
+   * Absent/empty ⇒ only the built-in `status` type, unscheduled.
+   */
+  reports?: Record<string, ReportConfig>;
 }
 
 /** API-facing project DTO (adds derived fields). */

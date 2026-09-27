@@ -22,6 +22,13 @@
  *   GET managers/reports/:type          current report + dated list
  *   GET managers/reports/:type/:date
  *
+ * Reports (M10): `GET managers/reports` lists every EFFECTIVE type (the built-in
+ * `status` everywhere, Home's definitions, the project's own) with its config and
+ * current report; a type directory with no definition is listed as `defined: false`.
+ *
+ *   POST  managers/reports/:type/refresh         fire the derived `report-<type>` trigger now (ignores `enabled`,
+ *                                                never a behaviour gate) → 202 { runId, sessionId }
+ *
  * Writes (M5) — through the same serialised writer the agents' MCP state tools
  * use (`managers/state-writes.ts`), so validation and ordering are shared, and
  * auto-committed as the requesting user:
@@ -73,6 +80,8 @@ import { mcpResolveEnv } from "../managers/mcp-secret-env.js";
 import { workspaceLabel } from "../managers/state-writes.js";
 import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
 import { probeConnection } from "../managers/mcp-probe.js";
+import { effectiveTriggersFor, reportTypesFor } from "../managers/effective-triggers.js";
+import { BehaviourOffError } from "../managers/behaviours.js";
 import type { Project } from "../projects.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -549,7 +558,8 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
     const project = await projects.get(slug);
     return loadAlerts({
       state,
-      project,
+      // M10: alerts watch the derived report triggers too.
+      project: { ...project, triggers: await effectiveTriggersFor(projects, project) },
       schedules: () => ctx.herdctl.listAgentSchedules(project),
       behaviours: await behavioursFor(projects, project),
     });
@@ -599,7 +609,8 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           properties: {
             objective: { type: "string", description: "Objective id to brief on in full." },
             trigger: { type: "string", description: "Trigger name to brief as." },
-            kind: { type: "string", description: "`wake` (default) or `chat`." },
+            kind: { type: "string", description: "`wake` (default), `chat`, or `report` (M10; with `report`)." },
+            report: { type: "string", description: "Report type for `kind=report` (default `status`)." },
           },
         },
         response: ok200("`{ text, sections, objective }`."),
@@ -609,11 +620,12 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       withWorkspace(req, reply, async () => {
         const q = req.query;
         if (q.objective !== undefined && !isName(q.objective)) throw new Invalid(`Invalid objective id: ${q.objective}`);
-        if (q.kind !== undefined && q.kind !== "wake" && q.kind !== "chat") {
-          throw new Invalid(`kind must be wake or chat, got ${JSON.stringify(q.kind)}`);
+        if (q.kind !== undefined && q.kind !== "wake" && q.kind !== "chat" && q.kind !== "report") {
+          throw new Invalid(`kind must be wake, chat or report, got ${JSON.stringify(q.kind)}`);
         }
+        if (q.report !== undefined && !isName(q.report)) throw new Invalid(`Invalid report type: ${q.report}`);
         const project = await projects.get(req.params.slug);
-        const trig = q.trigger ? project.triggers?.[q.trigger] : undefined;
+        const trig = q.trigger ? (await effectiveTriggersFor(projects, project))[q.trigger] : undefined;
         if (q.trigger && !trig) return notFound(reply, `No such trigger: ${q.trigger}`);
         const objective =
           q.objective ??
@@ -621,7 +633,13 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const b = await briefingForWorkspace(
           { state, projects, herdctl: ctx.herdctl },
           req.params.slug,
-          { kind: (q.kind as "wake" | "chat" | undefined) ?? "wake", trigger: q.trigger ?? null, objective, now: new Date() },
+          {
+            kind: (q.kind as "wake" | "chat" | "report" | undefined) ?? "wake",
+            trigger: q.kind === "report" ? (q.trigger ?? `report-${q.report ?? "status"}`) : (q.trigger ?? null),
+            report: q.kind === "report" ? (q.report ?? "status") : null,
+            objective,
+            now: new Date(),
+          },
           project,
         );
         return { text: b.text, sections: b.sections, objective: b.objective };
@@ -637,13 +655,55 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         tags: TAGS,
         summary: "List report types",
         description:
-          "Every `reports/<type>/` directory: `{ reports: [{ type, current, dates }] }`, where `current` is " +
-          "`current.md`'s metadata (no body) or null, and `dates` the dated reports on disk, newest first.",
+          "Every EFFECTIVE report type (M10: the built-in `status`, Home's definitions, this workspace's own) plus " +
+          "any `reports/<type>/` directory with no definition: `{ reports: [{ type, defined, enabled, description, " +
+          "schedule, origin, inherited, trigger, current, dates }] }`. `enabled` is whether the schedule is armed " +
+          "here (this workspace's own flag only); `current` is `current.md`'s metadata (no body, with `generated`) " +
+          "or null; `dates` the dated reports on disk, newest first.",
         params: paramsSchema(),
         response: ok200("`{ reports }`."),
       },
     },
-    (req, reply) => withWorkspace(req, reply, async ({ layout }) => state.reports.list(layout)),
+    (req, reply) =>
+      withWorkspace(req, reply, async ({ layout }) => {
+        const project = await projects.get(req.params.slug);
+        const types = await reportTypesFor(projects, project);
+        const onDisk = await state.reports.list(layout);
+        const byType = new Map(onDisk.reports.map((r) => [r.type, r]));
+        const reports: Array<Record<string, unknown> & { type: string }> = types.map((t) => ({
+          type: t.type,
+          defined: true,
+          enabled: t.enabled,
+          description: t.description,
+          schedule: t.schedule,
+          origin: t.origin,
+          inherited: t.inherited,
+          trigger: t.trigger,
+          promptFile: t.promptFile,
+          model: t.model,
+          current: byType.get(t.type)?.current ?? null,
+          dates: byType.get(t.type)?.dates ?? [],
+        }));
+        for (const r of onDisk.reports) {
+          if (!types.some((t) => t.type === r.type)) {
+            reports.push({
+              type: r.type,
+              defined: false,
+              enabled: false,
+              description: "",
+              schedule: null,
+              origin: null,
+              inherited: false,
+              trigger: null,
+              promptFile: null,
+              model: null,
+              current: r.current,
+              dates: r.dates,
+            });
+          }
+        }
+        return { reports: reports.sort((x, y) => x.type.localeCompare(y.type)) };
+      }),
   );
 
   app.get<{ Params: { slug: string; type: string } }>(
@@ -654,7 +714,8 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         summary: "Get a report type's current report",
         description:
           "`{ type, current, dates }` with `current` the full `current.md` (frontmatter, title, body, updated) or " +
-          "null when only dated reports exist. 400 for a malformed type, 404 when the type has no directory.",
+          "null when there is none yet. 400 for a malformed type, 404 when the type is neither defined here (M10) " +
+          "nor has a directory.",
         params: paramsSchema({ type: { description: "Report type (kebab-case), e.g. `status`." } }),
         response: ok200("`{ type, current, dates }`."),
       },
@@ -663,7 +724,9 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       withWorkspace(req, reply, async ({ layout }) => {
         const { type } = req.params;
         if (!isName(type)) throw new Invalid(`Invalid report type: ${type}`);
-        if (!(await state.reports.hasType(layout, type))) return notFound(reply, `No such report type: ${type}`);
+        const project = await projects.get(req.params.slug);
+        const defined = (await reportTypesFor(projects, project)).some((t) => t.type === type);
+        if (!defined && !(await state.reports.hasType(layout, type))) return notFound(reply, `No such report type: ${type}`);
         return {
           type,
           current: await state.reports.read(layout, type, null),
@@ -694,6 +757,57 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const report = await state.reports.read(layout, type, date);
         if (!report) return notFound(reply, `No ${type} report for ${date}`);
         return { report };
+      }),
+  );
+
+  // --- report refresh (M10) ----------------------------------------------------------------
+
+  app.post<{ Params: { slug: string; type: string } }>(
+    "/managers/reports/:type/refresh",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Refresh a report now",
+        description:
+          "Fires the derived `report-<type>` trigger now, through the one trigger fire path, deliberately " +
+          "IGNORING its `enabled` flag (a manual run is a deliberate act) but never a behaviour gate. 202 " +
+          "`{ ok, type, trigger, runId, sessionId }`; the run finishes asynchronously (poll " +
+          "`managers/runs/:runId`). 400 for a malformed type, 404 for a type not defined here, 409 " +
+          "`behaviour_off` when a behaviour gating the trigger is off, 502 when no chat started, 503 when firing " +
+          "is unavailable.",
+        params: paramsSchema({ type: { description: "Report type (kebab-case), e.g. `status`." } }),
+        response: {
+          202: { description: "`{ ok, type, trigger, runId, sessionId }`.", type: "object", additionalProperties: true },
+        },
+      },
+    },
+    (req, reply) =>
+      withWorkspace(req, reply, async () => {
+        const { slug, type } = req.params;
+        if (!isName(type)) throw new Invalid(`Invalid report type: ${type}`);
+        const project = await projects.get(slug);
+        const t = (await reportTypesFor(projects, project)).find((x) => x.type === type);
+        if (!t) return notFound(reply, `No such report type here: ${type}`);
+        if (!ctx.fireTrigger) return reply.code(503).send({ error: "Trigger firing is unavailable", code: "unavailable" });
+        let runId: string | null = null;
+        let sessionId: string | null;
+        try {
+          sessionId = await ctx.fireTrigger(slug, t.trigger, {
+            why: `Refresh now (a manual ${type} report)`,
+            onRun: (id) => {
+              runId = id;
+            },
+          });
+        } catch (err) {
+          if (err instanceof BehaviourOffError) {
+            return reply.code(409).send({ error: err.message, code: "behaviour_off", behaviours: err.gate.off });
+          }
+          throw err;
+        }
+        if (!sessionId) {
+          return reply.code(502).send({ error: "The report run did not start a chat", code: "trigger_failed", runId });
+        }
+        return reply.code(202).send({ ok: true, type, trigger: t.trigger, runId, sessionId });
       }),
   );
 

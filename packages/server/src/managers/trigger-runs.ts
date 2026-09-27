@@ -38,8 +38,13 @@ export interface BeginTriggerRunParams {
   onError?: (what: string, err: unknown) => void;
 }
 
-/** A schedule fire is a wake; an event (or webhook) fire is an event run. */
+/**
+ * A derived report trigger's fire is a `report` run (M10; the `derived` marker is
+ * never read from project.yaml, so no declared trigger can claim it); any other
+ * schedule fire is a wake; an event (or webhook) fire is an event run.
+ */
 export function runKindOf(trigger: TriggerDto): RunWrite["kind"] {
+  if (trigger.derived?.kind === "report") return "report";
   return trigger.trigger.type === "schedule" ? "wake" : "event";
 }
 

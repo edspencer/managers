@@ -52,6 +52,8 @@ import { WriteQueue, writeFileAtomic } from "./managers/write-queue.js";
 import { BehaviourLkg } from "./managers/behaviour-lkg.js";
 import type { WorkspaceLike } from "./managers/behaviours.js";
 import { sanitizeProjectMcp } from "./managers/project-mcp.js";
+import { sanitizeReports } from "./managers/reports.js";
+import { isReservedTriggerName, RESERVED_TRIGGER_MESSAGE } from "./managers/effective-triggers.js";
 import { sanitizeAttachmentsOverride } from "./attachments-config.js";
 import {
   PROJECT_SCHEMA_VERSION,
@@ -1317,6 +1319,10 @@ export class ProjectStore {
     if (!isValidTriggerName(name)) {
       throw new ProjectError(`Invalid trigger name: ${name}`, "invalid");
     }
+    // Managers M10: derived trigger names are reserved for every caller.
+    if (isReservedTriggerName(name)) {
+      throw new ProjectError(`Trigger name "${name}" is reserved: ${RESERVED_TRIGGER_MESSAGE}.`, "invalid");
+    }
     const clean = sanitizeTrigger(trigger);
     if (!clean) throw new ProjectError("Invalid trigger definition", "invalid");
     const triggers = { ...(current.triggers ?? {}), [name]: clean };
@@ -1670,6 +1676,13 @@ export class ProjectStore {
       ...(() => {
         const m = sanitizeProjectMcp(p.mcp);
         return m ? { mcp: m } : {};
+      })(),
+      // reports (Managers M10): same discipline as behaviours — carried only when
+      // an entry survives; a bad FIELD is dropped, never the entry (a dropped
+      // `enabled` just leaves the schedule off).
+      ...(() => {
+        const r = sanitizeReports(p.reports);
+        return r ? { reports: r } : {};
       })(),
     };
   }

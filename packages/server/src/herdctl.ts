@@ -47,6 +47,8 @@
  * and paddock calls it after each turn (`ws-turn.ts`) and around fork/promote.
  */
 import { mcpResolveEnv } from "./managers/mcp-secret-env.js";
+import { effectiveTriggers, type EffectiveTrigger } from "./managers/effective-triggers.js";
+import type { ReportWorkspaceLike } from "./managers/reports.js";
 import {
   FleetManager,
   clearSession,
@@ -505,8 +507,8 @@ export class HerdctlService {
    * The fire path re-reads the root itself, so a stale copy here can only ever
    * leave a schedule armed that the fire then refuses — never the reverse.
    */
-  private rootRecord: (WorkspaceLike & { dir?: string }) | null = null;
-  private rootProvider: (() => Promise<WorkspaceLike & { dir?: string }>) | null = null;
+  private rootRecord: (WorkspaceLike & ReportWorkspaceLike & { dir?: string }) | null = null;
+  private rootProvider: (() => Promise<WorkspaceLike & ReportWorkspaceLike & { dir?: string }>) | null = null;
   /**
    * Managers M9.5: how a record is resolved for the gate — the last-known-good
    * definitions substituted for an unreadable file (`ProjectStore.resolveForGateSync`).
@@ -514,7 +516,7 @@ export class HerdctlService {
   private gateResolver: <T extends WorkspaceLike & { dir?: string }>(ws: T) => T = (ws) => ws;
 
   /** Wire how {@link ensureProjectAgent} re-reads Home's behaviour definitions (Managers M8). */
-  setRootProvider(fn: () => Promise<WorkspaceLike & { dir?: string }>): void {
+  setRootProvider(fn: () => Promise<WorkspaceLike & ReportWorkspaceLike & { dir?: string }>): void {
     this.rootProvider = fn;
   }
 
@@ -555,6 +557,23 @@ export class HerdctlService {
     const res = resolveProjectMcp(project, this.mcpEnv);
     if (log && this.mcpLog) for (const n of projectMcpNotices(project.slug, res)) this.mcpLog(n.level, n.message);
     return res;
+  }
+
+  /**
+   * Managers M10: a workspace's EFFECTIVE triggers — its declared ones plus the
+   * derived `report-<type>` ones, from the cached Home report definitions (an
+   * unreadable Home contributes none; the built-ins and the project's own still
+   * apply). What the keeper's `schedules`, the scoped trigger agents and the
+   * chat listing are built from.
+   */
+  effectiveTriggersOf(project: Project): Record<string, EffectiveTrigger> {
+    const root = project.slug === "" || !this.rootRecord || this.rootRecord.configError ? null : this.rootRecord;
+    return effectiveTriggers(project, root);
+  }
+
+  /** `project` with its effective trigger map (Managers M10). */
+  private withEffective(project: Project): Project {
+    return { ...project, triggers: this.effectiveTriggersOf(project) };
   }
 
   /** A workspace's effective behaviours against the cached Home definitions (Managers M8). */
@@ -787,7 +806,8 @@ export class HerdctlService {
   async registerTriggerAgents(project: Project, mcp?: ProjectMcpResolution): Promise<void> {
     if (!this.fleet) return;
     const resolved = mcp ?? this.projectMcpOf(project);
-    for (const [name, trigger] of Object.entries(project.triggers ?? {})) {
+    // Managers M10: the derived `report-<type>` triggers register here too.
+    for (const [name, trigger] of Object.entries(this.effectiveTriggersOf(project))) {
       // The post-turn CURATOR (event/afterTurn) trigger, T5, never runs as its own
       // agent — SweepService executes it via the project's `sweeper-<slug>` agent.
       // Registering a `trigger-<slug>-<name>` for it would be a dead, never-fired agent.
@@ -1882,7 +1902,8 @@ export class HerdctlService {
    * scans only kick in for a project that has hook chats to show.
    */
   async listSessions(project: Project): Promise<SessionWithActivity[]> {
-    const agentNames = visibleProjectAgentNames(project);
+    // Managers M10: a derived report trigger's chats are the project's too.
+    const agentNames = visibleProjectAgentNames(this.withEffective(project));
     const perAgent =
       agentNames.length === 1
         ? [await this.manager.getAgentSessions(agentNames[0])]
@@ -2214,7 +2235,8 @@ export class HerdctlService {
   ): Record<string, unknown> & { name: string } {
     return buildAgentConfig(
       this.cfg,
-      project,
+      // Managers M10: the keeper's `schedules` include the derived report triggers.
+      this.withEffective(project),
       modelOverride,
       this.mcpSources,
       this.hostPlugins,

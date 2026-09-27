@@ -22,6 +22,11 @@
  *   11 Recent project log  the last 10 project-level episodes
  *   12 OVERVIEW.md     (≤8k chars)
  *
+ * A `report` briefing (M10: a derived `report-<type>` run) adds three sections
+ * after Alerts — the schedule (herdctl's next fires), the previous report of that
+ * type in full, and what changed since it was generated (episodes, task changes,
+ * runs) — so the model can write "In flight" and "what changed" without digging.
+ *
  * A section over its budget is cut at a line boundary and ends with a
  * `[truncated: …]` note, so the agent knows there is more (and where to read it).
  * Headings inside embedded documents are demoted two levels so they never read as
@@ -56,6 +61,8 @@ import {
 import { behaviourDriftAlert } from "./behaviour-state.js";
 import { MANAGER_PROTOCOL } from "./protocol.js";
 import { isMissing, isParseFailure } from "./store-util.js";
+import { effectiveTriggersFor } from "./effective-triggers.js";
+import type { ReportConfig } from "./reports.js";
 
 export type BriefingKind = "wake" | "chat" | "report" | "consolidation";
 
@@ -75,7 +82,11 @@ export const BRIEFING_SECTIONS = [
   "Recent project log",
   "OVERVIEW.md",
 ] as const;
-export type BriefingSectionName = (typeof BRIEFING_SECTIONS)[number];
+/** M10: the sections a `report` briefing adds, right after Alerts. */
+export const REPORT_BRIEFING_SECTIONS = ["Schedule", "Previous report", "Changed since previous report"] as const;
+export type BriefingSectionName =
+  | (typeof BRIEFING_SECTIONS)[number]
+  | (typeof REPORT_BRIEFING_SECTIONS)[number];
 
 /** Hard per-section budgets in characters, heading included. */
 export const SECTION_BUDGETS: Record<BriefingSectionName, number> = {
@@ -90,6 +101,9 @@ export const SECTION_BUDGETS: Record<BriefingSectionName, number> = {
   "Answered since last wake": 4_000,
   "Recent runs": 2_000,
   Alerts: 3_000,
+  Schedule: 1_500,
+  "Previous report": 12_000,
+  "Changed since previous report": 8_000,
   "Recent project log": 5_000,
   "OVERVIEW.md": 8_000,
 };
@@ -109,6 +123,8 @@ export interface BriefingParams {
   objective?: string | null;
   /** The trigger being fired, if any. */
   trigger?: string | null;
+  /** M10: the report type a `report` briefing is for (its previous report and changes). */
+  report?: string | null;
   runId?: string | null;
   /** Why the manager is being woken, in words (e.g. "Run now (manual)"). Derived when absent. */
   why?: string | null;
@@ -371,6 +387,95 @@ function alertLine(a: Alert): string {
   return `- [${a.severity}] ${a.id} — ${oneLine(a.message, 240)}`;
 }
 
+// --- the report sections (M10) ------------------------------------------------------------
+
+/** With no previous report, "changed since" looks back this far. */
+export const REPORT_CHANGES_FALLBACK_DAYS = 7;
+export const REPORT_CHANGES_CAP = 40;
+
+async function reportSections(
+  src: BriefingSources,
+  layout: WorkspaceLayout,
+  p: BriefingParams,
+  schedules: AlertSchedule[],
+  allRuns: RunSummary[],
+  doneMonths: string[],
+): Promise<Section[]> {
+  const { state } = src;
+  const now = p.now;
+  const type = p.report ?? null;
+
+  // Schedule: herdctl's armed keeper schedules and their next fires.
+  const armed = [...schedules]
+    .filter((s) => s.nextRunAt)
+    .sort((a, b) => String(a.nextRunAt).localeCompare(String(b.nextRunAt)) || a.name.localeCompare(b.name));
+  const schedule: Section = {
+    name: "Schedule",
+    title: "Schedule",
+    body: armed.length
+      ? "Next scheduled fires:\n" + armed.map((s) => `- ${s.name} · next ${stamp(s.nextRunAt)}${s.status ? ` · ${s.status}` : ""}`).join("\n")
+      : "(nothing scheduled: no enabled schedule is armed)",
+  };
+
+  // Previous report of this type (its current.md).
+  const prev = type ? await state.reports.read(layout, type, null).catch(() => null) : null;
+  const generated = prev ? (typeof prev.frontmatter.generated === "string" ? prev.frontmatter.generated : prev.updated) : null;
+  const previous: Section = {
+    name: "Previous report",
+    title: type ? `Previous ${type} report` : "Previous report",
+    body: prev
+      ? `Generated ${stamp(generated)}${prev.frontmatter.run ? ` by ${String(prev.frontmatter.run)}` : ""}.\n\n${embed(prev.body)}`
+      : "(no previous report of this type)",
+    hint: type ? `read reports/${type}/current.md for the rest` : undefined,
+  };
+
+  // What changed since it was generated.
+  const sinceIso =
+    generated && Number.isFinite(Date.parse(generated))
+      ? generated
+      : new Date(now.getTime() - REPORT_CHANGES_FALLBACK_DAYS * 86_400_000).toISOString();
+  const since = Date.parse(sinceIso);
+  const lines: string[] = [];
+
+  const episodes: Episode[] = [];
+  const log = await state.episodes.page(layout, null, { months: 2 }).catch(() => null);
+  if (log) episodes.push(...log.entries);
+  const { objectives } = await state.objectives.list(layout).catch(() => ({ objectives: [] as { id: string }[] }));
+  for (const o of objectives) {
+    const j = await state.episodes.page(layout, o.id, { months: 2 }).catch(() => null);
+    if (j) episodes.push(...j.entries);
+  }
+  const newEpisodes = episodes
+    .filter((e) => Date.parse(e.at) > since)
+    .sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+  lines.push(`Episodes (${newEpisodes.length}):`);
+  lines.push(...(newEpisodes.length ? newEpisodes.slice(0, REPORT_CHANGES_CAP).map((e) => episodeLine(e, 240)) : ["- (none)"]));
+
+  const tasks: TaskSummary[] = [...(await state.tasks.list(layout)).tasks];
+  const months = [...new Set([monthOf(now), sinceIso.slice(0, 7)])].filter((m) => doneMonths.includes(m)).sort();
+  for (const m of months) tasks.push(...(await state.tasks.list(layout, { month: m })).tasks);
+  const changedTasks = tasks
+    .filter((t) => t.updated && Date.parse(t.updated) > since)
+    .sort((a, b) => String(b.updated).localeCompare(String(a.updated)) || a.id.localeCompare(b.id));
+  lines.push("", `Task changes (${changedTasks.length}):`);
+  lines.push(
+    ...(changedTasks.length
+      ? changedTasks.slice(0, REPORT_CHANGES_CAP).map((t) => `- [${t.status}] ${t.id} — ${oneLine(t.title, 160)} · updated ${stamp(t.updated)}`)
+      : ["- (none)"]),
+  );
+
+  const newRuns = allRuns.filter((r) => r.id !== p.runId && r.started && Date.parse(r.started) > since);
+  lines.push("", `Runs (${newRuns.length}):`);
+  lines.push(...(newRuns.length ? newRuns.slice(0, REPORT_CHANGES_CAP).map(runLine) : ["- (none)"]));
+
+  const changed: Section = {
+    name: "Changed since previous report",
+    title: "Changed since the previous report",
+    body: `Since ${stamp(sinceIso)} (${prev ? "the previous report" : `no previous report, so the last ${REPORT_CHANGES_FALLBACK_DAYS} days`}).\n\n${lines.join("\n")}`,
+  };
+  return [schedule, previous, changed];
+}
+
 // --- the builder -----------------------------------------------------------------------
 
 export async function buildBriefing(src: BriefingSources, p: BriefingParams): Promise<Briefing> {
@@ -478,6 +583,10 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
     hint: "read OVERVIEW.md for the rest",
   };
 
+  // M10: the report sections (a report briefing only).
+  const reportSecs =
+    p.kind === "report" ? await reportSections(src, layout, p, schedules, allRuns, open.doneMonths) : [];
+
   const ordered = [
     header,
     protocol,
@@ -490,6 +599,7 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
     answeredSec,
     runs,
     alertsSec,
+    ...reportSecs,
     logSec,
     overviewSec,
   ];
@@ -510,6 +620,8 @@ type BriefedWorkspace = {
   triggers?: Record<string, PaddockTrigger>;
   behaviours?: Record<string, BehaviourConfig>;
   mcp?: Record<string, ProjectMcpConfig>;
+  reports?: Record<string, ReportConfig>;
+  configError?: string;
 };
 
 export interface BriefingDeps<P extends BriefedWorkspace> {
@@ -530,11 +642,14 @@ export async function briefingForWorkspace<P extends BriefedWorkspace>(
   project?: P,
 ): Promise<Briefing> {
   const p = project ?? (await deps.projects.get(slug));
-  const behaviours = await behavioursFor(deps.projects, { slug, behaviours: p.behaviours });
+  // M9.5/M10: the whole record, so an unreadable config fails closed here too.
+  const behaviours = await behavioursFor(deps.projects, { ...p, slug });
+  // M10: the effective triggers (a derived report-<type> is briefed, alerted on and named).
+  const triggers = await effectiveTriggersFor(deps.projects, { ...p, slug }).catch(() => p.triggers ?? {});
   return buildBriefing(
     {
       state: deps.state,
-      project: { slug, dir: p.dir, triggers: p.triggers },
+      project: { slug, dir: p.dir, triggers },
       readOverview: () => deps.projects.readOverview(slug),
       schedules: deps.herdctl ? () => deps.herdctl!.listAgentSchedules(p) : undefined,
       behaviours,

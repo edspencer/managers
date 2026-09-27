@@ -1,8 +1,8 @@
 /**
  * reports-store — `reports/<type>/current.md` plus `reports/<type>/YYYY-MM-DD.md`
  * (plan §4). The last write of a day wins its dated file; git keeps the
- * intraday history. Reads only in M4 (`write_report` lands in M5, its
- * post-processing in M10).
+ * intraday history. Reads only; `write_report` (state-writes.ts, composed by
+ * reports.ts) is the writer.
  *
  * Report frontmatter is optional and free-form until M10 defines the `status`
  * type, so it is returned as-is; a report whose frontmatter will not parse is
@@ -24,6 +24,8 @@ export interface ReportDoc {
   body: string;
   /** Frontmatter `updated`/`generated` if present, else the file's mtime (ISO). */
   updated: string;
+  /** M10: frontmatter `generated` (a server-composed report), else null. */
+  generated: string | null;
   parseError: ParseError | null;
 }
 
@@ -105,6 +107,7 @@ export class ReportsStore {
       title: h ? h[1]!.trim() : null,
       body,
       updated,
+      generated: typeof frontmatter.generated === "string" && frontmatter.generated ? frontmatter.generated : null,
       parseError: error ? { file, error } : null,
     };
   }

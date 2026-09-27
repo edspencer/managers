@@ -194,7 +194,12 @@ export type StartAgentTurn = (opts: StartAgentTurnOpts) => Promise<string>;
 export type ComposePreloadedPrompt = (projectSlug: string, baseMessage: string) => Promise<string>;
 
 /** Fire a project's named trigger on demand; resolves the started chat's id or null. */
-export type FireTrigger = (slug: string, triggerName: string) => Promise<string | null>;
+export type FireTrigger = (
+  slug: string,
+  triggerName: string,
+  /** Managers M10: `onRun` hears the run id as soon as the run record exists. */
+  opts?: { why?: string; onRun?: (runId: string) => void },
+) => Promise<string | null>;
 
 /**
  * The context the self-MCP builder + trigger-firing cluster need: the deps bag,

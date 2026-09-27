@@ -13,6 +13,8 @@
  */
 import { BehaviourOffError } from "../managers/behaviours.js";
 import { humanTriggerGuard } from "../managers/trigger-guard.js";
+import { derivedTriggers, effectiveTriggersFor } from "../managers/effective-triggers.js";
+import { toTriggerDto } from "../triggers.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { keeperAgentName } from "../herdctl.js";
 import { GRANTABLE_TOOLS } from "../hook-config.js";
@@ -289,7 +291,13 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       if (!triggersGuard(reply)) return reply;
       try {
         const project = await projects.get(req.params.slug); // throws not_found
-        const dtos = await triggers!.list(project.slug);
+        // Managers M10: the derived report triggers have runtime state too (their
+        // schedules ride the keeper's `schedules` block; their runs, their own agent).
+        const root = project.slug === "" ? null : await projects.get("").catch(() => null);
+        const derived = Object.entries(derivedTriggers(project, root && !root.configError ? root : null)).map(
+          ([name, t]) => toTriggerDto(project.slug, name, t),
+        );
+        const dtos = [...(await triggers!.list(project.slug)).filter((d) => !derived.some((x) => x.name === d.name)), ...derived];
         // The agents a trigger's runs land under: the keeper (unscoped schedule
         // triggers) + every trigger's own scoped `trigger-<slug>-<name>` agent.
         const agents = [keeperAgentName(project.slug), ...dtos.map((d) => d.agentName)];
@@ -348,7 +356,8 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       }
       try {
         const project = await projects.get(slug); // throws not_found
-        const rec = project.triggers?.[name];
+        // Managers M10: a derived `report-<type>` trigger is runnable too.
+        const rec = (await effectiveTriggersFor(projects, project))[name];
         if (!rec) {
           return reply.code(404).send({ error: `No such trigger: ${name}`, code: "not_found" });
         }

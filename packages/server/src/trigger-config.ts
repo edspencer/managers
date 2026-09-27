@@ -39,6 +39,7 @@
  */
 import path from "node:path";
 import { z } from "zod";
+import type { DerivedTriggerInfo } from "./managers/effective-triggers.js";
 
 /** The trigger kinds. `webhook` is shape-reserved (no ingress in T1 — deferred T6). */
 export const TRIGGER_TYPES = ["schedule", "event", "webhook"] as const;
@@ -236,6 +237,11 @@ export type TriggerDto = PaddockTrigger & {
   name: string;
   /** The herdctl agent this trigger registers as (`trigger-<slug>-<name>`). */
   agentName: string;
+  /**
+   * Managers M10: set only on a trigger the server DERIVES (`report-<type>`),
+   * never persisted — see `managers/effective-triggers.ts`.
+   */
+  derived?: DerivedTriggerInfo;
 };
 
 // --- validation ---------------------------------------------------------------

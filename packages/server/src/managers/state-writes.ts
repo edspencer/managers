@@ -192,6 +192,9 @@ export interface ReportResult {
   date: string;
   file: string;
   currentFile: string;
+  /** M10: the previous dated report's date, or null. */
+  previous: string | null;
+  generated: string;
 }
 export interface ArtifactResult {
   run: string;
@@ -681,9 +684,26 @@ export class StateWriter {
     });
   }
 
-  // --- reports (stub until M10) -------------------------------------------------------
+  // --- reports (M10) ---------------------------------------------------------------------
 
-  async writeReport(ws: WriteWorkspace, input: WriteReportInput, actor: WriteActor): Promise<ReportResult> {
+  /**
+   * Write a report: `reports/<type>/YYYY-MM-DD.md` (the last write of a day wins)
+   * and `current.md`, atomically, under the workspace lock, and note the type on
+   * the current run. The caller validates the type against the workspace's
+   * effective report types and supplies `compose`, which turns the stripped body
+   * plus the server's facts (`date`, `generated`, `previous` — the latest dated
+   * report before today, found under the lock) into the file's frontmatter and
+   * body (`reports.ts` `composeReport`). Without `compose` the body is written
+   * under a minimal frontmatter (tests, and any caller outside the MCP tool).
+   */
+  async writeReport(
+    ws: WriteWorkspace,
+    input: WriteReportInput,
+    actor: WriteActor,
+    compose?: (c: { date: string; generated: string; previous: string | null; runId: string | null }) =>
+      | { frontmatter: Record<string, unknown>; body: string }
+      | Promise<{ frontmatter: Record<string, unknown>; body: string }>,
+  ): Promise<ReportResult> {
     const type = typeof input.type === "string" ? input.type.trim() : "";
     if (!isName(type)) throw invalid(`type must be a kebab-case report type, got ${JSON.stringify(input.type)}`);
     const body = typeof input.body === "string" ? input.body.trim() : "";
@@ -692,15 +712,25 @@ export class StateWriter {
     return this.locked(ws, actor, async () => {
       const now = this.now();
       const date = dateOf(now);
-      const fm = { type, updated: isoSecond(now), ...(actor.runId ? { run: actor.runId } : {}) };
-      const text = stringifyFrontmatter(fm, `${body}\n`);
+      const generated = isoSecond(now);
+      const runId = actor.runId ?? null;
+      const previous =
+        (await fs.readdir(ws.layout.reportTypeDir(type)).catch(() => [] as string[]))
+          .map((f) => /^(\d{4}-\d{2}-\d{2})\.md$/.exec(f)?.[1])
+          .filter((d): d is string => typeof d === "string" && d < date)
+          .sort()
+          .pop() ?? null;
+      const composed = compose
+        ? await compose({ date, generated, previous, runId })
+        : { frontmatter: { type, generated, run: runId, previous }, body: `${body}\n` };
+      const text = stringifyFrontmatter(composed.frontmatter, composed.body);
       const dated = ws.layout.reportDatedFile(type, date);
       const current = ws.layout.reportCurrentFile(type);
       await writeFileAtomic(dated, text);
       await writeFileAtomic(current, text);
       await this.touchRun(ws, actor, "reports", type);
       this.notify(ws, actor, `write_report (${type})`);
-      return { type, date, file: ws.layout.rel(dated), currentFile: ws.layout.rel(current) };
+      return { type, date, file: ws.layout.rel(dated), currentFile: ws.layout.rel(current), previous, generated };
     });
   }
 

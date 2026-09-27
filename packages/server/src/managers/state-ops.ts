@@ -22,6 +22,8 @@ import type { PageOpts } from "./episodes-store.js";
 import type { ParseError } from "./store-util.js";
 import type { Alert } from "./alerts.js";
 import type { Briefing } from "./briefing.js";
+import { isName } from "./layout.js";
+import { BUILTIN_REPORT_TYPES, composeReport, stripServerSections } from "./reports.js";
 import {
   StateWriteError,
   type ArtifactResult,
@@ -91,6 +93,17 @@ export interface StateOpsParams {
   loadAlerts: (project: string) => Promise<Alert[]>;
   /** Build a workspace's briefing (M7; shared with the REST preview). */
   loadBriefing: (project: string, opts: BriefingRequest) => Promise<Briefing>;
+  /**
+   * M10: what `write_report` needs to know about a workspace — its display name
+   * and its effective report types. Absent (bare tests): the built-in types and
+   * the key as the name.
+   */
+  loadReportContext?: (project: string) => Promise<ReportContext>;
+}
+
+export interface ReportContext {
+  name: string;
+  types: string[];
 }
 
 export const MEMORY_OP_UNAVAILABLE =
@@ -126,7 +139,50 @@ export function buildStateOps(p: StateOpsParams): ManagementStateOps {
     recordEpisode: async (project, input) => state.writer.recordEpisode(await ws(project), input, actor()),
     upsertTask: async (project, input) => state.writer.upsertTask(await ws(project), input, actor()),
     updateObjective: async (project, input) => state.writer.updateObjective(await ws(project), input, actor()),
-    writeReport: async (project, input) => state.writer.writeReport(await ws(project), input, actor()),
+    writeReport: async (project, input) => {
+      // M10: the type must be one this workspace has; the server renders "Needs
+      // you" and "Alerts" itself, so the model's own copies are dropped.
+      const type = typeof input.type === "string" ? input.type.trim() : "";
+      if (!isName(type)) {
+        throw new StateWriteError("invalid", `type must be a kebab-case report type, got ${JSON.stringify(input.type)}`);
+      }
+      const ctx: ReportContext = p.loadReportContext
+        ? await p.loadReportContext(project)
+        : { name: project === "" ? "Home" : project, types: Object.keys(BUILTIN_REPORT_TYPES) };
+      if (!ctx.types.includes(type)) {
+        throw new StateWriteError(
+          "invalid",
+          `Unknown report type "${type}" here. This workspace's report types: ${ctx.types.join(", ") || "(none)"}. ` +
+            "A new type is defined in project.yaml `reports:`.",
+        );
+      }
+      const body = stripServerSections(typeof input.body === "string" ? input.body : "");
+      if (!body.trim()) {
+        throw new StateWriteError(
+          "invalid",
+          'body is empty once the server-rendered "Needs you" and "Alerts" sections are removed; write the report\'s own sections (e.g. "## In flight", "## Notes")',
+        );
+      }
+      const w = await ws(project);
+      const [tasks, alerts] = await Promise.all([
+        state.tasks.list(w.layout, { status: ["awaiting-ed"] }),
+        (p.loadAlerts?.(project) ?? Promise.resolve([])).catch(() => []),
+      ]);
+      return state.writer.writeReport(w, { type, body }, actor(), (c) =>
+        composeReport({
+          type,
+          slug: project,
+          projectName: ctx.name,
+          date: c.date,
+          generated: c.generated,
+          runId: c.runId,
+          previous: c.previous,
+          body,
+          tasks: tasks.tasks,
+          alerts,
+        }),
+      );
+    },
     recordArtifact: async (project, input) => state.writer.recordArtifact(await ws(project), input, actor()),
     memoryOp: async () => {
       if (!memoryAvailable) throw new StateWriteError("conflict", MEMORY_OP_UNAVAILABLE);

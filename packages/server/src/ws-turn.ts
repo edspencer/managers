@@ -123,7 +123,7 @@ export interface TurnEngine {
   recoveryEngine: RecoveryEngine;
   emitAfterTurn(slug: string, sessionId: string | null): void;
   composePreloadedPrompt(projectSlug: string, baseMessage: string): Promise<string>;
-  fireTrigger(slug: string, triggerName: string): Promise<string | null>;
+  fireTrigger(slug: string, triggerName: string, opts?: { why?: string; onRun?: (runId: string) => void }): Promise<string | null>;
   /**
    * Gap B: build a per-turn sink that renders autonomous background-completion
    * re-invocation turns (delivered on the same session stream after the primary

@@ -365,7 +365,7 @@ export function registerProjectWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         runProvenance.get(s.sessionId);
       // Trigger capability descriptor for trigger chats (Epic T / T4) — truthful from
       // the registered trigger agent config. A no-op for the keeper chats that dominate.
-      const triggerOf = makeTriggerResolver(project);
+      const triggerOf = makeTriggerResolver(project, herdctl.effectiveTriggersOf?.(project));
       // Parent edge for the nested chat list: an explicit detach (#508) wins, else
       // the recorded RunProvenance edge, else a backfill from who injected the
       // kickoff prompt. All three are in-memory sidecar reads.
@@ -616,7 +616,8 @@ export function registerProjectWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         await herdctl.removeProjectAgent(
           project.slug,
           Object.keys(project.hooks ?? {}),
-          Object.keys(project.triggers ?? {}),
+          // M10: the derived report triggers registered agents (and jobs) too.
+          Object.keys(herdctl.effectiveTriggersOf?.(project) ?? project.triggers ?? {}),
         );
       } catch (err) {
         req.log.warn({ err }, "keeper-agent unregister failed (project dir already removed)");
@@ -631,7 +632,8 @@ export function registerProjectWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         .purgeProjectJobs(
           project.slug,
           Object.keys(project.hooks ?? {}),
-          Object.keys(project.triggers ?? {}),
+          // M10: the derived report triggers registered agents (and jobs) too.
+          Object.keys(herdctl.effectiveTriggersOf?.(project) ?? project.triggers ?? {}),
         )
         .catch((err: unknown) => {
           req.log.warn({ err }, "job-record purge failed (project is still deleted)");
