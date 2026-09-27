@@ -276,6 +276,9 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
 
   if (opts.gitRepo) {
     await initGitRepo(projectsRoot);
+    // M9.5: the data-dir guard only claims an EMPTY root; this one now holds a
+    // repo, so mark it as Managers' (as a real `ensureDataRepo` would have).
+    await fs.writeFile(path.join(projectsRoot, ".managers-data"), "", "utf8");
   }
 
   const restoreEnv = () => {

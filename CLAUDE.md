@@ -20,9 +20,9 @@ What changed from Paddock, and what did not:
   none reaches a keeper, sweeper or trigger child. `test/unit/no-paddock-env.test.ts`
   fails the build if any `packages/*/src` file spells `PADDOCK_` outside that file.
 - **Data-dir guard** (`data-dir-guard.ts`, applied in `loadPaddockConfig`): a
-  projects root that already holds `*/project.yaml` but no `.managers-data` marker
-  is **refused** unless `MANAGERS_ADOPT_DATA_DIR=1`. A fresh root is claimed (the
-  marker is written). This is what stops a rig from ever touching real data.
+  NON-EMPTY projects root without a `.managers-data` marker is **refused** unless
+  `MANAGERS_ADOPT_DATA_DIR=1` (since M9.5; before, only one holding
+  `*/project.yaml`). Only an absent or empty root is claimed (the marker is written). This is what stops a rig from ever touching real data.
 - **Runtime posture (M3, `managers/claude-overlay.ts`).** Transcripts never
   expire and there is no Claude Code auto-memory:
   - `<claudeHome>/settings.json` is ALWAYS a file Managers generated (never a
@@ -162,6 +162,29 @@ What changed from Paddock, and what did not:
   Settings → Connections (`ConnectionsSection.tsx`). The fake `claude` now
   permission-checks MCP calls against `--allowedTools`/`--disallowedTools`, and the
   rig runs `fake-paddock-mcp.mjs` beside the server.
+- **Audit fixes (M9.5).** `project.yaml` writes: every `ProjectStore` mutator runs
+  its read-modify-write under a per-workspace lock (`withYamlLock`) and
+  `writeYaml` is temp-file + rename, so concurrent saves never lose `behaviours:`.
+  A file that exists but will not read as a record (bad YAML, not a mapping, a
+  `behaviours:` block the sanitiser would thin — `behavioursShapeError`) sets the
+  DTO's `configError`: the store REFUSES to rewrite it, and the gate FAILS CLOSED —
+  every behaviour off, the last-known-good definitions
+  (`managers/behaviour-lkg.ts`, `.managers/state/behaviour-defs.json`) keep their
+  triggers gated and tools denied, a synthetic `config-unreadable` behaviour (gating
+  `*` when nothing is known) and an error alert appear, and the Behaviours PATCH is
+  a 409. `behavioursFor` treats a throwing root read the same way. Agents (every MCP
+  principal) cannot create, change or remove a behaviour-gated trigger or one whose
+  name was ever gated (`managers/trigger-guard.ts`, tombstones in
+  `.managers/state/gated-triggers.json`); humans use the Triggers tab/REST. At boot
+  `MANAGERS_MCP_*` vars are moved out of `process.env` (`managers/mcp-secret-env.ts`;
+  resolvers read `mcpResolveEnv()`), so children never inherit another project's
+  token. Autocommit stages only store-shaped files (`isOwnedStateFile`); a behaviour
+  switch commits pending `project.yaml` edits separately as the bot first, and
+  switches are serialised. The data-dir guard claims only an EMPTY root. Boot fails
+  runs left `running` by a previous process (`interrupted by restart`). `mcpCalls`
+  counts calls that went through; errored/denied ones go to `mcpErrors`. The
+  `bypass-permissions` alert warns when a narrowed connection or gated tool meets
+  `bypassPermissions`. History titles strip the preload (`runs.ts` `runPrompt`).
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

@@ -32,7 +32,9 @@
  *   MANAGERS_FAKE_INVOCATION_LOG=<rig>/invocations.jsonl
  *                         one JSON line per fake-claude spawn: argv-derived flags,
  *                         the --mcp-config, and `paddockEnvCount` (a COUNT of
- *                         inherited PADDOCK_* vars — never names or values).
+ *                         inherited PADDOCK_* vars — never names or values), and
+ *                         `mcpSecretEnvCount` (M9.5: inherited MANAGERS_MCP_* vars,
+ *                         which the server's boot sequester makes 0).
  *   HOST=127.0.0.1        forced, whatever pm or the caller exported.
  *
  * ── The fake Paddock /mcp (M9) ──────────────────────────────────────────────

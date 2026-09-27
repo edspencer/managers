@@ -615,6 +615,10 @@ function recordInvocation(flags, prompt) {
         // Managers M1: how many inherited PADDOCK_* vars reached this child. The
         // server's boot scrub (env-scrub.ts) should make this 0. A count, never names.
         paddockEnvCount: Object.keys(process.env).filter((k) => k.startsWith("PADDOCK_")).length,
+        // Managers M9.5: how many MCP credential vars (MANAGERS_MCP_*) this child
+        // inherited. The boot sequester (managers/mcp-secret-env.ts) makes it 0;
+        // tokens reach the child only in its --mcp-config. A count, never names.
+        mcpSecretEnvCount: Object.keys(process.env).filter((k) => k.startsWith("MANAGERS_MCP_")).length,
       }) + "\n",
     );
   } catch {

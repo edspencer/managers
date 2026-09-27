@@ -233,6 +233,8 @@ describe("runs + reports", () => {
 
 describe("ensureDataRepo", () => {
   it("writes the skeleton and git-inits, and is idempotent", async () => {
+    // M9.5: only an EMPTY root is claimed, so drop the shared fixture's project dir.
+    await fs.rm(proj, { recursive: true, force: true });
     const r1 = await ensureDataRepo(root, { gitInit: true });
     expect(r1.changed.sort()).toEqual([".gitattributes", ".gitignore", ".managers-data", "README.md"]);
     expect(r1.gitInitialized).toBe(true);

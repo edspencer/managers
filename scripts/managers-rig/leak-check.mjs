@@ -153,6 +153,12 @@ try {
     !!turn && turn.paddockEnvCount === 0,
     turn ? `paddockEnvCount=${turn.paddockEnvCount}` : "no invocation recorded",
   );
+  // M9.5: the rig sets MANAGERS_MCP_PADDOCK_* tokens for the server; no child may inherit one.
+  check(
+    "spawned fake claude inherited 0 MANAGERS_MCP_* vars",
+    !!turn && turn.mcpSecretEnvCount === 0,
+    turn ? `mcpSecretEnvCount=${turn.mcpSecretEnvCount}` : "no invocation recorded",
+  );
 } finally {
   server.stop();
 }

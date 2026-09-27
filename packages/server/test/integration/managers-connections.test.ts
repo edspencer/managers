@@ -24,9 +24,17 @@ import YAML from "yaml";
 import { startTestApp, type TestApp } from "../helpers/app.js";
 import { keeperAgentName, triggerAgentName } from "../../src/herdctl-agent-names.js";
 import type { Project } from "../../src/projects.js";
+import { resetSequesteredMcpSecrets, sequesterMcpSecrets } from "../../src/managers/mcp-secret-env.js";
 import { startFakePaddockMcp } from "../../../../scripts/managers-rig/fake-paddock-mcp.mjs";
 
-type Run = { id: string; trigger: string; status: string; sessionId: string | null; mcpCalls: Record<string, Record<string, number>> };
+type Run = {
+  id: string;
+  trigger: string;
+  status: string;
+  sessionId: string | null;
+  mcpCalls: Record<string, Record<string, number>>;
+  mcpErrors?: Record<string, Record<string, number>>;
+};
 type Conn = {
   name: string;
   url: string | null;
@@ -42,7 +50,7 @@ type Line = {
   type: string;
   message?: { content?: Array<{ type: string; id?: string; name?: string; tool_use_id?: string; content?: unknown; is_error?: boolean }> | string };
 };
-type Invocation = { prompt: string; allowedTools: string | null; mcpConfig: string | null };
+type Invocation = { prompt: string; allowedTools: string | null; mcpConfig: string | null; mcpSecretEnvCount?: number };
 
 const TOKEN_ENV = "MANAGERS_MCP_PADDOCK_WIDGET_LIB";
 const WRONG_ENV = "MANAGERS_MCP_PADDOCK_WRONG_TOKEN";
@@ -260,6 +268,9 @@ describe("integration: per-project MCP connections (M9)", () => {
     const [c1] = await transcriptCalls(off.sessionId!);
     expect(c1).toMatchObject({ name: "mcp__paddock__create_chat", isError: true });
     expect(c1!.content).toContain("denied");
+    // M9.5: a denied call is not a call that happened — counted apart.
+    expect(off.mcpCalls).toEqual({});
+    expect(off.mcpErrors).toEqual({ paddock: { create_chat: 1 } });
     expect((await inject("PATCH", `${api(slug)}/behaviours/dispatch`, { enabled: true })).statusCode).toBe(200);
     const before = fake.calls.length;
     const on = await fire(slug, "pd-dispatch", prompt);
@@ -268,6 +279,44 @@ describe("integration: per-project MCP connections (M9)", () => {
     expect(c2!.content).toMatch(/"sessionId": "fake-chat-new-\d{4}"/);
     expect(on.mcpCalls).toEqual({ paddock: { create_chat: 1 } });
     expect(fake.calls.slice(before)).toEqual([{ tool: "create_chat", args: { project: "demo", prompt: "triage #12" }, authorized: true }]);
+  });
+
+  // M9.5 (M9 gap): the token lives in the server's environment; no child may inherit it.
+  it("MANAGERS_MCP_* is moved out of the environment children inherit; the token reaches the child only in --mcp-config", async () => {
+    const slug = slugs["Widget Lib"]!;
+    const saved = { [TOKEN_ENV]: process.env[TOKEN_ENV], [WRONG_ENV]: process.env[WRONG_ENV] };
+    try {
+      expect(sequesterMcpSecrets()).toBeGreaterThanOrEqual(2);
+      expect(process.env[TOKEN_ENV]).toBeUndefined();
+      // Re-resolve from the private map, as boot's registration would.
+      await t.herdctl.ensureProjectAgent(await t.projects.get(slug));
+      const before = fake.calls.length;
+      const run = await fire(slug, "pd-seq", "Seq. [[MCP paddock.list_projects {}]]");
+      expect(run.status).toBe("succeeded");
+      expect(run.mcpCalls).toEqual({ paddock: { list_projects: 1 } });
+      expect(fake.calls.slice(before)).toEqual([{ tool: "list_projects", args: {}, authorized: true }]);
+      const inv = (await invocations()).filter((i) => i.prompt.includes("Seq."));
+      expect(inv.length).toBeGreaterThan(0);
+      for (const i of inv) {
+        expect(i.mcpSecretEnvCount).toBe(0);
+        expect(i.mcpConfig).toContain("Bearer rig-token");
+      }
+      // The Connections view still sees it as set.
+      const [c] = await connections(slug);
+      expect(c!.envRefs.find((r) => r.name === TOKEN_ENV)?.set).toBe(true);
+    } finally {
+      resetSequesteredMcpSecrets();
+      for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+      await t.herdctl.ensureProjectAgent(await t.projects.get(slug));
+    }
+  });
+
+  it("control: without the sequester the child DOES inherit the token (the M9 gap)", async () => {
+    const slug = slugs["Widget Lib"]!;
+    const run = await fire(slug, "pd-noseq", "NoSeq. [[MCP paddock.list_projects {}]]");
+    expect(run.status).toBe("succeeded");
+    const inv = (await invocations()).filter((i) => i.prompt.includes("NoSeq."));
+    expect(inv.some((i) => (i.mcpSecretEnvCount ?? 0) > 0)).toBe(true);
   });
 
   it("trigger scoping: a scoped trigger reaches the connection only through its own run.tools", async () => {

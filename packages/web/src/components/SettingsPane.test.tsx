@@ -267,10 +267,6 @@ describe("SettingsPane", () => {
       "placeholder",
       "Instance default (loading…)",
     );
-    expect(screen.getByLabelText("CLAUDE.md token budget")).toHaveAttribute(
-      "placeholder",
-      "Instance default (loading…)",
-    );
     expect(screen.queryByText(/Inheriting the instance defaults:/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Loading the instance curation budgets…/)).toBeInTheDocument();
 
@@ -290,10 +286,9 @@ describe("SettingsPane", () => {
       "placeholder",
       "Instance default (8000)",
     );
-    expect(screen.getByLabelText("CLAUDE.md token budget")).toHaveAttribute(
-      "placeholder",
-      "Instance default (6000)",
-    );
+    // M9.5: the sweeper no longer curates CLAUDE.md, so there is no field for its budget.
+    expect(screen.queryByLabelText("CLAUDE.md token budget")).not.toBeInTheDocument();
+    expect(screen.queryByText(/CLAUDE\.md under/)).not.toBeInTheDocument();
     expect(screen.getByText(/Inheriting the instance defaults:/i)).toBeInTheDocument();
   });
 

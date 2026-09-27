@@ -400,23 +400,16 @@ describe("HomePane: root onboarding (#865)", () => {
     expect(screen.queryByText("All caught up")).not.toBeInTheDocument();
   });
 
-  it("carries BOTH cards on a POPULATED root too", async () => {
-    // They are not first-run scaffolding to be thrown away: the root's Home is
-    // the instance's landing surface every day, not only on day one. Neither is
-    // closeable — the dismissal machinery went with the slideshow.
+  it("carries the Tips card on a POPULATED root too, and no What's New (M9.5)", async () => {
+    // Tips is not first-run scaffolding: the root's Home is the instance's
+    // landing surface every day. Not closeable. M9.5: What's New held upstream
+    // Paddock's release notes (paddock.edspencer.net links) and is now empty,
+    // so its card does not render at all and Tips stands alone.
     renderRoot({ instanceEmpty: false });
-    expect(await screen.findByTestId("home-whats-new")).toBeInTheDocument();
-    expect(screen.getByTestId("home-tips-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("home-tips-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("home-whats-new")).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("paddock.edspencer.net");
     expect(screen.queryByRole("button", { name: /Close/ })).not.toBeInTheDocument();
-  });
-
-  it("puts What's New in the LEFT slot, before Tips", async () => {
-    // Deliberate: What's New is the card with a reason to be looked FOR, so it
-    // takes the position the eye reaches first. DOM order is what carries that,
-    // and it is the kind of thing a refactor reorders without noticing.
-    renderRoot({ instanceEmpty: false });
-    const cards = await screen.findAllByTestId(/^home-(whats-new|tips-panel)$/);
-    expect(cards.map((c) => c.dataset.testid)).toEqual(["home-whats-new", "home-tips-panel"]);
   });
 
   it("asks the server for NOTHING to render the cards", async () => {

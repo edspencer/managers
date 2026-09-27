@@ -49,12 +49,11 @@ describe("TIPS", () => {
     }
   });
 
-  it("links only to the documentation site", () => {
+  // M9.5: the tips came from upstream Paddock's website; no link may send Ed there.
+  it("link nowhere (Managers has no docs site; upstream Paddock's is a different product)", () => {
     for (const tip of TIPS) {
-      if (tip.href === undefined) continue;
-      expect(tip.href, `${tip.id} href`).toMatch(
-        /^https:\/\/paddock\.edspencer\.net\/[a-z0-9/-]+\/(#[a-z0-9_-]+)?$/,
-      );
+      expect(tip.href, `${tip.id} href`).toBeUndefined();
+      expect(`${tip.title} ${tip.body}`, `${tip.id}`).not.toMatch(/paddock/i);
     }
   });
 });

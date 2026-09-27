@@ -90,13 +90,36 @@ describe("data-dir guard", () => {
     expect(() => loadPaddockConfig()).not.toThrow();
   });
 
-  it("a root holding only loose files is not a refusal, and is claimed", () => {
+  // M9.5 (audit #7): this used to be claimed — a marker, git init, README and
+  // .managers/ written into somebody's real directory of notes or code.
+  it("refuses a non-empty root with NO projects (loose files, a code dir) and writes nothing", () => {
     const root = path.join(dataDir, "projects");
-    fs.mkdirSync(path.join(root, "notes"), { recursive: true });
-    fs.writeFileSync(path.join(root, "README.md"), "hi\n");
-    expect(dataDirGuardRefusal(root, {})).toBeUndefined();
+    fs.mkdirSync(path.join(root, "somerepo", "src"), { recursive: true });
+    fs.writeFileSync(path.join(root, "notes.txt"), "hi\n");
+    fs.writeFileSync(path.join(root, "somerepo", "src", "a.ts"), "export {};\n");
+    const before = fs.readdirSync(root).sort();
+    expect(dataDirGuardRefusal(root, {})).toMatch(/not empty.*\.managers-data/s);
+    expect(() => loadPaddockConfig()).toThrow(/Refusing to start.*not empty/s);
     claimProjectsRoot(root);
+    expect(fs.existsSync(path.join(root, DATA_REPO_MARKER))).toBe(false);
+    expect(fs.readdirSync(root).sort()).toEqual(before);
+  });
+
+  it("claims an EMPTY existing root", () => {
+    const root = path.join(dataDir, "projects");
+    fs.mkdirSync(root, { recursive: true });
+    expect(dataDirGuardRefusal(root, {})).toBeUndefined();
+    loadPaddockConfig();
     expect(fs.existsSync(path.join(root, DATA_REPO_MARKER))).toBe(true);
+  });
+
+  it("adopts a non-empty, project-less root only with MANAGERS_ADOPT_DATA_DIR=1 (and never marks it)", () => {
+    const root = path.join(dataDir, "projects");
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, "notes.txt"), "hi\n");
+    process.env.MANAGERS_ADOPT_DATA_DIR = "1";
+    expect(() => loadPaddockConfig()).not.toThrow();
+    expect(fs.existsSync(path.join(root, DATA_REPO_MARKER))).toBe(false);
   });
 
   it("createDataDir: false (config show) checks but never claims", () => {

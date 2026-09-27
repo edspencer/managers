@@ -1,7 +1,8 @@
 /**
  * Managers M8: agents get no tool to flip their own autonomy. A trigger's
  * `run.behaviour` binding IS autonomy (unbinding it ungates the trigger), so the
- * `set_trigger` op refuses any change to it, while other edits still merge.
+ * `set_trigger` op refuses any change to it; since M9.5 it refuses any edit of a
+ * gated trigger at all (see trigger-guard.ts and managers-audit-fixes.test.ts).
  */
 import { describe, it, expect, vi } from "vitest";
 import { buildManagementOps } from "../../../src/management-ops.js";
@@ -56,10 +57,17 @@ describe("set_trigger and run.behaviour (M8)", () => {
     );
     expect(set).not.toHaveBeenCalled();
   });
-  it("still allows an edit that leaves the binding alone", async () => {
+  // M9.5 (audit #3): M8 let an agent edit a gated trigger's other fields, and
+  // remove + recreate it unbound. Now a gated trigger is Ed's alone: the store
+  // write runs the agent guard under the project.yaml lock, and it refuses.
+  it("hands the store an agent guard that refuses ANY edit of a gated trigger", async () => {
     const { w, set } = ops();
     await w.setTrigger("alpha", "triage-prs", { enabled: false });
     expect(set).toHaveBeenCalledTimes(1);
-    expect((set.mock.calls[0]![2] as { run: { behaviour: string } }).run.behaviour).toBe("triage-external-prs");
+    const guard = set.mock.calls[0]![3] as unknown as (current: unknown) => Promise<void>;
+    expect(typeof guard).toBe("function");
+    await expect(guard({ ...ALPHA, triggers: { "triage-prs": gated } })).rejects.toThrow(
+      /set_trigger refused: trigger "triage-prs" is gated by "triage-external-prs"/,
+    );
   });
 });

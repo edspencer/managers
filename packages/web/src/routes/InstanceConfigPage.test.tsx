@@ -432,12 +432,12 @@ describe("InstanceConfigPage (#385)", () => {
       expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     });
 
-    it("names the profile in a legend and links the docs", async () => {
+    it("names the profile in a legend, with no link to upstream Paddock's docs (M9.5)", async () => {
       renderScreen();
       await screen.findByText("Posture profile");
       expect(screen.getByText(/This instance's posture profile is/)).toBeInTheDocument();
-      const link = screen.getByRole("link", { name: /what the profiles do/i });
-      expect(link).toHaveAttribute("href", "https://paddock.edspencer.net/configuration/profiles/");
+      expect(screen.queryByRole("link", { name: /what the profiles do/i })).not.toBeInTheDocument();
+      expect(document.body.innerHTML).not.toContain("paddock.edspencer.net");
     });
 
     it("chips the rows the profile chose, naming it in the tooltip", async () => {

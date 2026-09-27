@@ -13,8 +13,9 @@ describe("What's New cap (#866)", () => {
     expect(WHATS_NEW.length).toBeLessThanOrEqual(WHATS_NEW_MAX);
   });
 
-  it("is actually full, so the cap is exercised rather than theoretical", () => {
-    expect(WHATS_NEW).toHaveLength(WHATS_NEW_MAX);
+  // M9.5: the inherited entries were upstream Paddock's release notes; Managers has none yet.
+  it("carries no upstream Paddock release notes", () => {
+    expect(WHATS_NEW).toHaveLength(0);
   });
 });
 
@@ -54,7 +55,7 @@ describe("What's New entries", () => {
     for (const entry of WHATS_NEW) {
       expect(entry.href, `${entry.id} href`).toMatch(
         // Underscores are legal here: `#065--promote_project-over-mcp`.
-        /^https:\/\/paddock\.edspencer\.net\/whats-new\/#[a-z0-9_-]+$/,
+        /^https:\/\/(?!paddock\.)[a-z0-9.-]+\/[^\s]*$/,
       );
     }
   });
