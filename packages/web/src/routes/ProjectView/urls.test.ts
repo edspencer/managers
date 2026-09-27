@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   ROOT_KEY,
   chatMessageUrl,
+  chatUrl,
+  episodeUrl,
+  objectivesUrl,
+  tasksUrl,
   decodeFilesSubpath,
   deriveView,
   gridUrl,
@@ -155,5 +159,36 @@ describe("message deep links", () => {
     expect(parseMessageAnchor("#m-")).toBeUndefined();
     expect(parseMessageAnchor("#m-nope")).toBeUndefined();
     expect(parseMessageAnchor(`#m-${UUID}/../etc`)).toBeUndefined();
+  });
+});
+
+describe("Managers M11: the Objectives and Tasks tabs", () => {
+  it.each([
+    ["/projects/acme/objectives", "/projects/acme", "objectives"],
+    ["/projects/acme/objectives/blog-cadence", "/projects/acme", "objectives"],
+    ["/projects/acme/tasks", "/projects/acme", "tasks"],
+    ["/projects/acme/tasks/t-260926-7k3f", "/projects/acme", "tasks"],
+    ["/objectives", "", "objectives"],
+    ["/objectives/grow", "", "objectives"],
+    ["/tasks", "", "tasks"],
+    ["/tasks/t-260926-7k3f", "", "tasks"],
+    // Exact segments: a lookalike prefix is not the tab, and a project's own
+    // `/tasks` never resolves as the root's.
+    ["/projects/acme/tasksomething", "/projects/acme", "chat"],
+    ["/tags/web", "", "home"],
+  ])("%s (base %j) → %s", (pathname, base, tab) => {
+    expect(deriveView(pathname, base)).toBe(tab);
+  });
+
+  it("builds objective, task, episode and chat URLs for both mounts", () => {
+    expect(objectivesUrl("/projects/acme")).toBe("/projects/acme/objectives");
+    expect(objectivesUrl("", "grow")).toBe("/objectives/grow");
+    expect(tasksUrl("/projects/acme", "t-260926-7k3f")).toBe("/projects/acme/tasks/t-260926-7k3f");
+    expect(tasksUrl("")).toBe("/tasks");
+    expect(episodeUrl("/projects/acme", "grow", "ep-260902-1000-bb")).toBe(
+      "/projects/acme/objectives/grow#ep-260902-1000-bb",
+    );
+    expect(chatUrl("acme-site", "abc")).toBe("/projects/acme-site/chat/abc");
+    expect(chatUrl(ROOT_KEY, "abc")).toBe("/chat/abc");
   });
 });

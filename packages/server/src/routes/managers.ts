@@ -11,6 +11,7 @@
  *   GET managers/log                    the project-level episodic log, paged the same way
  *   GET managers/tasks                  open tasks (?status=a,b&objective=x), or a done month (?month=YYYY-MM)
  *   GET managers/tasks/:id
+ *   GET managers/wake                   can an answer fire the `wake` trigger? {available, reason} (M11)
  *   GET managers/memory                 MEMORY.md + facts + playbooks, root and project, scope-tagged
  *   GET managers/memory/facts/:name     (?scope=root|project)
  *   GET managers/runs                   paged by month (?before&months&trigger&status)
@@ -160,6 +161,26 @@ function tidy<T extends { parseErrors?: unknown[] }>(body: T): T {
   return body;
 }
 
+/**
+ * A section as a one-paragraph plain-text excerpt (M11's objective cards): the
+ * Markdown's inline markers and list bullets dropped, whitespace collapsed, cut
+ * at a word boundary to at most `max` characters with an ellipsis.
+ */
+export function excerptOf(markdown: string, max = 280): string {
+  const text = markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\[\[([a-z0-9-]+)\]\]/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}(?:[-*+]|\d+\.|#{1,6}|>)\s+/gm, "")
+    .replace(/[*_`~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s.,;:]+$/, "")}…`;
+}
+
 /** A write failure → its REST status, keeping the house `{ error, code }` body. */
 function writeError(reply: FastifyReply, err: StateWriteError) {
   const status = err.code === "not_found" ? 404 : err.code === "conflict" ? 409 : 400;
@@ -291,13 +312,31 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         summary: "List the workspace's objectives",
         description:
           "Every `objectives/<id>/objective.md`, parsed: `{ objectives: [{ id, title, status, success, triggers, " +
-          "created, updated, file }] }`, active first. A file that will not parse is skipped and listed in " +
-          "`parseErrors` (present only when non-empty).",
+          "created, updated, file, excerpt, openTasks }] }`, active first. `excerpt` is the start of the " +
+          "`## Where we are` section (plain text, at most 280 characters); `openTasks` counts the objective's " +
+          "tasks in `tasks/open/` (every status but done and dropped). A file that will not parse is skipped " +
+          "and listed in `parseErrors` (present only when non-empty).",
         params: paramsSchema(),
         response: ok200("`{ objectives, parseErrors? }`."),
       },
     },
-    (req, reply) => withWorkspace(req, reply, async ({ layout }) => tidy(await state.objectives.list(layout))),
+    (req, reply) =>
+      withWorkspace(req, reply, async ({ layout }) => {
+        const list = await state.objectives.list(layout);
+        // M11: the list card's excerpt and open-task count. Both come from caches
+        // keyed by file mtime, and neither reads a journal.
+        const { tasks } = await state.tasks.list(layout);
+        const open = new Map<string, number>();
+        for (const t of tasks) if (t.objective) open.set(t.objective, (open.get(t.objective) ?? 0) + 1);
+        const objectives = await Promise.all(
+          list.objectives.map(async (o) => ({
+            ...o,
+            excerpt: excerptOf(await state.objectives.whereWeAre(layout, o.id)),
+            openTasks: open.get(o.id) ?? 0,
+          })),
+        );
+        return tidy({ ...list, objectives });
+      }),
   );
 
   app.get<{ Params: { slug: string; id: string }; Querystring: Q }>(
@@ -868,6 +907,50 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       }),
   );
 
+  /**
+   * Whether "answer and wake the manager" can fire this workspace's `wake`
+   * trigger: it must exist, be enabled, and every behaviour gating it must be on
+   * (M8). The reason is phrased for the UI's tooltip and the answer response.
+   */
+  async function wakeAvailability(project: Project): Promise<{ available: boolean; reason: string | null }> {
+    const rec = project.triggers?.wake;
+    if (!rec) return { available: false, reason: "this project has no wake trigger" };
+    if (rec.enabled !== true) return { available: false, reason: "the wake trigger is disabled" };
+    // M8: the M5 follow-up — the wake's behaviour gate, checked up front so the
+    // reason is specific (the fire path would refuse it anyway).
+    const gate = triggerGate("wake", rec, await behavioursFor(projects, project));
+    if (!gate.open) {
+      return {
+        available: false,
+        reason: `the wake trigger's behaviour ${gate.off.map((n) => `"${n}"`).join(", ")} is off`,
+      };
+    }
+    return { available: true, reason: null };
+  }
+
+  app.get<{ Params: { slug: string } }>(
+    "/managers/wake",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Can an answer wake the manager?",
+        description:
+          "`{ available, reason }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire this " +
+          "workspace's `wake` trigger — it exists, is enabled, and every behaviour gating it is on. `reason` " +
+          "says why not (null when available). Drives the answer form's \"Wake the manager now\" switch (M11).",
+        params: paramsSchema(),
+        response: ok200("`{ available, reason }`."),
+      },
+    },
+    async (req, reply) => {
+      try {
+        return await wakeAvailability(await projects.get(req.params.slug));
+      } catch (err) {
+        return sendProjectError(reply, err);
+      }
+    },
+  );
+
   app.post<{ Params: { slug: string; id: string } }>(
     "/managers/tasks/:id/answer",
     {
@@ -901,19 +984,9 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         );
         let wake: { fired: boolean; sessionId?: string; reason?: string } | undefined;
         if (wakeArg === true) {
-          const project = await projects.get(req.params.slug);
-          const rec = project.triggers?.wake;
-          // M8: the M5 follow-up — the wake's behaviour gate, checked up front so the
-          // reason is specific (the fire path would refuse it anyway).
-          const gate = rec ? triggerGate("wake", rec, await behavioursFor(projects, project)) : null;
-          if (!rec) wake = { fired: false, reason: "this project has no wake trigger" };
-          else if (rec.enabled !== true) wake = { fired: false, reason: "the wake trigger is disabled" };
-          else if (gate && !gate.open) {
-            wake = {
-              fired: false,
-              reason: `the wake trigger's behaviour ${gate.off.map((n) => `"${n}"`).join(", ")} is off`,
-            };
-          } else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
+          const avail = await wakeAvailability(await projects.get(req.params.slug));
+          if (!avail.available) wake = { fired: false, reason: avail.reason ?? "the wake trigger cannot fire" };
+          else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
           else {
             try {
               const sessionId = await ctx.fireTrigger(req.params.slug, "wake");

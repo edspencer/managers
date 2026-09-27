@@ -91,6 +91,17 @@ export class ObjectivesStore {
   }
 
   /**
+   * The objective's `## Where we are` section alone (M11: the list card's
+   * excerpt), from the same parse cache as {@link get} and without reading any
+   * journal. `""` when the section is absent or the file is missing/unparseable.
+   */
+  async whereWeAre(layout: WorkspaceLayout, id: string): Promise<string> {
+    const got = await this.cacheFor(id).get(layout.objectiveFile(id));
+    if (!got?.ok) return "";
+    return got.value.sections.find((s) => KNOWN[s.heading.trim().toLowerCase()] === "whereWeAre")?.body ?? "";
+  }
+
+  /**
    * One objective with its sections and a page of its journal. `null` when it
    * does not exist; `{ parseError }` when its file will not parse.
    */

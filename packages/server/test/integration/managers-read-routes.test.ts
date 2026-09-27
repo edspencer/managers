@@ -31,6 +31,15 @@ beforeAll(async () => {
   t = await startTestApp();
   await put("acme/project.yaml", "name: Acme\nslug: acme\nstatus: active\n");
   await put("bare/project.yaml", "name: Bare\nslug: bare\nstatus: idea\n");
+  // M11: the answer form's wake switch — enabled, disabled, and behaviour-gated wakes.
+  const wakeYaml = (slug: string, enabled: boolean, extra = "", run = "") =>
+    `name: ${slug}\nslug: ${slug}\nstatus: active\n${extra}triggers:\n  wake:\n    trigger: { type: schedule, cron: "0 3 1 1 *" }\n    run: { prompt: "Wake."${run} }\n    enabled: ${enabled}\n`;
+  await put("waker/project.yaml", wakeYaml("waker", true));
+  await put("sleepy/project.yaml", wakeYaml("sleepy", false));
+  await put(
+    "gated/project.yaml",
+    wakeYaml("gated", true, "behaviours:\n  wake-up:\n    description: Wake on answers.\n", ", behaviour: wake-up"),
+  );
 
   // acme: an objective with a two-month journal, tasks (incl. a malformed one), a log, a run, a report.
   await put(
@@ -145,11 +154,39 @@ describe("integration: Managers read routes", () => {
     });
   });
 
+  it("M11: /managers/wake says whether an answer can wake the manager, and why not", async () => {
+    expect((await get("/api/projects/waker/managers/wake")).body).toEqual({ available: true, reason: null });
+    expect((await get("/api/projects/sleepy/managers/wake")).body).toEqual({
+      available: false,
+      reason: "the wake trigger is disabled",
+    });
+    expect((await get("/api/projects/acme/managers/wake")).body).toEqual({
+      available: false,
+      reason: "this project has no wake trigger",
+    });
+    expect((await get("/api/projects/gated/managers/wake")).body).toEqual({
+      available: false,
+      reason: 'the wake trigger\'s behaviour "wake-up" is off',
+    });
+    // Home (the root) has no wake trigger in this fixture.
+    expect((await get("/api/root/managers/wake")).body).toMatchObject({ available: false });
+    expect((await get("/api/projects/nope/managers/wake")).status).toBe(404);
+  });
+
   it("objectives: list, detail with sections and a paged journal, 404", async () => {
     const list = await get("/api/projects/acme/managers/objectives");
     expect(list.body).toEqual({
       objectives: [
-        expect.objectContaining({ id: "grow", title: "Grow", status: "active", triggers: ["wake"], file: "objectives/grow/objective.md" }),
+        expect.objectContaining({
+          id: "grow",
+          title: "Grow",
+          status: "active",
+          triggers: ["wake"],
+          file: "objectives/grow/objective.md",
+          // M11: the card's excerpt and open-task count (the malformed task is not counted).
+          excerpt: "Early days.",
+          openTasks: 1,
+        }),
       ],
     });
     const one = await get("/api/projects/acme/managers/objectives/grow?months=1");

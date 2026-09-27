@@ -22,6 +22,8 @@ import { FilesPane } from "../components/FilesPane";
 import { ProjectMenu } from "../components/ProjectMenu";
 import { SettingsPane } from "../components/SettingsPane";
 import { TriggersPane } from "../components/TriggersPane";
+import { ObjectivesPane } from "../components/managers/ObjectivesPane";
+import { TasksPane } from "../components/managers/TasksPane";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DeleteProjectDialog } from "../components/DeleteProjectDialog";
 import { ForkChatModal } from "../components/ForkChatModal";
@@ -55,8 +57,10 @@ import {
   deriveView,
   gridUrl,
   homeUrl,
+  objectivesUrl,
   parseMessageAnchor,
   repoHref,
+  tasksUrl,
   viewBase,
 } from "./ProjectView/urls";
 import { TabButton } from "./ProjectView/TabButton";
@@ -151,6 +155,9 @@ export function ProjectView({
   // the Changes tab with no file selected — the pane defaults to the first one).
   const routeChangeFile =
     view === "changes" && params.file ? decodeURIComponent(params.file) : undefined;
+  // Managers M11: the objective / task a `…/objectives/:id` or `…/tasks/:id` URL names.
+  const routeObjectiveId = view === "objectives" ? params.objectiveId : undefined;
+  const routeTaskId = view === "tasks" ? params.taskId : undefined;
 
   // Stable ChatPane mount key. The pane should reset when the user switches to a
   // DIFFERENT chat (new chat / a saved chat / after deleting the open one), but
@@ -504,6 +511,10 @@ export function ProjectView({
     const sub =
       view === "home"
         ? toSubPath({ view: "home" })
+        : view === "objectives"
+          ? toSubPath({ view: "objectives", id: routeObjectiveId })
+          : view === "tasks"
+            ? toSubPath({ view: "tasks", id: routeTaskId })
         : view === "settings"
           ? toSubPath({ view: "settings" })
           : view === "history"
@@ -516,7 +527,7 @@ export function ProjectView({
                 ? toSubPath({ view: "changes", file: routeChangeFile })
                 : toSubPath({ view: "files", path: filesSubpath || undefined });
     writeLastTab(slug, sub);
-  }, [root, slug, view, routeSessionId, filesSubpath, routeChangeFile]);
+  }, [root, slug, view, routeSessionId, filesSubpath, routeChangeFile, routeObjectiveId, routeTaskId]);
 
   // Refresh just the chat list (e.g. after a new session is established).
   const refreshChats = useCallback(async () => {
@@ -689,6 +700,8 @@ export function ProjectView({
   const goFiles = useCallback(() => navigate(`${base}/files`), [navigate, base]);
   const goChanges = useCallback(() => navigate(`${base}/changes`), [navigate, base]);
   const goHistory = useCallback(() => navigate(`${base}/history`), [navigate, base]);
+  const goObjectives = useCallback(() => navigate(objectivesUrl(base)), [navigate, base]);
+  const goTasks = useCallback(() => navigate(tasksUrl(base)), [navigate, base]);
   const goSettings = useCallback(() => navigate(`${base}/settings`), [navigate, base]);
   const goTriggers = useCallback(() => navigate(`${base}/triggers`), [navigate, base]);
   // Select a specific changed file in the Changes tab, reflecting it in the URL
@@ -1445,6 +1458,14 @@ export function ProjectView({
             <TabButton active={view === "home"} onClick={goHome}>
               Home
             </TabButton>
+            {/* Managers M11: the manager's objectives and tasks, right after Home
+                because they are what the manager is for. */}
+            <TabButton active={view === "objectives"} onClick={goObjectives}>
+              Objectives
+            </TabButton>
+            <TabButton active={view === "tasks"} onClick={goTasks}>
+              Tasks
+            </TabButton>
             <TabButton active={view === "chat"} onClick={goChat}>
               Chat
             </TabButton>
@@ -1579,6 +1600,12 @@ export function ProjectView({
               create/edit/delete/enable run through the unified /triggers endpoints, so
               it manages its own state. */}
           {view === "triggers" && <TriggersPane project={project} />}
+          {/* Managers M11. Keyed on the workspace so switching projects never
+              shows the previous one's list while the new one loads. */}
+          {view === "objectives" && (
+            <ObjectivesPane key={`o:${slug}`} slug={slug} base={base} objectiveId={routeObjectiveId} />
+          )}
+          {view === "tasks" && <TasksPane key={`t:${slug}`} slug={slug} base={base} taskId={routeTaskId} />}
           {view === "home" && (
             <HomePane
               project={project}

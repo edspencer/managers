@@ -1957,6 +1957,10 @@ export interface ObjectiveSummary {
   created: string | null;
   updated: string | null;
   file: string;
+  /** M11 (list only): the start of `## Where we are`, plain text, ≤280 chars. */
+  excerpt?: string;
+  /** M11 (list only): this objective's tasks in `tasks/open/` (every status but done/dropped). */
+  openTasks?: number;
 }
 
 export interface Episode {
@@ -2215,6 +2219,13 @@ export interface TaskAnswerInput {
   text?: string;
   /** Also fire the project's `wake` trigger (when it exists and is enabled). */
   wake?: boolean;
+}
+
+/** `GET …/managers/wake` (M11): can an answer fire the workspace's `wake` trigger? */
+export interface WakeAvailability {
+  available: boolean;
+  /** Why not, phrased for a tooltip; null when available. */
+  reason: string | null;
 }
 
 export interface TaskAnswerResult {

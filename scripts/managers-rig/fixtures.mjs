@@ -39,6 +39,12 @@ import {
   renderRun,
   renderTask,
 } from "./lib/domain.mjs";
+import { makeIds } from "./lib/transcript.mjs";
+
+// The session id seed.mjs gives a fixture chat (`<slug>:<label>`), so a run
+// record can point at a seeded chat. Must match seed.mjs's makeIds namespace.
+const rigIds = makeIds("managers-rig-v1");
+const seededChatId = (slug, label) => rigIds.stableUuid(`chat:${slug}:${label}`);
 
 // ── Managers domain state (M4) ──────────────────────────────────────────────
 // Home's SHARED memory: two facts every project's manager sees (scope: root).
@@ -108,7 +114,9 @@ const acmeTaskIds = (clock) =>
 
 function acmeDomain(clock) {
   const ids = acmeTaskIds(clock);
-  const wakeRun = { daysAgo: 1, hh: 7, suffix: "wk" };
+  // M11: the wake run links the seeded "morning" chat, so a journal entry's run
+  // link has a chat to open.
+  const wakeRun = { daysAgo: 1, hh: 7, suffix: "wk", sessionId: seededChatId("acme-site", "morning") };
   const wakeRunId = clock.runId(clock.at(wakeRun.daysAgo, wakeRun.hh), wakeRun.suffix);
   const episodes = ACME_JOURNAL.map(([daysAgo, hh, suffix, imp, tags, text, refs]) => ({
     daysAgo,

@@ -120,3 +120,21 @@ describe("validateSubPath", () => {
     );
   });
 });
+
+describe("Managers M11: objectives and tasks", () => {
+  it("encodes the tabs with and without an item", () => {
+    expect(toSubPath({ view: "objectives" })).toBe("objectives");
+    expect(toSubPath({ view: "objectives", id: "blog-cadence" })).toBe("objectives/blog-cadence");
+    expect(toSubPath({ view: "tasks" })).toBe("tasks");
+    expect(toSubPath({ view: "tasks", id: "t-260926-7k3f" })).toBe("tasks/t-260926-7k3f");
+  });
+
+  it("round-trips them through storage and refuses nested junk", () => {
+    writeLastTab("acme", "tasks/t-260926-7k3f");
+    expect(readLastTab("acme")).toBe("tasks/t-260926-7k3f");
+    writeLastTab("acme", "objectives");
+    expect(readLastTab("acme")).toBe("objectives");
+    writeLastTab("acme", "tasks/a/b");
+    expect(readLastTab("acme")).toBe("objectives");
+  });
+});

@@ -157,7 +157,7 @@ export function renderRun(clock, r) {
     status: r.status,
     started: clock.iso(started),
     finished,
-    sessionId: null,
+    sessionId: r.sessionId ?? null,
     model: "claude-opus-5",
     usage: { inputTokens: 12000, outputTokens: 800, cacheReadTokens: 30000, cacheCreationTokens: 2000 },
     episodes: r.episodes ?? [],

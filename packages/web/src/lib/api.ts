@@ -69,6 +69,7 @@ import {
   type TaskWriteInput,
   type TaskAnswerInput,
   type TaskAnswerResult,
+  type WakeAvailability,
   type ObjectiveWriteInput,
 } from "./types";
 import { apiBase } from "../routes/ProjectView/urls";
@@ -1228,6 +1229,11 @@ export const api = {
       body: JSON.stringify(patch),
     });
     return task;
+  },
+
+  /** M11: whether an answer's "wake the manager" can fire this workspace's `wake` trigger. */
+  async managersWake(slug: string): Promise<WakeAvailability> {
+    return req<WakeAvailability>(`${mgr(slug)}/wake`);
   },
 
   /** Ed answers an awaiting-ed task; `wake: true` also fires the project's enabled `wake` trigger. */

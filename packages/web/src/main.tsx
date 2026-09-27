@@ -82,6 +82,11 @@ const router = createBrowserRouter([
       // Deep-linkable in-project sub-routes. The active tab is derived from the
       // URL (not local state), so a deep link / reload highlights the right tab.
       { path: "projects/:slug/home", element: <ProjectView /> },
+      // Managers M11: objectives (one objective's page with its journal) and tasks.
+      { path: "projects/:slug/objectives", element: <ProjectView /> },
+      { path: "projects/:slug/objectives/:objectiveId", element: <ProjectView /> },
+      { path: "projects/:slug/tasks", element: <ProjectView /> },
+      { path: "projects/:slug/tasks/:taskId", element: <ProjectView /> },
       { path: "projects/:slug/chat", element: <ProjectView /> },
       { path: "projects/:slug/chat/:sessionId", element: <ProjectView /> },
       { path: "projects/:slug/files", element: <ProjectView /> },
@@ -101,6 +106,11 @@ const router = createBrowserRouter([
       // With no root project it 404s through the shell's error boundary, the same
       // as Files/Changes/History/Triggers.
       { path: "chat", element: <ProjectView root /> },
+      // Managers M11: Home's own objectives and tasks (the root workspace's).
+      { path: "objectives", element: <ProjectView root /> },
+      { path: "objectives/:objectiveId", element: <ProjectView root /> },
+      { path: "tasks", element: <ProjectView root /> },
+      { path: "tasks/:taskId", element: <ProjectView root /> },
       { path: "chat/:sessionId", element: <ProjectView root /> },
       // Root Files + Changes (#516 Phase 4). These paths have no pre-#516
       // meaning, so unlike `/` and `/chat` there is nothing to fall back TO —

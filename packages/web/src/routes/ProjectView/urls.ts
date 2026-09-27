@@ -6,6 +6,8 @@
 /** The active main-area tab. Derived purely from the URL (see `deriveView`). */
 export type ProjectViewTab =
   | "home"
+  | "objectives"
+  | "tasks"
   | "chat"
   | "files"
   | "changes"
@@ -110,8 +112,34 @@ export function deriveView(pathname: string, base: string): ProjectViewTab {
   if (tail.startsWith("/settings")) return "settings";
   if (tail.startsWith("/triggers") || tail.startsWith("/hooks")) return "triggers";
   if (tail.startsWith("/home")) return "home";
+  // Managers M11. Exact segment matches (`/tasks` but not `/tasksfoo`) so a
+  // future sibling route can never be swallowed by a prefix.
+  if (/^\/objectives(\/|$)/.test(tail)) return "objectives";
+  if (/^\/tasks(\/|$)/.test(tail)) return "tasks";
   if (tail.startsWith("/chat")) return "chat";
   return base === "" ? "home" : "chat";
+}
+
+// --- Managers M11: objectives and tasks ----------------------------------------
+
+/** `<base>/objectives` or one objective's page. */
+export function objectivesUrl(base: string, id?: string): string {
+  return id ? `${base}/objectives/${encodeURIComponent(id)}` : `${base}/objectives`;
+}
+
+/** `<base>/tasks` or one task's page. */
+export function tasksUrl(base: string, id?: string): string {
+  return id ? `${base}/tasks/${encodeURIComponent(id)}` : `${base}/tasks`;
+}
+
+/** A journal entry on its objective's page: the page plus a `#ep-…` fragment. */
+export function episodeUrl(base: string, objectiveId: string, episodeId: string): string {
+  return `${objectivesUrl(base, objectiveId)}#${episodeId}`;
+}
+
+/** A chat in a workspace (`""` = the root). */
+export function chatUrl(workspace: WorkspaceKey, sessionId: string): string {
+  return `${viewBase(workspace)}/chat/${encodeURIComponent(sessionId)}`;
 }
 
 /**
