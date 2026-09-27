@@ -346,30 +346,25 @@ test("the root's Home leads with onboarding; a project's Home has none of it", a
 
   await page.goto("/");
   const rootMain = page.getByRole("main");
-  const whatsNew = rootMain.getByTestId("home-whats-new");
   const tips = rootMain.getByTestId("home-tips-panel");
-  await expect(whatsNew).toBeVisible({ timeout: 20_000 });
-  await expect(tips).toBeVisible();
+  await expect(tips).toBeVisible({ timeout: 20_000 });
+  // M9.5: What's New held upstream Paddock's release notes and is now empty, so
+  // its card does not render; no link to paddock.edspencer.net survives on Home.
+  await expect(rootMain.getByTestId("home-whats-new")).toHaveCount(0);
+  expect(await rootMain.innerHTML()).not.toContain("paddock.edspencer.net");
 
-  // Above the workspace sections, and What's New before Tips — asserted on
-  // DOCUMENT POSITION rather than on heading order, because the cards label
-  // themselves with a <div> rather than an <h3> and so do not appear in the
-  // heading list at all. Anchored on OVERVIEW.md because this root has one
-  // project and no chats, so both feeds collapse into the single "All caught up"
-  // invitation and there is no `Running` heading to sit above.
+  // Above the workspace sections — asserted on DOCUMENT POSITION rather than on
+  // heading order, because the card labels itself with a <div> rather than an
+  // <h3>. Anchored on OVERVIEW.md because this root has one project and no chats.
   const order = await rootMain.evaluate((main) => {
-    const node = (sel: string) => main.querySelector(sel);
     const overview = [...main.querySelectorAll("h3")].find(
       (h) => h.textContent?.trim() === "OVERVIEW.md",
     );
-    const news = node('[data-testid="home-whats-new"]');
-    const tipsEl = node('[data-testid="home-tips-panel"]');
-    if (!overview || !news || !tipsEl) return null;
-    const before = (a: Element, b: Element) =>
-      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    return { newsBeforeTips: before(news, tipsEl), tipsBeforeNotes: before(tipsEl, overview) };
+    const tipsEl = main.querySelector('[data-testid="home-tips-panel"]');
+    if (!overview || !tipsEl) return null;
+    return { tipsBeforeNotes: (tipsEl.compareDocumentPosition(overview) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 };
   });
-  expect(order).toEqual({ newsBeforeTips: true, tipsBeforeNotes: true });
+  expect(order).toEqual({ tipsBeforeNotes: true });
 
   // The control. A project's Home is exactly what it was before #865.
   await page.goto(`/projects/${slug}/home`);
