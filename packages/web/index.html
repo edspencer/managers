@@ -46,11 +46,11 @@
          focus-zoom is prevented by 16px form controls (see index.css), which
          keeps pinch-to-zoom working for accessibility. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#141210" />
+    <meta name="theme-color" content="#0e131c" />
     <title>Managers</title>
     <meta
       name="description"
-      content="Project-first launchpad for server-hosted, persistent Claude Code sessions."
+      content="Scheduled manager agents that track your long-running objectives, one per project."
     />
     <!-- PWA (issue #199): installable web app. The manifest + service worker
          (registered in src/lib/pwa.ts) enable Add-to-Home-Screen + standalone
@@ -84,7 +84,6 @@
           foundation: "inter-latin",
           parchment: "alegreya-latin",
           terminal: "iosevka-terminal-400",
-          scifi: "saira-latin",
         };
         var file = PRIMARY[document.documentElement.getAttribute("data-theme")] || PRIMARY.foundation;
         var link = document.createElement("link");

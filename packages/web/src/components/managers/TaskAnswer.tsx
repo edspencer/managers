@@ -13,6 +13,7 @@
  */
 import { useId, useState } from "react";
 import { api } from "../../lib/api";
+import { notifyNeedsYouChanged } from "../../lib/needsYouCounts";
 import type { TaskAnswerResult, TaskSummary, WakeAvailability } from "../../lib/types";
 import { Button, Callout, Textarea, Toggle, cx } from "../ui";
 import { Tooltip } from "../Tooltip";
@@ -51,6 +52,8 @@ export function TaskAnswer({ slug, task, wake, onAnswered, className }: TaskAnsw
         ...(wakeNow && canWake ? { wake: true } : {}),
       });
       setText("");
+      // The shell's sidebar pills and fleet strip re-read their counts.
+      notifyNeedsYouChanged();
       onAnswered(result, input.choice ?? input.text ?? "");
     } catch (e) {
       setError(errorText(e, "The answer was not saved"));

@@ -120,7 +120,7 @@ export interface AuthConfig {
 /**
  * Per-instance branding (issue #34). Lets several Paddock instances (Projects,
  * Homelab, House, …) be told apart at a glance. All optional; the defaults
- * preserve today's look (🧭 / "Managers" / terracotta). Injected into index.html
+ * preserve the stock look (the chevron mark / "Managers" / cobalt blue). Injected into index.html
  * at serve time (so there's no title/color flash) and read by the SPA from a
  * `window.__MANAGERS_CONFIG__` global.
  */
@@ -971,8 +971,8 @@ function loadTranscriptionConfig(file: PaddockConfigFile["transcription"] = {}):
 function loadBrandConfig(file: PaddockConfigFile["brand"] = {}): BrandConfig {
   return {
     name: envOr("MANAGERS_BRAND_NAME", fileOr(file.name, "Managers")),
-    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "🧭")),
-    accent: envOr("MANAGERS_BRAND_ACCENT", fileOr(file.accent, "#c2603c")),
+    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "/icons/mark.svg")),
+    accent: envOr("MANAGERS_BRAND_ACCENT", fileOr(file.accent, "#2f6ae0")),
   };
 }
 

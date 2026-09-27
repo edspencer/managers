@@ -1,5 +1,5 @@
 /*
- * Foundation — the neutral base. Warm ground, terracotta accent.
+ * Foundation — the Managers default. Cool slate ground, cobalt accent.
  *
  * This is the palette that `tokens.css` already declares at `:root` / `.dark`,
  * restated here behind `[data-theme="foundation"]`. That looks redundant and is
@@ -41,24 +41,24 @@
 }
 [data-theme="foundation"]:not(.dark) {
   /* light */
-  --accent: 194 96 60;
-  --accent-600: 168 78 47;
-  --accent-700: 138 63 38;
-  --surface: oklch(0.9645 0.0035 88);
-  --surface-raised: oklch(0.996 0.0015 88);
-  --surface-sunken: oklch(0.933 0.006 88);
-  --surface-hover: oklch(0.94 0.006 88);
-  --surface-active: oklch(0.908 0.008 88);
-  --surface-selected: oklch(0.918 0.009 88);
+  --accent: 47 106 224;
+  --accent-600: 35 91 200;
+  --accent-700: 27 73 163;
+  --surface: oklch(0.968 0.006 255);
+  --surface-raised: oklch(0.995 0.002 255);
+  --surface-sunken: oklch(0.938 0.01 255);
+  --surface-hover: oklch(0.945 0.01 255);
+  --surface-active: oklch(0.912 0.014 255);
+  --surface-selected: oklch(0.924 0.02 258);
   --overlay: oklch(0 0 0 / 0.42);
   --overlay-strong: oklch(0 0 0 / 0.82);
-  --text: oklch(0.225 0.014 88);
-  --text-muted: oklch(0.415 0.017 88);
-  --text-subtle: oklch(0.492 0.018 88);
+  --text: oklch(0.235 0.03 262);
+  --text-muted: oklch(0.42 0.03 260);
+  --text-subtle: oklch(0.495 0.028 258);
   --text-on-solid: oklch(1 0 0);
-  --border-subtle: oklch(0.905 0.008 88);
-  --border: oklch(0.82 0.012 88);
-  --border-strong: oklch(0.608 0.015 88);
+  --border-subtle: oklch(0.91 0.01 255);
+  --border: oklch(0.83 0.016 255);
+  --border-strong: oklch(0.61 0.025 258);
   --accent-color: rgb(var(--accent));
   --accent-solid: rgb(var(--accent-600));
   --accent-solid-hover: rgb(var(--accent-700));
@@ -67,148 +67,107 @@
   --accent-soft: color-mix(in oklab, rgb(var(--accent)) 10%, var(--surface-raised));
   --accent-border: color-mix(in oklab, rgb(var(--accent)) 40%, var(--surface));
   /* prose roles — see the block comment in tokens.css */
-  --code-fill: oklch(0.894 0.022 92.5);
-  --quote-text: oklch(0.505 0.049 81.4);
-  --quote-border: oklch(0.753 0.049 89.6);
+  --code-fill: oklch(0.9 0.02 255);
+  --quote-text: oklch(0.47 0.05 255);
+  --quote-border: oklch(0.76 0.05 255);
   --success-solid: oklch(0.535 0.1252 158);
   --success-fg: oklch(1 0 0);
   --success-text: oklch(0.47 0.11 158);
   --success-soft: oklch(0.948 0.045 158);
   --success-border: oklch(0.84 0.075 158);
-  --warn-solid: oklch(0.535 0.1074 72);
+  --warn-solid: oklch(0.56 0.125 62);
   --warn-fg: oklch(1 0 0);
-  --warn-text: oklch(0.47 0.0955 72);
-  --warn-soft: oklch(0.948 0.0401 72);
-  --warn-border: oklch(0.84 0.075 72);
+  --warn-text: oklch(0.49 0.11 60);
+  --warn-soft: oklch(0.948 0.04 72);
+  --warn-border: oklch(0.83 0.1 70);
   --danger-solid: oklch(0.535 0.17 24);
   --danger-fg: oklch(1 0 0);
   --danger-text: oklch(0.47 0.15 24);
   --danger-soft: oklch(0.948 0.0262 24);
   --danger-border: oklch(0.84 0.075 24);
-  --info-solid: oklch(0.535 0.127 242);
+  --info-solid: oklch(0.535 0.09 205);
   --info-fg: oklch(1 0 0);
-  --info-text: oklch(0.47 0.1116 242);
-  --info-soft: oklch(0.948 0.0276 242);
-  --info-border: oklch(0.84 0.075 242);
-  --lineage-solid: oklch(0.535 0.17 295);
+  --info-text: oklch(0.47 0.08 205);
+  --info-soft: oklch(0.948 0.03 205);
+  --info-border: oklch(0.84 0.06 205);
+  --lineage-solid: oklch(0.535 0.17 318);
   --lineage-fg: oklch(1 0 0);
-  --lineage-text: oklch(0.47 0.17 295);
-  --lineage-soft: oklch(0.948 0.028 295);
-  --lineage-border: oklch(0.84 0.075 295);
-  --shadow-color: 40 34 22;
+  --lineage-text: oklch(0.47 0.16 318);
+  --lineage-soft: oklch(0.948 0.03 318);
+  --lineage-border: oklch(0.84 0.075 318);
+  --shadow-color: 20 32 60;
   --shadow-ambient: 0.06;
   --shadow-direct: 0.08;
-  --scroll-thumb: oklch(0.82 0.012 88);
+  --scroll-thumb: oklch(0.83 0.016 255);
 }
 [data-theme="foundation"].dark {
   /* dark */
-  --accent: 194 96 60;
-  --accent-600: 168 78 47;
-  --accent-700: 138 63 38;
-  /* The dark ground is WARM, and that is the theme's character rather than a
-     rounding of it. The first token pass neutralised it — chroma 0.0075 on the
-     raised surface against the old UI's 0.0170, at hue 88 rather than the old
-     ramp's 67-77 — and the result reads as grey-brown where it used to read as
-     brown. Restored to the measured values of the pre-token UI, sampled from a
-     screenshot of it rather than recovered from the config, so what is written
-     here is what was actually on screen:
-
-       surface        #141210   was `bg.dark`
-       surface-raised #28221a   was `paddock-900` — the assistant prose card
-
-     Note the lightness barely moved (raised 0.232 -> 0.256). The complaint that
-     prompted this was "further from black", but the measurement says otherwise:
-     what changed is CHROMA, less than half of what it was. Warmth, not depth.
-
-     The three interaction surfaces are deliberately NOT restored to their old
-     hexes. The old UI's `paddock-800` (#3e3528) was a BORDER colour that a few
-     places also used as a fill; adopting it as `--surface-active` lifts the
-     ladder's top by 0.067 L and drops `--text-subtle` on it to 3.75:1, below
-     AA. So they keep the token ladder's lightness and take only its warmth —
-     chroma 0.012-0.014 at hue 75 instead of 0.008-0.009 at 88. Same reasoning
-     for `--surface-sunken`: the old `paddock-950` was LIGHTER than the page it
-     sat on, which is not what a sunken surface means here. */
-  --surface: oklch(0.184 0.0052 67.5);
-  --surface-raised: oklch(0.256 0.017 74.8);
-  --surface-sunken: oklch(0.152 0.006 75);
-  --surface-hover: oklch(0.245 0.012 75);
-  --surface-active: oklch(0.268 0.014 75);
-  --surface-selected: oklch(0.258 0.013 75);
+  --accent: 47 106 224;
+  --accent-600: 35 91 200;
+  --accent-700: 27 73 163;
+  /* Navy ground at hue 262. The interaction fills (hover/active/selected) sit
+     between `--surface` and `--surface-raised` in lightness so `--text-subtle`
+     still clears 4.5:1 on the lightest of them; they carry a little more
+     chroma than the ground so a selected row reads as blue, not grey. */
+  --surface: oklch(0.185 0.02 262);
+  --surface-raised: oklch(0.24 0.028 262);
+  --surface-sunken: oklch(0.155 0.018 262);
+  --surface-hover: oklch(0.235 0.026 262);
+  --surface-active: oklch(0.262 0.03 262);
+  --surface-selected: oklch(0.252 0.036 262);
   --overlay: oklch(0 0 0 / 0.55);
   --overlay-strong: oklch(0 0 0 / 0.86);
-  --text: oklch(0.934 0.0124 91.5);
-  --text-muted: oklch(0.718 0.015 88);
-  --text-subtle: oklch(0.652 0.016 88);
+  --text: oklch(0.94 0.012 255);
+  --text-muted: oklch(0.74 0.022 255);
+  --text-subtle: oklch(0.675 0.024 255);
   --text-on-solid: oklch(1 0 0);
-  --border-subtle: oklch(0.28 0.009 88);
-  --border: oklch(0.335 0.011 88);
-  --border-strong: oklch(0.55 0.016 76);
+  --border-subtle: oklch(0.275 0.024 262);
+  --border: oklch(0.335 0.03 262);
+  --border-strong: oklch(0.56 0.035 258);
   --accent-color: rgb(var(--accent));
   --accent-solid: rgb(var(--accent-600));
   --accent-solid-hover: rgb(var(--accent-700)); /* darker, not lighter: hover must raise the label's contrast — see tokens.css */
   --accent-fg: oklch(1 0 0);
-  /* Accent text was being lifted 26% toward white, which turns the terracotta
-     into a salmon (#c2603c -> #d58a6f) — a visibly different colour, and the
-     one people mean when they say "the orange changed". `--accent` itself never
-     moved; only its derivations did.
-
-     The lift cannot simply be removed, though, and it is worth writing down why
-     rather than rediscovering it. Measured against the restored warm ground:
-
-       raw #c2603c   3.77:1 on surface-raised, 3.5:1 on surface-active
-       86% lift      4.77:1                     4.60:1  — the floor, everywhere
-       74% lift      5.77:1                     5.5:1   — passes, but is salmon
-
-     So the old orange as SMALL TEXT was never AA on this ground — restoring it
-     literally would make contrast worse, which is the opposite of the complaint
-     that prompted the change. 86% is the least lift that clears 4.5:1 against
-     EVERY dark surface, not just the raised one: `--surface-active` is the
-     binding constraint and 88% misses it by 0.05. As close to the original
-     terracotta as the floor permits. Fills and borders
-     below carry no text and are restored exactly. */
-  --accent-text: color-mix(in oklab, rgb(var(--accent)) 86%, white);
-  /* Mixed in sRGB at the pre-token UI's own alphas, not in oklab at higher
-     percentages. The old sub-agent strip was literally `bg-accent/10` over the
-     page, and 10% of #c2603c over #141210 composites to #251a14 — which is the
-     exact pixel measured in the reference screenshot. Matching the mix SPACE
-     matters as much as the percentage: oklab interpolation of the same two
-     endpoints lands somewhere else. */
+  /* Accent as TEXT is lifted 30% toward white. The raw cobalt is a fill colour,
+     not a text colour, on navy: 70% is the least mix that clears 4.5:1 against
+     every dark surface, with `--surface-active` the binding pair. */
+  --accent-text: color-mix(in oklab, rgb(var(--accent)) 70%, white);
+  /* Mixed in sRGB at low alpha, like a `bg-accent/10` wash over the page. */
   --accent-soft: color-mix(in srgb, rgb(var(--accent)) 10%, var(--surface));
   --accent-border: color-mix(in srgb, rgb(var(--accent)) 30%, var(--surface));
-  /* prose roles — the measured pre-token values. `--code-fill` is NOT
-     `--surface-active`: the restoration above raised the prose card to meet it,
-     leaving 0.012 L between the chip and the card it sits on. See tokens.css. */
-  --code-fill: oklch(0.319 0.024 75);
-  --quote-text: oklch(0.666 0.059 86.5);
-  --quote-border: oklch(0.429 0.036 76.4);
+  /* prose roles — `--code-fill` is NOT `--surface-active`: it must stay visibly
+     lighter than the raised card it sits on (tokens.test.ts asserts 1.15:1). */
+  --code-fill: oklch(0.315 0.035 262);
+  --quote-text: oklch(0.7 0.05 250);
+  --quote-border: oklch(0.43 0.05 258);
   --success-solid: oklch(0.535 0.1252 158);
   --success-fg: oklch(1 0 0);
   --success-text: oklch(0.79 0.1268 158);
   --success-soft: oklch(0.26 0.05 158);
   --success-border: oklch(0.37 0.07 158);
-  --warn-solid: oklch(0.535 0.1074 72);
+  --warn-solid: oklch(0.56 0.125 62);
   --warn-fg: oklch(1 0 0);
   --warn-text: oklch(0.79 0.13 72);
-  --warn-soft: oklch(0.26 0.05 72);
-  --warn-border: oklch(0.37 0.07 72);
+  --warn-soft: oklch(0.27 0.05 65);
+  --warn-border: oklch(0.4 0.08 65);
   --danger-solid: oklch(0.535 0.17 24);
   --danger-fg: oklch(1 0 0);
   --danger-text: oklch(0.79 0.1217 24);
   --danger-soft: oklch(0.26 0.05 24);
   --danger-border: oklch(0.37 0.07 24);
-  --info-solid: oklch(0.535 0.127 242);
+  --info-solid: oklch(0.535 0.09 205);
   --info-fg: oklch(1 0 0);
-  --info-text: oklch(0.79 0.1172 242);
-  --info-soft: oklch(0.26 0.05 242);
-  --info-border: oklch(0.37 0.07 242);
-  --lineage-solid: oklch(0.535 0.17 295);
+  --info-text: oklch(0.8 0.1 205);
+  --info-soft: oklch(0.27 0.04 205);
+  --info-border: oklch(0.37 0.06 205);
+  --lineage-solid: oklch(0.535 0.17 318);
   --lineage-fg: oklch(1 0 0);
-  --lineage-text: oklch(0.79 0.1195 295);
-  --lineage-soft: oklch(0.26 0.05 295);
-  --lineage-border: oklch(0.37 0.07 295);
+  --lineage-text: oklch(0.8 0.12 318);
+  --lineage-soft: oklch(0.26 0.05 318);
+  --lineage-border: oklch(0.37 0.07 318);
   --shadow-color: 0 0 0;
   --shadow-ambient: 0.4;
   --shadow-direct: 0.5;
-  --scroll-thumb: oklch(0.335 0.011 88);
+  --scroll-thumb: oklch(0.335 0.03 262);
 }
 

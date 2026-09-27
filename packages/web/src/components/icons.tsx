@@ -17,6 +17,19 @@ function base(props: IconProps) {
   };
 }
 
+/**
+ * The Managers mark's glyph: two stacked chevrons (rank, and progress upward).
+ * Drawn without its tile so the brand chip supplies the fill from `--accent`;
+ * `public/icons/mark.svg` is the same drawing on a fixed cobalt tile, for
+ * favicons and anywhere CSS can't reach.
+ */
+export const ManagersMark = (p: IconProps) => (
+  <svg {...base({ viewBox: "0 0 32 32", strokeWidth: 3.2, ...p })}>
+    <path d="M9.5 16 16 9.5 22.5 16" />
+    <path d="M9.5 23 16 16.5 22.5 23" strokeOpacity={0.6} />
+  </svg>
+);
+
 export const PlusIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M12 5v14M5 12h14" />

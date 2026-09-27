@@ -1,14 +1,14 @@
 {
   "name": "Managers",
   "short_name": "Managers",
-  "description": "Project-first launchpad for server-hosted, persistent Claude Code sessions.",
+  "description": "Scheduled manager agents that track your long-running objectives, one per project.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#141210",
-  "theme_color": "#141210",
+  "background_color": "#0e131c",
+  "theme_color": "#0e131c",
   "icons": [
     {
       "src": "/icons/icon-192.png",
