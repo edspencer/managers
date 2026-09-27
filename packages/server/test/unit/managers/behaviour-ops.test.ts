@@ -19,7 +19,12 @@ const gated = {
 };
 
 function ops() {
-  const set = vi.fn(async (_s: string, name: string, rec: Record<string, unknown>) => ({ name, agentName: "a", ...rec }));
+  // M14.5: the op hands the store a MERGE function, which the store evaluates
+  // against the trigger it reads under the project.yaml lock (here: `gated`).
+  const set = vi.fn(async (_s: string, name: string, rec: unknown) => {
+    const r = typeof rec === "function" ? (rec as (e: unknown) => Record<string, unknown>)(gated) : (rec as Record<string, unknown>);
+    return { name, agentName: "a", ...r };
+  });
   const ctx = {
     deps: {
       projects: { list: async () => [ALPHA], get: async () => ALPHA },
@@ -48,14 +53,12 @@ describe("set_trigger and run.behaviour (M8)", () => {
   it("refuses unbinding a gated trigger", async () => {
     const { w, set } = ops();
     await expect(w.setTrigger("alpha", "triage-prs", { run: { behaviour: undefined } })).rejects.toThrow(/run\.behaviour/);
-    expect(set).not.toHaveBeenCalled();
   });
   it("refuses rebinding it to another behaviour", async () => {
     const { w, set } = ops();
     await expect(w.setTrigger("alpha", "triage-prs", { run: { behaviour: "something-on" } })).rejects.toThrow(
       /autonomy gate/,
     );
-    expect(set).not.toHaveBeenCalled();
   });
   // M9.5 (audit #3): M8 let an agent edit a gated trigger's other fields, and
   // remove + recreate it unbound. Now a gated trigger is Ed's alone: the store

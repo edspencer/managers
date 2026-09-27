@@ -57,8 +57,11 @@ async function boot(opts: {
     MANAGERS_BRAND_LOGO: process.env.MANAGERS_BRAND_LOGO,
     MANAGERS_BRAND_ACCENT: process.env.MANAGERS_BRAND_ACCENT,
     HOST: process.env.HOST,
+    MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH: process.env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH,
   };
   process.env.HOME = home;
+  // M14.5: auth=none needs its explicit opt-in (boot-posture.ts).
+  process.env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH = "1";
   // Pin loopback so the safe-by-default bind guard (#435) doesn't refuse to boot
   // under a dev box's ambient HOST=0.0.0.0 + auth=none (CI leaves HOST unset).
   process.env.HOST = "127.0.0.1";

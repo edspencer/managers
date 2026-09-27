@@ -236,6 +236,7 @@ describe("schemas round-trip (strict write → file → lenient read)", () => {
       ...rec,
       expect: { ...rec.expect, report: null, description: null },
       mcpErrors: {}, // M9.5: absent on disk reads as none
+      memoryOps: [], // M14.5: absent on disk reads as none
     });
     expect(runWriteSchema.safeParse({ ...rec, expect: { kind: "episode", within: "2 days" } }).success).toBe(false);
   });

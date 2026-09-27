@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "../../lib/api";
 import type { ManagersAlert, NeedsYouResponse, TaskAnswerResult } from "../../lib/types";
-import { NeedsYouPanel, reportAge, totalsLine } from "./NeedsYouPanel";
+import { GROUP_CAP, NeedsYouPanel, PAGE_SIZE, nextLimit, reportAge, totalsLine } from "./NeedsYouPanel";
 import { task, taskDetail } from "./testData";
 
 const managersNeedsYou = vi.fn();
@@ -220,5 +220,91 @@ describe("NeedsYouPanel helpers", () => {
   it("totalsLine", () => {
     expect(totalsLine({ checked: 1, needsYou: 1, alerts: 0, errors: 0, withItems: 1 })).toBe("1 ask — 1 project checked");
     expect(totalsLine({ checked: 5, needsYou: 0, alerts: 0, errors: 0, withItems: 0 })).toBe("5 projects checked");
+  });
+});
+
+describe("NeedsYouPanel (M14.5)", () => {
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      task({ id: `t-260927-${String(i).padStart(4, "0")}`, title: `Ask number ${i}`, status: "awaiting-ed", ask: "?", options: [] }),
+    );
+
+  it("a project with an unreadable project.yaml keeps its asks, read-only, under an error row", async () => {
+    managersNeedsYou.mockResolvedValue(
+      response({
+        projects: [
+          {
+            slug: "widget-lib",
+            name: "widget-lib",
+            needsYou: [RN88],
+            alerts: [
+              {
+                id: "config-unreadable:",
+                kind: "config-unreadable",
+                trigger: "",
+                severity: "error",
+                message: "project.yaml is not valid YAML (x). This project is missing from the project list.",
+                runId: null,
+                at: null,
+              },
+            ],
+            status: { generated: null, stale: false },
+            parseErrors: [],
+            configError: "project.yaml is not valid YAML (x)",
+          },
+        ],
+        totals: { checked: 2, needsYou: 1, alerts: 1, errors: 1, withItems: 1 },
+      }),
+    );
+    renderPanel();
+    const group = await screen.findByTestId("needs-you-group-widget-lib");
+    expect(within(group).getByTestId("needs-you-config-error")).toHaveTextContent(
+      "This project’s project.yaml can’t be read: project.yaml is not valid YAML (x). It is missing from the project list until you fix the file by hand, so its asks below can’t be answered from here yet.",
+    );
+    // The ask is listed, without an answer form, and the header is not a link to a page that cannot open.
+    expect(within(group).getByText("Merge renovate #88?")).toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: /merge/i })).toBeNull();
+    expect(within(group).getByTestId("needs-you-project-widget-lib").tagName).toBe("SPAN");
+    expect(within(group).getByTestId("needs-you-alert-config-unreadable:")).toHaveTextContent("missing from the project list");
+    expect(managersWake).not.toHaveBeenCalled();
+  });
+
+  it("caps a long list at GROUP_CAP with Show all N, and Show fewer", async () => {
+    const asks = many(12);
+    managersNeedsYou.mockResolvedValue(
+      response({
+        projects: [{ slug: "acme-site", name: "Acme Site", needsYou: asks, alerts: [], status: { generated: null, stale: false }, parseErrors: [] }],
+        totals: { checked: 1, needsYou: 12, alerts: 0, errors: 0, withItems: 1 },
+      }),
+    );
+    renderPanel();
+    const group = await screen.findByTestId("needs-you-group-acme-site");
+    expect(within(group).getAllByTestId(/^needs-you-task-/)).toHaveLength(GROUP_CAP);
+    await userEvent.click(within(group).getByRole("button", { name: "Show all 12 asks" }));
+    expect(within(group).getAllByTestId(/^needs-you-task-/)).toHaveLength(12);
+    await userEvent.click(within(group).getByRole("button", { name: "Show fewer" }));
+    expect(within(group).getAllByTestId(/^needs-you-task-/)).toHaveLength(GROUP_CAP);
+  });
+
+  it("500 asks: 5 rows, then a page at a time, with Open Tasks", async () => {
+    managersNeedsYou.mockResolvedValue(
+      response({
+        projects: [{ slug: "acme-site", name: "Acme Site", needsYou: many(500), alerts: [], status: { generated: null, stale: false }, parseErrors: [] }],
+        totals: { checked: 1, needsYou: 500, alerts: 0, errors: 0, withItems: 1 },
+      }),
+    );
+    renderPanel();
+    const group = await screen.findByTestId("needs-you-group-acme-site");
+    expect(within(group).getAllByTestId(/^needs-you-task-/)).toHaveLength(5);
+    expect(within(group).getByRole("link", { name: "Open Tasks" })).toHaveAttribute("href", "/projects/acme-site/tasks");
+    await userEvent.click(within(group).getByRole("button", { name: "Show 50 more (495 asks hidden)" }));
+    expect(within(group).getAllByTestId(/^needs-you-task-/)).toHaveLength(55);
+  });
+
+  it("nextLimit", () => {
+    expect(nextLimit(GROUP_CAP, 12)).toBe(12);
+    expect(nextLimit(GROUP_CAP, GROUP_CAP + PAGE_SIZE)).toBe(GROUP_CAP + PAGE_SIZE);
+    expect(nextLimit(GROUP_CAP, 500)).toBe(GROUP_CAP + PAGE_SIZE);
+    expect(nextLimit(455, 500)).toBe(500);
   });
 });

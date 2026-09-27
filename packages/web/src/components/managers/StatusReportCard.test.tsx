@@ -125,6 +125,38 @@ describe("StatusReportCard (Managers M12)", () => {
     expect(screen.getByTestId("status-report-generated")).toHaveTextContent("Generated just now");
   });
 
+  it("M14.5: re-reads Needs you while open, so an ask raised after mount replaces 'Nothing needs you'", async () => {
+    managersTasks.mockResolvedValue({ tasks: [], doneMonths: [] });
+    render(
+      <MemoryRouter>
+        <StatusReportCard slug="acme" base="/projects/acme" onOpenRun={onOpenRun} pollMs={5} livePollMs={20} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Nothing needs you right now.")).toBeInTheDocument();
+    // An agent raises an ask while the page is open.
+    managersTasks.mockResolvedValue({
+      tasks: [task({ id: "t-260927-live", status: "awaiting-ed", title: "LIVE-PROBE", ask: "Now?" })],
+      doneMonths: [],
+    });
+    expect(await screen.findByRole("link", { name: "LIVE-PROBE" }, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.queryByText("Nothing needs you right now.")).not.toBeInTheDocument();
+    // A failing re-read says so (and clears only when a later read succeeds).
+    managersTasks.mockRejectedValue(new ApiError("boom", 500));
+    await waitFor(() => expect(screen.getByText(/Couldn’t load what needs you/)).toBeInTheDocument(), { timeout: 2000 });
+  });
+
+  it("M14.5: lists at most 5 asks, then 'Show all N in Tasks'", async () => {
+    managersTasks.mockResolvedValue({
+      tasks: Array.from({ length: 9 }, (_, i) => task({ id: `t-260927-000${i}`, status: "awaiting-ed", title: `Ask ${i}` })),
+      doneMonths: [],
+    });
+    renderCard();
+    const needs = await screen.findByTestId("needs-you");
+    await within(needs).findByRole("link", { name: "Ask 0" });
+    expect(within(needs).queryByRole("link", { name: "Ask 5" })).toBeNull();
+    expect(within(needs).getByRole("link", { name: "Show all 9 in Tasks" })).toHaveAttribute("href", "/projects/acme/tasks");
+  });
+
   it("says nothing needs you when no task is awaiting, and flags an old report", async () => {
     managersTasks.mockResolvedValue({ tasks: [], doneMonths: [] });
     managersReport.mockResolvedValue({ type: "status", current: doc({ generated: "2026-01-01T00:00:00Z" }), dates: [] });

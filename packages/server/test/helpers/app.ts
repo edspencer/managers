@@ -129,6 +129,9 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
     HOST: process.env.HOST,
     MANAGERS_HOST: process.env.MANAGERS_HOST,
     MANAGERS_DANGEROUSLY_ALLOW_OPEN: process.env.MANAGERS_DANGEROUSLY_ALLOW_OPEN,
+    MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH: process.env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH,
+    MANAGERS_ALLOW_BATCH_DRIVE: process.env.MANAGERS_ALLOW_BATCH_DRIVE,
+    MANAGERS_AUTH_MODE: process.env.MANAGERS_AUTH_MODE,
     MANAGERS_CONFIG: process.env.MANAGERS_CONFIG,
     MANAGERS_ENVIRONMENT_PROMPT: process.env.MANAGERS_ENVIRONMENT_PROMPT,
     MANAGERS_FAKE_INVOCATION_LOG: process.env.MANAGERS_FAKE_INVOCATION_LOG,
@@ -176,6 +179,11 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
   // regardless of the box env (CI has it unset; a dev box may not). The session
   // path has its own coverage (unit/mocked harnesses).
   process.env.MANAGERS_DRIVE_MODE = "batch";
+  // M14.5: boot refuses auth=none and batch drive mode without their explicit
+  // opt-ins (boot-posture.ts). This harness is exactly the credential-free,
+  // fake-`claude` rig those opt-ins exist for.
+  process.env.MANAGERS_ALLOW_BATCH_DRIVE = "1";
+  process.env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH = "1";
   // #635: a defined-but-blank MANAGERS_ENVIRONMENT_PROMPT is the opt-out, so an
   // ambient value on a dev box would silently change what every turn's system
   // prompt looks like. Clear it; tests that want one pass it via `opts.env`.

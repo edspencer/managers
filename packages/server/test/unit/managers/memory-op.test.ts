@@ -182,7 +182,8 @@ describe("the MEMORY.md index", () => {
     const text = await read("memory/MEMORY.md");
     expect(text.startsWith(`${preamble}\n\n${MEMORY_INDEX_MARKER}\n`)).toBe(true);
     expect(text).not.toContain("[[stale]]");
-    expect(memoryPreamble("no marker here\n")).toBe("no marker here");
+    // M14.5 (audit M9–M14 #10): byte for byte, a trailing newline included.
+    expect(memoryPreamble("no marker here\n")).toBe("no marker here\n");
     expect(memoryPreamble(null)).toBe(DEFAULT_MEMORY_PREAMBLE);
   });
 
@@ -245,11 +246,13 @@ describe("the memory_op gate (M14)", () => {
     state.consolidations.begin(runId, "acme");
     let current: string | null = runId;
     const s = base({ currentRunId: () => current });
-    await s.memoryOp("acme", add);
+    // M14.5: an unattended consolidation must cite evidence (a user fact, Ed's).
+    await expect(s.memoryOp("acme", add)).rejects.toThrow(/at least 1 evidence/);
+    await s.memoryOp("acme", { ...add, type: "project", evidence: [ids[0]!] });
     // The same run id registered for another workspace unlocks nothing here.
     const other = base({ currentProjectSlug: "widget", currentRunId: () => runId });
     expect(other.memoryAvailable()).toBe(false);
-    expect(state.consolidations.end(runId)).toEqual([{ op: "add", name: "gate-test", type: "user" }]);
+    expect(state.consolidations.end(runId)).toEqual([{ op: "add", name: "gate-test", type: "project" }]);
     // Ended: the run marker is gone even though the id is unchanged.
     await expect(s.memoryOp("acme", { ...add, name: "after" })).rejects.toThrow(MEMORY_OP_UNAVAILABLE);
     current = null;

@@ -217,18 +217,29 @@ describe("integration: M9.5 audit fixes", () => {
   it("#3: remove_trigger + set_trigger + run_trigger (the audit's sequence) cannot ungate drafter", async () => {
     const before = await runNow(widget.slug, "drafter");
     expect(before.statusCode).toBe(409);
-    const calls = toolCalls(
-      await runPrompt(
-        acme.slug,
-        "bypass",
-        `[[MCP managers.remove_trigger {"project":"${widget.slug}","name":"drafter"}]] ` +
-          `[[MCP managers.set_trigger {"project":"${widget.slug}","name":"drafter","type":"schedule","cron":"0 3 1 1 *","prompt":"x","enabled":true}]] ` +
-          `[[MCP managers.run_trigger {"project":"${widget.slug}","name":"drafter"}]] ` +
-          // Home's name-gated trigger in another project, and a brand-new name are the controls.
-          `[[MCP managers.set_trigger {"project":"${acme.slug}","name":"triage-prs","type":"schedule","cron":"0 3 1 1 *","prompt":"x","enabled":true}]] ` +
-          `[[MCP managers.set_trigger {"project":"${acme.slug}","name":"fresh-one","type":"schedule","cron":"0 3 1 1 *","prompt":"x","enabled":false}]]`,
+    // M14.5: an agent may write triggers only in its own project, so the sequence
+    // runs from widget-lib's own trigger (from acme-site it is refused earlier, by
+    // the cross-project rule: see managers-audit2-fixes.test.ts).
+    const calls = [
+      ...toolCalls(
+        await runPrompt(
+          widget.slug,
+          "bypass",
+          `[[MCP managers.remove_trigger {"project":"${widget.slug}","name":"drafter"}]] ` +
+            `[[MCP managers.set_trigger {"project":"${widget.slug}","name":"drafter","type":"schedule","cron":"0 3 1 1 *","prompt":"x","enabled":true}]] ` +
+            `[[MCP managers.run_trigger {"project":"${widget.slug}","name":"drafter"}]]`,
+        ),
       ),
-    );
+      ...toolCalls(
+        await runPrompt(
+          acme.slug,
+          "bypass",
+          // Home's name-gated trigger in acme's own project, and a brand-new name are the controls.
+          `[[MCP managers.set_trigger {"project":"${acme.slug}","name":"triage-prs","type":"schedule","cron":"0 3 1 1 *","prompt":"x","enabled":true}]] ` +
+            `[[MCP managers.set_trigger {"project":"${acme.slug}","name":"fresh-one","type":"schedule","cron":"0 3 1 1 *","prompt":"x","enabled":false}]]`,
+        ),
+      ),
+    ];
     expect(calls.map((c) => c.name)).toEqual([
       "mcp__managers__remove_trigger",
       "mcp__managers__set_trigger",

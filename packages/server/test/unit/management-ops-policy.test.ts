@@ -67,9 +67,24 @@ const principal = (scope: ManagementScope): ManagementPrincipal => ({
 });
 
 describe("the internal keeper principal is untouched", () => {
-  it("returns the very same ops object (no wrapper at all)", () => {
+  it("passes the read ops and every chat write through untouched; only trigger WRITES are wrapped (M14.5)", () => {
     const { ops } = stubOps();
-    expect(enforceManagementPolicy(ops, INTERNAL_PRINCIPAL)).toBe(ops);
+    const out = enforceManagementPolicy(ops, INTERNAL_PRINCIPAL);
+    expect(out.read).toBe(ops.read);
+    for (const k of ["createChat", "forkChat", "sendMessage", "setArchived", "listTriggers", "runTrigger"] as const) {
+      expect(out.write![k]).toBe(ops.write![k]);
+    }
+    expect(out.write!.setTrigger).not.toBe(ops.write!.setTrigger);
+    expect(out.write!.removeTrigger).not.toBe(ops.write!.removeTrigger);
+  });
+
+  it("M14.5: refuses the keeper's trigger writes in ANOTHER project, and allows its own", async () => {
+    const { ops } = stubOps();
+    const out = enforceManagementPolicy(ops, INTERNAL_PRINCIPAL);
+    const own = ops.write!.currentProjectSlug;
+    await expect(out.write!.setTrigger("someone-else", "wake", {})).rejects.toThrow(/only in its own project/);
+    await expect(out.write!.removeTrigger("someone-else", "wake")).rejects.toThrow(/only in its own project/);
+    await expect(out.write!.setTrigger(own, "wake", {})).resolves.toBeDefined();
   });
 
   it("offers every tool", () => {
