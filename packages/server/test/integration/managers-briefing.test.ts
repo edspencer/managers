@@ -201,6 +201,37 @@ describe("integration: the wake briefing (M7)", () => {
     expect(home.text).toContain("- Project: Home (the root workspace)");
   });
 
+  // M15 (real-Claude shakedown): an answer's wake said "Run now (a manual fire)".
+  it("answer … wake:true fires wake with a Why naming the answered task", async () => {
+    await t.triggers.set(empty.slug, "wake", {
+      trigger: { type: "schedule", cron: "0 0 1 1 *" },
+      run: { prompt: "Wake." },
+      enabled: true,
+    });
+    const task = (
+      (await t.app.inject({
+        method: "POST",
+        url: `${api(empty.slug)}/tasks`,
+        payload: { title: "Pick one", status: "awaiting-ed", ask: "A or B?", options: ["A", "B"] },
+      })).json() as { task: { id: string } }
+    ).task;
+    const res = await t.app.inject({
+      method: "POST",
+      url: `${api(empty.slug)}/tasks/${task.id}/answer`,
+      payload: { choice: "A", wake: true },
+    });
+    const wake = (res.json() as { wake: { fired: boolean; sessionId?: string } }).wake;
+    expect(wake.fired).toBe(true);
+    const done = await waitFor(async () => {
+      const { runs } = await get<{ runs: Run[] }>(`${api(empty.slug)}/runs?trigger=wake`);
+      return runs.find((r) => r.status !== "running") ?? null;
+    });
+    const first = await firstUserMessage(empty.slug, done.sessionId!);
+    expect(first).toContain(`- Why: Ed answered ${task.id} and asked you to wake now`);
+    await t.triggers.set(empty.slug, "wake", { trigger: { type: "schedule", cron: "0 0 1 1 *" }, run: { prompt: "Wake." }, enabled: false });
+    await t.app.inject({ method: "PATCH", url: `${api(empty.slug)}/tasks/${task.id}`, payload: { status: "done" } });
+  });
+
   it("empty state: an empty project's briefing says (no objectives) and (no open tasks)", async () => {
     const b = await get<{ text: string }>(`${api(empty.slug)}/briefing`);
     expect(b.text).toContain("(no objectives)");

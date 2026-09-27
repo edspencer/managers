@@ -14,8 +14,8 @@ export interface Brand {
 
 export const DEFAULT_BRAND: Brand = {
   name: "Managers",
-  logo: "🧭",
-  accent: "#c2603c",
+  logo: "/icons/mark.svg",
+  accent: "#2f6ae0",
 };
 
 /** OpenAPI reference availability for this instance (see server openapi config). */

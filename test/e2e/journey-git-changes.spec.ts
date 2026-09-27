@@ -27,10 +27,12 @@ test("Changes tab is present on a git repo and lists uncommitted project files",
   await expect(changesTab).toBeVisible({ timeout: 15_000 });
   await changesTab.click();
 
-  // The changed-files panel lists the new project's untracked files.
+  // The changed-files panel lists the new project's untracked files. Managers M15
+  // commits the project's skeleton (project.yaml, CLAUDE.md, .managers/triggers/)
+  // at create, so project.yaml is NOT listed; the curator's CHANGELOG.md still is.
   await expect(page.getByText("Changed files")).toBeVisible();
-  await expect(page.getByRole("button", { name: /project\.yaml/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /CHANGELOG\.md/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /project\.yaml/ })).toHaveCount(0);
   // The branch indicator shows "main".
   await expect(page.getByText("main", { exact: true })).toBeVisible();
 });

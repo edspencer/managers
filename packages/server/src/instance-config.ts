@@ -261,7 +261,7 @@ const spawnDepth = (raw: unknown): Coerced => {
 const hexColor = (raw: unknown): Coerced =>
   typeof raw === "string" && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(raw.trim())
     ? { ok: true, value: raw.trim() }
-    : { ok: false, error: "must be a hex color like #c2603c" };
+    : { ok: false, error: "must be a hex color like #2f6ae0" };
 
 /** Bounds on a free-form list field, for the same reason as {@link MAX_STRING_CHARS}. */
 const MAX_LIST_ITEMS = 64;
@@ -356,8 +356,8 @@ export const FIELDS: readonly FieldSpec[] = [
 
   // Branding (issue #34).
   { key: "brand.name", group: "branding", label: "Name", type: "string", envVars: ["MANAGERS_BRAND_NAME"], default: "Managers", editable: true, coerce: nonEmptyString },
-  { key: "brand.logo", group: "branding", label: "Logo", help: "An emoji/glyph, or a URL/path to an image.", type: "string", envVars: ["MANAGERS_BRAND_LOGO"], default: "🧭", editable: true, coerce: nonEmptyString },
-  { key: "brand.accent", group: "branding", label: "Accent color", type: "string", envVars: ["MANAGERS_BRAND_ACCENT"], default: "#c2603c", editable: true, coerce: hexColor },
+  { key: "brand.logo", group: "branding", label: "Logo", help: "An emoji/glyph, or a URL/path to an image.", type: "string", envVars: ["MANAGERS_BRAND_LOGO"], default: "/icons/mark.svg", editable: true, coerce: nonEmptyString },
+  { key: "brand.accent", group: "branding", label: "Accent color", type: "string", envVars: ["MANAGERS_BRAND_ACCENT"], default: "#2f6ae0", editable: true, coerce: hexColor },
 
   // Transcription (voice dictation). endpoint is semi-sensitive; apiKey is a
   // secret and deliberately NOT surfaced here.

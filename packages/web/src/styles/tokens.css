@@ -1,5 +1,13 @@
 /*
- * Paddock design tokens — the single source of truth for colour.
+ * Managers design tokens — the single source of truth for colour.
+ *
+ * MANAGERS PALETTE: cool slate ground (hue ~255) and a cobalt accent (#2f6ae0),
+ * light and dark — Managers' own identity, moved off the warm cream +
+ * terracotta it inherited from Paddock. `info` moved from sky (242) to teal
+ * (205) and `lineage` from violet (295) to orchid (318) so neither reads as the
+ * accent; `warn` (the "needs you" amber) gained chroma so it pops against blue.
+ * Where a comment below quotes a ratio from Paddock's terracotta history,
+ * `tokens.test.ts` is authoritative for the current values.
  *
  * READ docs/DESIGN.md BEFORE EDITING. The short version:
  *
@@ -31,9 +39,9 @@
    * Brandable seam. Server-injected override lands on these three, in this
    * exact format. Do not rename, do not convert to oklch.
    */
-  --accent: 194 96 60; /* #c2603c */
-  --accent-600: 168 78 47; /* #a84e2f */
-  --accent-700: 138 63 38; /* #8a3f26 */
+  --accent: 47 106 224; /* #2f6ae0 */
+  --accent-600: 35 91 200; /* #a84e2f */
+  --accent-700: 27 73 163; /* #8a3f26 */
 
   /* -------------------------------------------------------------- surfaces --
    * sunken < surface < raised. `surface` is the app canvas; `raised` is
@@ -42,12 +50,12 @@
    * `hover`/`active`/`selected` are the interactive fills that sit on top of
    * any of the three.
    */
-  --surface: oklch(0.9645 0.0035 88);
-  --surface-raised: oklch(0.996 0.0015 88);
-  --surface-sunken: oklch(0.933 0.006 88);
-  --surface-hover: oklch(0.94 0.006 88);
-  --surface-active: oklch(0.908 0.008 88);
-  --surface-selected: oklch(0.918 0.009 88);
+  --surface: oklch(0.968 0.006 255);
+  --surface-raised: oklch(0.995 0.002 255);
+  --surface-sunken: oklch(0.938 0.01 255);
+  --surface-hover: oklch(0.945 0.01 255);
+  --surface-active: oklch(0.912 0.014 255);
+  --surface-selected: oklch(0.924 0.02 258);
   /* Modal / drawer scrim. Deliberately hue-neutral black so it darkens rather
      than tints whatever is behind it. */
   --overlay: oklch(0 0 0 / 0.42);
@@ -60,9 +68,9 @@
    * legally sit on (`--surface-sunken`) — including `--text-subtle`, which is
    * the placeholder colour and therefore real text.
    */
-  --text: oklch(0.225 0.014 88);
-  --text-muted: oklch(0.415 0.017 88);
-  --text-subtle: oklch(0.492 0.018 88);
+  --text: oklch(0.235 0.03 262);
+  --text-muted: oklch(0.42 0.03 260);
+  --text-subtle: oklch(0.495 0.028 258);
   /* Foreground for anything sitting on a saturated solid fill. */
   --text-on-solid: oklch(1 0 0);
 
@@ -71,17 +79,17 @@
    * `--border-strong` clears 3:1 against every surface, so it is the one to
    * reach for on a control boundary, a hover state, or a focus-adjacent edge.
    */
-  --border-subtle: oklch(0.905 0.008 88);
-  --border: oklch(0.82 0.012 88);
-  --border-strong: oklch(0.608 0.015 88);
+  --border-subtle: oklch(0.91 0.01 255);
+  --border: oklch(0.83 0.016 255);
+  --border-strong: oklch(0.61 0.025 258);
 
   /* ------------------------------------------------------- accent, derived --
    * `--accent-solid` is the fill for anything that carries text on it: the raw
-   * brand accent only manages 4.17:1 against white, so the button uses the 600
-   * step (5.53:1). `--accent-text` is the accent AS TEXT on a neutral surface,
+   * brand accent manages 4.93:1 against white, so the button uses the 600
+   * step (6.17:1). `--accent-text` is the accent AS TEXT on a neutral surface,
    * which needs the darker 700 step in light mode.
    *
-   * `--accent-solid-hover` goes to the 700 step in BOTH modes (7.45:1), because
+   * `--accent-solid-hover` goes to the 700 step in BOTH modes (8.31:1), because
    * hover must raise the contrast of the text the fill is carrying, and the
    * only direction that does with a white foreground is darker. See the note on
    * the dark block below for why that was not obvious.
@@ -120,9 +128,9 @@
    * was L 0.505 and this ramp deliberately darkened it (see the note at the top
    * of this file about light mode failing AA at 3.75:1).
    */
-  --code-fill: oklch(0.894 0.022 92.5);
-  --quote-text: oklch(0.505 0.049 81.4);
-  --quote-border: oklch(0.753 0.049 89.6);
+  --code-fill: oklch(0.9 0.02 255);
+  --quote-text: oklch(0.47 0.05 255);
+  --quote-border: oklch(0.76 0.05 255);
 
   /* ------------------------------------------------------------- status hues --
    * Five domain hues. Each has the same five slots so they are interchangeable
@@ -136,8 +144,8 @@
    * success  emerald  added · completed · enabled · connected · adopted
    * warn     amber    caution · pending · modified · paused · dirty · starred
    * danger   rose     error · failed · deleted · destructive · stderr
-   * info     sky      informational · in progress · background task · repo
-   * lineage  violet   derivation & structure: renamed, spawned, hunk header,
+   * info     teal     informational · in progress · background task · repo
+   * lineage  orchid   derivation & structure: renamed, spawned, hunk header,
    *                   trigger type = schedule
    */
   --success-solid: oklch(0.535 0.1252 158);
@@ -146,11 +154,11 @@
   --success-soft: oklch(0.948 0.045 158);
   --success-border: oklch(0.84 0.075 158);
 
-  --warn-solid: oklch(0.535 0.1074 72);
+  --warn-solid: oklch(0.56 0.125 62);
   --warn-fg: oklch(1 0 0);
-  --warn-text: oklch(0.47 0.0955 72);
-  --warn-soft: oklch(0.948 0.0401 72);
-  --warn-border: oklch(0.84 0.075 72);
+  --warn-text: oklch(0.49 0.11 60);
+  --warn-soft: oklch(0.948 0.04 72);
+  --warn-border: oklch(0.83 0.1 70);
 
   --danger-solid: oklch(0.535 0.17 24);
   --danger-fg: oklch(1 0 0);
@@ -158,56 +166,55 @@
   --danger-soft: oklch(0.948 0.0262 24);
   --danger-border: oklch(0.84 0.075 24);
 
-  --info-solid: oklch(0.535 0.127 242);
+  --info-solid: oklch(0.535 0.09 205);
   --info-fg: oklch(1 0 0);
-  --info-text: oklch(0.47 0.1116 242);
-  --info-soft: oklch(0.948 0.0276 242);
-  --info-border: oklch(0.84 0.075 242);
+  --info-text: oklch(0.47 0.08 205);
+  --info-soft: oklch(0.948 0.03 205);
+  --info-border: oklch(0.84 0.06 205);
 
-  --lineage-solid: oklch(0.535 0.17 295);
+  --lineage-solid: oklch(0.535 0.17 318);
   --lineage-fg: oklch(1 0 0);
-  --lineage-text: oklch(0.47 0.17 295);
-  --lineage-soft: oklch(0.948 0.028 295);
-  --lineage-border: oklch(0.84 0.075 295);
+  --lineage-text: oklch(0.47 0.16 318);
+  --lineage-soft: oklch(0.948 0.03 318);
+  --lineage-border: oklch(0.84 0.075 318);
 
   /* --------------------------------------------------------------- effects --
    * Shadows are tinted toward the surface hue and layered (ambient + direct);
    * see theme.css. `--shadow-color` is the channel set both layers mix from.
    */
-  --shadow-color: 40 34 22;
+  --shadow-color: 20 32 60;
   --shadow-ambient: 0.06;
   --shadow-direct: 0.08;
 
-  --scroll-thumb: oklch(0.82 0.012 88);
+  --scroll-thumb: oklch(0.83 0.016 255);
 }
 
 .dark {
   color-scheme: dark;
 
-  /* Warm dark ground — see theme-foundation.css for the measurement these came
-     from. Kept in lockstep with that file: foundation was lifted out of here
+  /* Navy dark ground (hue 262). Kept in lockstep with that file: foundation was lifted out of here
      verbatim, and the two drifting apart is a bug waiting to happen. */
-  --surface: oklch(0.184 0.0052 67.5);
-  --surface-raised: oklch(0.256 0.017 74.8);
-  --surface-sunken: oklch(0.152 0.006 75);
-  --surface-hover: oklch(0.245 0.012 75);
-  --surface-active: oklch(0.268 0.014 75);
-  --surface-selected: oklch(0.258 0.013 75);
+  --surface: oklch(0.185 0.02 262);
+  --surface-raised: oklch(0.24 0.028 262);
+  --surface-sunken: oklch(0.155 0.018 262);
+  --surface-hover: oklch(0.235 0.026 262);
+  --surface-active: oklch(0.262 0.03 262);
+  --surface-selected: oklch(0.252 0.036 262);
   --overlay: oklch(0 0 0 / 0.55);
   --overlay-strong: oklch(0 0 0 / 0.86);
 
-  --text: oklch(0.934 0.0124 91.5);
-  --text-muted: oklch(0.718 0.015 88);
-  --text-subtle: oklch(0.652 0.016 88);
+  --text: oklch(0.94 0.012 255);
+  --text-muted: oklch(0.74 0.022 255);
+  --text-subtle: oklch(0.675 0.024 255);
   --text-on-solid: oklch(1 0 0);
 
-  --border-subtle: oklch(0.28 0.009 88);
-  --border: oklch(0.335 0.011 88);
-  --border-strong: oklch(0.55 0.016 76);
+  --border-subtle: oklch(0.275 0.024 262);
+  --border: oklch(0.335 0.03 262);
+  --border-strong: oklch(0.56 0.035 258);
 
   /* On a dark canvas the raw accent already clears 4.5:1 as a fill, but not as
-     TEXT at small sizes against `surface-raised` — so accent text is lightened
-     toward white. Still derived from `--accent`, so branding propagates.
+     TEXT at small sizes against the navy surfaces — so accent text is lifted
+     30% toward white (binding pair: `--surface-active`). Still derived from `--accent`, so branding propagates.
 
      `--accent-solid-hover` used to be the raw accent here, on the instinct that
      a control on a dark canvas should BRIGHTEN under the pointer. Measured, it
@@ -227,7 +234,7 @@
   --accent-solid: rgb(var(--accent-600));
   --accent-solid-hover: rgb(var(--accent-700));
   --accent-fg: oklch(1 0 0);
-  --accent-text: color-mix(in oklab, rgb(var(--accent)) 86%, white);
+  --accent-text: color-mix(in oklab, rgb(var(--accent)) 70%, white);
   --accent-soft: color-mix(in srgb, rgb(var(--accent)) 10%, var(--surface));
   --accent-border: color-mix(in srgb, rgb(var(--accent)) 30%, var(--surface));
 
@@ -238,9 +245,9 @@
      (L 0.232 -> 0.256) and closed the gap to `--surface-active` (L 0.268) to
      0.012 L, which is nothing. The chip did not change; the card rose to meet
      it. */
-  --code-fill: oklch(0.319 0.024 75);
-  --quote-text: oklch(0.666 0.059 86.5);
-  --quote-border: oklch(0.429 0.036 76.4);
+  --code-fill: oklch(0.315 0.035 262);
+  --quote-text: oklch(0.7 0.05 250);
+  --quote-border: oklch(0.43 0.05 258);
 
   --success-solid: oklch(0.535 0.1252 158);
   --success-fg: oklch(1 0 0);
@@ -248,11 +255,11 @@
   --success-soft: oklch(0.26 0.05 158);
   --success-border: oklch(0.37 0.07 158);
 
-  --warn-solid: oklch(0.535 0.1074 72);
+  --warn-solid: oklch(0.56 0.125 62);
   --warn-fg: oklch(1 0 0);
   --warn-text: oklch(0.79 0.13 72);
-  --warn-soft: oklch(0.26 0.05 72);
-  --warn-border: oklch(0.37 0.07 72);
+  --warn-soft: oklch(0.27 0.05 65);
+  --warn-border: oklch(0.4 0.08 65);
 
   --danger-solid: oklch(0.535 0.17 24);
   --danger-fg: oklch(1 0 0);
@@ -260,21 +267,21 @@
   --danger-soft: oklch(0.26 0.05 24);
   --danger-border: oklch(0.37 0.07 24);
 
-  --info-solid: oklch(0.535 0.127 242);
+  --info-solid: oklch(0.535 0.09 205);
   --info-fg: oklch(1 0 0);
-  --info-text: oklch(0.79 0.1172 242);
-  --info-soft: oklch(0.26 0.05 242);
-  --info-border: oklch(0.37 0.07 242);
+  --info-text: oklch(0.8 0.1 205);
+  --info-soft: oklch(0.27 0.04 205);
+  --info-border: oklch(0.37 0.06 205);
 
-  --lineage-solid: oklch(0.535 0.17 295);
+  --lineage-solid: oklch(0.535 0.17 318);
   --lineage-fg: oklch(1 0 0);
-  --lineage-text: oklch(0.79 0.1195 295);
-  --lineage-soft: oklch(0.26 0.05 295);
-  --lineage-border: oklch(0.37 0.07 295);
+  --lineage-text: oklch(0.8 0.12 318);
+  --lineage-soft: oklch(0.26 0.05 318);
+  --lineage-border: oklch(0.37 0.07 318);
 
   --shadow-color: 0 0 0;
   --shadow-ambient: 0.4;
   --shadow-direct: 0.5;
 
-  --scroll-thumb: oklch(0.335 0.011 88);
+  --scroll-thumb: oklch(0.335 0.03 262);
 }

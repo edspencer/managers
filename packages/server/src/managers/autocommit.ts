@@ -12,7 +12,8 @@
  *
  * Cadence: a write schedules a commit {@link AutocommitOptions.debounceMs} later
  * (10 s by default), coalescing a burst of writes into one commit; a turn ending
- * flushes immediately. `MANAGERS_AUTOCOMMIT=0` disables it. It never pushes.
+ * flushes immediately. `MANAGERS_AUTOCOMMIT=0` disables it. It never pushes; the opt-in
+ * data sync (M15, `data-sync.ts`) does, serialised on this chain via {@link Autocommitter.exclusive}.
  *
  * Authorship: agent writes commit as `managers-bot`; UI writes commit as the
  * requesting user (or the configured `MANAGERS_GIT_AUTHOR_*`). A pending commit
@@ -213,6 +214,36 @@ export class Autocommitter {
       return next;
     };
     return this.opts.lock ? this.opts.lock(key, chained) : chained();
+  }
+
+  /**
+   * M15: commit the REMOVAL of a whole subtree (`rel`, relative to `root`) — a
+   * deleted project — so the data repo (and its remote) stop carrying it. Any
+   * pending commit for the removed directory is dropped. `{ committed: false }`
+   * when nothing under `rel` was tracked.
+   */
+  async commitRemoval(root: string, rel: string, message: string, author: GitAuthor): Promise<CommitResult> {
+    if (!this.enabled) return { committed: false };
+    if (!rel || rel === "." || path.isAbsolute(rel) || rel.split(/[\\/]/).includes("..")) return { committed: false };
+    const gone = path.resolve(root, rel);
+    for (const [key, p] of this.pending) {
+      if (key === gone || key.startsWith(gone + path.sep)) {
+        if (p.timer) clearTimeout(p.timer);
+        this.pending.delete(key);
+      }
+    }
+    return this.exclusive(() => this.opts.git.commitProject(path.resolve(root), message, [rel], { author }));
+  }
+
+  /**
+   * M15: run `fn` on the global commit chain — after every commit queued so far,
+   * and before any queued later. The data-repo sync runs here, so a pull or push
+   * never overlaps a commit. Runs even when autocommit is disabled.
+   */
+  exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.chain.then(fn, fn);
+    this.chain = next.catch(() => undefined);
+    return next;
   }
 
   /** Whether a commit is pending for `dir` (tests). */

@@ -196,7 +196,7 @@ export interface SwaggerUiBranding {
   logo?: SwaggerImage;
   /** Browser-tab favicon image. */
   favicon?: SwaggerImage;
-  /** Brand accent hex (e.g. #c2603c) used for the topbar trim. */
+  /** Brand accent hex (e.g. #2f6ae0) used for the topbar trim. */
   accent: string;
 }
 

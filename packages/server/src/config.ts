@@ -17,6 +17,7 @@
  * out of a running instance by a stale line in an old env file. Pinned by
  * `test/unit/config.test.ts`.
  */
+import { loadDataSyncConfig, type DataSyncConfig } from "./managers/data-sync.js";
 import { mcpResolveEnv } from "./managers/mcp-secret-env.js";
 import path from "node:path";
 import os from "node:os";
@@ -119,7 +120,7 @@ export interface AuthConfig {
 /**
  * Per-instance branding (issue #34). Lets several Paddock instances (Projects,
  * Homelab, House, …) be told apart at a glance. All optional; the defaults
- * preserve today's look (🧭 / "Managers" / terracotta). Injected into index.html
+ * preserve the stock look (the chevron mark / "Managers" / cobalt blue). Injected into index.html
  * at serve time (so there's no title/color flash) and read by the SPA from a
  * `window.__MANAGERS_CONFIG__` global.
  */
@@ -559,6 +560,12 @@ export interface PaddockConfig {
    */
   autocommit: { enabled: boolean; debounceMs: number };
   /**
+   * Managers M15: the opt-in data-repo sync (`MANAGERS_DATA_SYNC=1`,
+   * `MANAGERS_DATA_SYNC_INTERVAL`, default `10m`): pull --rebase --autostash, then
+   * push, on the interval and after each run's end-commit. Absent = off.
+   */
+  dataSync?: DataSyncConfig;
+  /**
    * The GitHub OAuth/App client id for the git-backing-store device flow
    * (github-auth.ts). Driven by `MANAGERS_GITHUB_CLIENT_ID`; `undefined` when
    * unset, in which case the GitHub connect feature reports "not configured".
@@ -964,8 +971,8 @@ function loadTranscriptionConfig(file: PaddockConfigFile["transcription"] = {}):
 function loadBrandConfig(file: PaddockConfigFile["brand"] = {}): BrandConfig {
   return {
     name: envOr("MANAGERS_BRAND_NAME", fileOr(file.name, "Managers")),
-    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "🧭")),
-    accent: envOr("MANAGERS_BRAND_ACCENT", fileOr(file.accent, "#c2603c")),
+    logo: envOr("MANAGERS_BRAND_LOGO", fileOr(file.logo, "/icons/mark.svg")),
+    accent: envOr("MANAGERS_BRAND_ACCENT", fileOr(file.accent, "#2f6ae0")),
   };
 }
 
@@ -1141,6 +1148,7 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
       email: envOr("MANAGERS_BOT_GIT_EMAIL", "managers-bot@localhost"),
     },
     autocommit: loadAutocommitConfig(),
+    dataSync: loadDataSyncConfig(),
   });
 }
 

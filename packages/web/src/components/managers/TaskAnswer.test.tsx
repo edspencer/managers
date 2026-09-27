@@ -78,6 +78,14 @@ describe("TaskAnswer (Managers M11)", () => {
     expect(managersAnswerTask).toHaveBeenCalledWith("acme", "t-260926-rn88", { choice: "skip", wake: true });
   });
 
+  // M15: in the real-Claude shakedown a click on the words did nothing.
+  it("toggles the wake switch when its text is clicked", async () => {
+    render(<TaskAnswer slug="acme" task={ask} wake={{ available: true, reason: null }} onAnswered={vi.fn()} />);
+    const sw = screen.getByRole("checkbox", { name: "Wake the manager now" });
+    await userEvent.click(screen.getByText("Wake the manager now"));
+    expect(sw).toBeChecked();
+  });
+
   it("shows the server's message on a 4xx and keeps the form usable", async () => {
     const { ApiError } = await import("../../lib/api");
     managersAnswerTask.mockRejectedValue(new ApiError("Task t-260926-rn88 is not awaiting-ed", 409, "conflict"));

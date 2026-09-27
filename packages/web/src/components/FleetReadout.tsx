@@ -260,6 +260,28 @@ function Channel({
   );
 }
 
+/**
+ * "4 NEEDS YOU" — the strip's one solid element, so it reads first. Links to
+ * Home, whose top section is the full list with an answer form per ask.
+ */
+function NeedsYouStat({ value }: { value: number }) {
+  const label = `${value} ${value === 1 ? "ask" : "asks"} waiting on you — answer them on Home`;
+  return (
+    <Link
+      data-testid="fleet-needs-you"
+      to="/"
+      title={label}
+      aria-label={label}
+      className="focus-visible:focus-ring flex h-6 shrink-0 items-center gap-1.5 rounded-md bg-warn-solid px-2 text-warn-fg shadow-sm can-hover:hover:brightness-95"
+    >
+      <span data-testid="fleet-needs-you-value" className="font-mono tabular text-2xs font-bold">
+        {value}
+      </span>
+      <span className="text-3xs font-bold uppercase tracking-[0.14em]">needs you</span>
+    </Link>
+  );
+}
+
 /** A count with its unit, as one hit target. `tone` carries the only colour. */
 function Stat({
   value,
@@ -271,7 +293,7 @@ function Stat({
   value: number;
   unit: string;
   to: string;
-  tone: "live" | "attention" | "rest";
+  tone: "live" | "rest";
   title: string;
 }) {
   return (
@@ -286,7 +308,6 @@ function Stat({
         className={cx(
           "h-1.5 w-1.5 shrink-0 rounded-[1px]",
           tone === "live" && "bg-accent-solid",
-          tone === "attention" && "bg-warn-solid",
           tone === "rest" && "bg-edge-strong",
         )}
       />
@@ -307,11 +328,14 @@ function Stat({
 }
 
 /**
+ * @param needsYou Open asks across the fleet (the shell's one needs-you read),
+ *   or null until it has loaded. Leads the strip as a solid amber pill when > 0:
+ *   it is the one number here that is waiting on a person, not on a model.
  * @param unread Fleet-wide unread count, from the shell's own badge derivation.
  *   Passed in rather than fetched so this strip and the sidebar badges are one
  *   number computed once — see the note at the top of this file.
  */
-export function FleetReadout({ unread }: { unread: number }) {
+export function FleetReadout({ unread, needsYou = null }: { unread: number; needsYou?: number | null }) {
   const { projects, rootWorkspace } = useProjects();
   const running = useRunningSessions();
 
@@ -399,6 +423,7 @@ export function FleetReadout({ unread }: { unread: number }) {
         that broke, and a row that appears the instant a turn starts would shove
         every route down by 36px at the least welcome moment.
       */}
+      {needsYou !== null && needsYou > 0 && <NeedsYouStat value={needsYou} />}
       <Stat
         value={running.size}
         unit="running"
@@ -410,7 +435,7 @@ export function FleetReadout({ unread }: { unread: number }) {
         value={unread}
         unit="unread"
         to="/"
-        tone={unread > 0 ? "attention" : "rest"}
+        tone={unread > 0 ? "live" : "rest"}
         title="Chats holding a reply you have not read"
       />
 

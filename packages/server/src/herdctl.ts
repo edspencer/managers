@@ -55,6 +55,7 @@ import {
   countPendingAsyncQueueEntries,
   getCliSessionFile,
   getSessionInfo,
+  calculateNextCronTrigger,
   type DiscoveredSession,
   type ChatMessage,
   type SDKMessage,
@@ -91,10 +92,12 @@ import {
 import {
   triggerRunsOnOwnAgent,
   isCuratorTrigger,
+  triggersToHerdctlSchedules,
   type PaddockTrigger,
 } from "./trigger-config.js";
 import {
   effectiveBehaviours,
+  triggerGatePredicate,
   unreadableRoot,
   type EffectiveBehaviour,
   type WorkspaceLike,
@@ -1631,7 +1634,21 @@ export class HerdctlService {
   async listAgentSchedules(project: Project): Promise<ScheduleInfo[]> {
     const agent = keeperAgentName(project.slug);
     const all = await this.manager.getSchedules().catch(() => [] as ScheduleInfo[]);
-    return all.filter((s) => s.agentName === agent);
+    // M15: which of them are ARMED (enabled, and not gated off by a behaviour) —
+    // herdctl's ScheduleInfo does not say, and a disabled one reads as "idle".
+    let armed: Set<string>;
+    try {
+      const block = triggersToHerdctlSchedules(
+        this.withEffective(project).triggers,
+        triggerGatePredicate(this.behavioursOf(project)),
+      );
+      armed = new Set(Object.entries(block ?? {}).filter(([, v]) => v.enabled === true).map(([k]) => k));
+    } catch {
+      armed = new Set();
+    }
+    return all
+      .filter((s) => s.agentName === agent)
+      .map((s) => (armed.has(s.name) ? withProjectedNextRun(s) : s));
   }
 
   /**
@@ -2296,5 +2313,21 @@ export class HerdctlService {
 
   private async ensureConfigFile(): Promise<void> {
     await writeBootConfigFile(this.cfg);
+  }
+}
+
+/**
+ * Managers M15: herdctl records a schedule's `nextRunAt` only after its FIRST fire,
+ * so a cron schedule that has never fired reads as "not armed" (the status-report
+ * briefing said "nothing scheduled" for an enabled daily `wake`, and the Triggers
+ * tab showed no next run). Project the next fire from the cron expression for an
+ * idle, never-computed cron schedule; anything else is returned unchanged.
+ */
+export function withProjectedNextRun(s: ScheduleInfo, now: Date = new Date()): ScheduleInfo {
+  if (s.nextRunAt || s.type !== "cron" || !s.cron || s.status === "disabled" || s.status === "running") return s;
+  try {
+    return { ...s, nextRunAt: calculateNextCronTrigger(s.cron, now).toISOString() };
+  } catch {
+    return s;
   }
 }
