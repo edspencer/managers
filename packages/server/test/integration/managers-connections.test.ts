@@ -50,7 +50,13 @@ type Line = {
   type: string;
   message?: { content?: Array<{ type: string; id?: string; name?: string; tool_use_id?: string; content?: unknown; is_error?: boolean }> | string };
 };
-type Invocation = { prompt: string; allowedTools: string | null; mcpConfig: string | null; mcpSecretEnvCount?: number };
+type Invocation = {
+  prompt: string;
+  allowedTools: string | null;
+  mcpConfig: string | null;
+  mcpConfigFile?: string | null;
+  mcpSecretEnvCount?: number;
+};
 
 const TOKEN_ENV = "MANAGERS_MCP_PADDOCK_WIDGET_LIB";
 const WRONG_ENV = "MANAGERS_MCP_PADDOCK_WRONG_TOKEN";
@@ -241,9 +247,11 @@ describe("integration: per-project MCP connections (M9)", () => {
     const pd = calls.find((c) => c.name === "mcp__paddock__list_projects")!;
     expect(pd.isError).toBe(false);
     expect(pd.content).toContain('"slug": "demo"');
-    // Characterisation (mcp-servers.ts argvExposure): under batch the header rides in --mcp-config.
+    // Characterisation: under batch the connection rides in --mcp-config — since
+    // herdctl 5.33.2 in the owner-only file it names, not in the argv itself.
     const inv = (await invocations()).find((i) => i.prompt.includes("[[MCP paddock.list_projects"))!;
-    expect(inv.mcpConfig).toContain('"paddock"');
+    expect(inv.mcpConfigFile).toContain('"paddock"');
+    expect(inv.mcpConfig).not.toContain('"paddock"');
   });
 
   it("a tool the connection narrows out is refused by the allowlist, and the fake never sees it", async () => {
@@ -299,7 +307,9 @@ describe("integration: per-project MCP connections (M9)", () => {
       expect(inv.length).toBeGreaterThan(0);
       for (const i of inv) {
         expect(i.mcpSecretEnvCount).toBe(0);
-        expect(i.mcpConfig).toContain("Bearer rig-token");
+        // In the --mcp-config file (herdctl >= 5.33.2), never in the argv.
+        expect(i.mcpConfigFile).toContain("Bearer rig-token");
+        expect(i.mcpConfig).not.toContain("Bearer rig-token");
       }
       // The Connections view still sees it as set.
       const [c] = await connections(slug);

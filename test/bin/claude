@@ -15,11 +15,13 @@
  * ── What herdctl passes us (see cli-runtime.ts) ─────────────────────────────
  *   claude -p --permission-mode <m> [--model <m>] [--system-prompt <s>]
  *          [--allowedTools <csv>] [--disallowedTools <csv>] [--resume <id>]
- *          [--mcp-config <json>] ...        (prompt arrives on STDIN)
- * cwd is the agent's working_directory. For a NEW session herdctl waits for a
- * NEW *.jsonl file to appear in getCliSessionDir(cwd) and derives the session id
- * from the filename. For --resume it watches <id>.jsonl directly. So:
- *   • new  → mint a uuid, write <uuid>.jsonl
+ *          [--fork-session] [--session-id <uuid>]
+ *          [--mcp-config <json|path>] ...   (prompt arrives on STDIN)
+ * cwd is the agent's working_directory. For a NEW session (or a fork) herdctl
+ * >= 5.33.1 mints the id, passes `--session-id <uuid>` and watches
+ * <uuid>.jsonl in getCliSessionDir(cwd) by name; for --resume it watches
+ * <id>.jsonl directly. So:
+ *   • new  → write <--session-id>.jsonl (mint a uuid only when it is absent)
  *   • resume → append to <resume>.jsonl
  *
  * ── Transcript line shapes (must match @herdctl/core jsonl-parser + chat) ───
@@ -234,7 +236,7 @@ function parseMcpDirectives(prompt) {
   return out;
 }
 
-/** `--mcp-config` is inline JSON from herdctl; the real CLI also accepts a path. */
+/** `--mcp-config` is inline JSON or (herdctl >= 5.33.2) a file path; the real CLI accepts both. */
 function parseMcpConfig(raw) {
   if (!raw) return {};
   try {
@@ -243,6 +245,19 @@ function parseMcpConfig(raw) {
     return (parsed && parsed.mcpServers) || {};
   } catch {
     return {};
+  }
+}
+
+/** `{mcpConfigFile, mcpConfigFileMode}` for a `--mcp-config` PATH; both null for inline JSON. */
+function mcpConfigFileRecord(raw) {
+  if (!raw || raw.trim().startsWith("{")) return { mcpConfigFile: null, mcpConfigFileMode: null };
+  try {
+    return {
+      mcpConfigFile: fs.readFileSync(raw, "utf8"),
+      mcpConfigFileMode: (fs.statSync(raw).mode & 0o777).toString(8),
+    };
+  } catch {
+    return { mcpConfigFile: null, mcpConfigFileMode: null };
   }
 }
 
@@ -382,6 +397,7 @@ function parseArgs(argv) {
     else if (a === "--system-prompt") flags.systemPrompt = argv[++i];
     else if (a === "--resume") flags.resume = argv[++i];
     else if (a === "--fork-session") flags.fork = true;
+    else if (a === "--session-id") flags.sessionId = argv[++i];
     else if (a === "--permission-mode") flags.permissionMode = argv[++i];
     else if (a === "--allowedTools") flags.allowedTools = argv[++i];
     else if (a === "--disallowedTools") flags.disallowedTools = argv[++i];
@@ -602,10 +618,16 @@ function recordInvocation(flags, prompt) {
         // so a test can prove an off behaviour's tools and the anti-tamper rules
         // reach the spawned process's argv.
         disallowedTools: flags.disallowedTools ?? null,
-        // The `--mcp-config` JSON verbatim, INCLUDING each server's env. Recorded
+        // The `--mcp-config` value verbatim (inline JSON, env included, before
+        // herdctl 5.33.2; a file path since). Recorded
         // so a test can observe what herdctl actually puts on the command line
         // rather than infer it from core's source (#691 step 6).
         mcpConfig: flags.mcpConfig ?? null,
+        // herdctl >= 5.33.2 passes `--mcp-config` as the PATH of an owner-only
+        // temp file (deleted when the run ends) instead of inline JSON. Then
+        // `mcpConfig` above is that path, and these carry what the file held and
+        // its permission bits (octal, e.g. "600"), read while it still exists.
+        ...mcpConfigFileRecord(flags.mcpConfig),
         // Managers M3: the `--setting-sources` value herdctl passed (null when
         // none), so a test can prove the retention overlay's source is loaded.
         settingSources: flags.settingSources ?? null,
@@ -646,7 +668,11 @@ async function main() {
   // leaving the source untouched. A plain resume appends to the source file.
   const forking = !!(flags.fork && flags.resume);
   const resuming = !!flags.resume && !forking;
-  const sessionId = resuming ? flags.resume : crypto.randomUUID();
+  // herdctl >= 5.33.1 MINTS a new session's id and passes `--session-id <uuid>`
+  // (fresh run or fork), then watches `<uuid>.jsonl` by name. The real CLI names
+  // the transcript after it, so honour it; mint our own only when it is absent
+  // (older herdctl, or HERDCTL_CLI_MINT_SESSION_ID=0).
+  const sessionId = resuming ? flags.resume : flags.sessionId || crypto.randomUUID();
   const file = path.join(dir, `${sessionId}.jsonl`);
 
   let priorText = "";
@@ -744,6 +770,13 @@ async function main() {
   // reply. Failures become `is_error: true` results; the turn always carries on.
   const mcpDirectives = parseMcpDirectives(prompt);
   if (mcpDirectives.length > 0) {
+    // Let herdctl discover the transcript first. It polls the session dir every
+    // 200ms (cli-runtime waitForNewSessionFile) and only then yields the `init`
+    // that carries session_id; the server attributes a tool's writes to the chat
+    // from that id (e.g. memory_op's "as Ed asked (chat <id>)"). Calling ~60ms
+    // after the file appears races that poll and loses under CI load. A real
+    // model takes seconds before its first tool call; same margin as a fork.
+    if (!resuming) sleep(350);
     const servers = parseMcpConfig(flags.mcpConfig);
     for (const d of mcpDirectives) {
       const toolUseId = `toolu_${crypto.randomBytes(8).toString("hex")}`;

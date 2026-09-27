@@ -167,19 +167,32 @@ describe("integration: M14.5 on a running app", () => {
     await t?.teardown();
   });
 
-  it("#2: herdctl's per-turn MCP bridge binds 127.0.0.1 (herdctl itself asks for 0.0.0.0)", async () => {
+  // herdctl < 5.33.2 asked for 0.0.0.0 with no auth and herdctl-bridge-bind.ts
+  // rewrote it; since 5.33.2 (#467) herdctl binds 127.0.0.1 itself on the CLI
+  // path and requires a per-bridge bearer token, so the rewrite no longer fires.
+  // Either way the resulting bind must be loopback.
+  it("#2: herdctl's per-turn MCP bridge binds 127.0.0.1 and refuses an unauthenticated call", async () => {
     const { startMcpHttpBridge } = (await import(
       "@herdctl/core/dist/runner/runtime/mcp-http-bridge.js" as string
-    )) as { startMcpHttpBridge: (def: unknown) => Promise<{ server: import("node:http").Server; port: number; close: () => Promise<void> }> };
+    )) as {
+      startMcpHttpBridge: (def: unknown) => Promise<{
+        server: import("node:http").Server;
+        port: number;
+        headers: Record<string, string>;
+        close: () => Promise<void>;
+      }>;
+    };
     const bridge = await startMcpHttpBridge({ name: "probe", tools: [] });
     try {
       const addr = bridge.server.address() as { address: string };
       expect(addr.address).toBe("127.0.0.1");
-      // Still reachable on loopback (the CLI child's URL).
-      const res = await fetch(`http://127.0.0.1:${bridge.port}/mcp`, {
-        method: "POST",
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
-      });
+      const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+      // No bearer: refused.
+      const anon = await fetch(`http://127.0.0.1:${bridge.port}/mcp`, { method: "POST", body });
+      expect(anon.status).toBe(401);
+      // Still reachable on loopback (the CLI child's URL) with the token herdctl
+      // hands the child in its MCP config `headers`.
+      const res = await fetch(`http://127.0.0.1:${bridge.port}/mcp`, { method: "POST", body, headers: bridge.headers });
       expect(res.status).toBe(200);
     } finally {
       await bridge.close();
