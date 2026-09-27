@@ -30,7 +30,7 @@ import { relativeTime } from "../../lib/format";
 import type { ManagersAlert, ReportDoc, TaskSummary } from "../../lib/types";
 import { reportsUrl, tasksUrl } from "../../routes/ProjectView/urls";
 import { Markdown } from "../Markdown";
-import { Button, Callout, Card, Chip, EmptyState, StatusDot } from "../ui";
+import { Button, Callout, Card, Chip, EmptyState, StatusDot, cx } from "../ui";
 import { AlertIcon, ClockIcon } from "../icons";
 import { AlertsList } from "./AlertsList";
 import { isReportStale, reportBody, reportGenerated } from "./reportMarkdown";
@@ -54,11 +54,13 @@ type Refresh =
   | { phase: "no-report"; runId: string | null }
   | { phase: "refused"; message: string };
 
-function SubHeading({ label, count }: { label: string; count?: number }) {
+function SubHeading({ label, count, tone }: { label: string; count?: number; tone?: "warn" }) {
   return (
-    <h4 className="mb-2 text-2xs font-semibold uppercase tracking-wide text-fg-muted">
+    <h4 className={cx("mb-2 text-2xs font-semibold uppercase tracking-wide", tone === "warn" ? "text-warn" : "text-fg-muted")}>
       {label}
-      {count !== undefined && count > 0 && <span className="ml-1.5 text-fg-subtle">{count}</span>}
+      {count !== undefined && count > 0 && (
+        <span className={cx("ml-1.5", tone === "warn" ? "text-warn" : "text-fg-subtle")}>{count}</span>
+      )}
     </h4>
   );
 }
@@ -213,9 +215,9 @@ export function StatusReportCard({
   return (
     <section className="mb-8" data-testid="status-report-card" aria-labelledby="status-report-heading">
       <Card flush>
-        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge-subtle px-4 py-3">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-t-2xl border-b border-accent-edge bg-accent-soft px-4 py-3">
           <div className="mr-auto min-w-0">
-            <h3 id="status-report-heading" className="text-sm font-semibold text-fg">
+            <h3 id="status-report-heading" className="text-base font-semibold text-fg">
               Status report
             </h3>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-2xs text-fg-subtle" data-testid="status-report-generated">
@@ -276,9 +278,13 @@ export function StatusReportCard({
           )}
           {refresh.phase === "refused" && <Callout tone="warn">{refresh.message}</Callout>}
 
-          {/* Needs you — LIVE, never the stored section. */}
-          <div data-testid="needs-you">
-            <SubHeading label="Needs you" count={needs?.length} />
+          {/* Needs you — LIVE, never the stored section. The one tinted block in the
+              card when it has asks: it is what the report is for. */}
+          <div
+            data-testid="needs-you"
+            className={cx(needs && needs.length > 0 && "rounded-xl border border-warn-edge bg-warn-soft px-3 py-3")}
+          >
+            <SubHeading label="Needs you" count={needs?.length} tone={needs && needs.length > 0 ? "warn" : undefined} />
             {needsError ? (
               <p className="text-sm text-danger">Couldn’t load what needs you: {needsError}</p>
             ) : needs === null ? (

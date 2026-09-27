@@ -323,7 +323,7 @@ export function SessionSidebar({
             </Tooltip>
           )}
           <span
-            className={`min-w-0 flex-1 truncate ${isUnread ? "font-semibold" : "font-medium"}`}
+            className={`min-w-0 flex-1 truncate ${isUnread ? "font-semibold text-fg" : "font-normal text-fg-muted"}`}
           >
             {c.name}
           </span>
@@ -556,7 +556,7 @@ export function SessionSidebar({
       {/* Session list — static column on lg+, off-canvas drawer on mobile. */}
       <div
         style={chatList.style}
-        className={`fixed inset-y-0 left-0 z-30 flex w-64 max-w-[80%] shrink-0 flex-col border-r border-edge bg-surface-raised shadow-2xl transition-transform duration-200 ease-out lg:relative lg:z-auto lg:max-w-none lg:translate-x-0 lg:bg-surface-raised/40 lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-30 flex w-64 max-w-[80%] shrink-0 flex-col border-r border-edge bg-surface-raised shadow-2xl transition-transform duration-200 ease-out lg:relative lg:z-auto lg:max-w-none lg:translate-x-0 lg:bg-surface-sunken/60 lg:shadow-none ${
           sessionsOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -609,7 +609,7 @@ export function SessionSidebar({
           <Tooltip content="New chat">
             <button
               type="button"
-              className="btn-primary h-9 w-9 shrink-0 p-0"
+              className="btn-ghost h-9 w-9 shrink-0 p-0"
               onClick={newChat}
               aria-label="New Chat"
             >
