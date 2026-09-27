@@ -28,6 +28,7 @@ import {
 import { loadHostMcpSource } from "./claude-mcp.js";
 import { loadHostPlugins } from "./claude-plugins.js";
 import { declaredMcpNotices } from "./mcp-servers.js";
+import { redactMcpInPayload } from "./managers/project-mcp.js";
 import { installHerdctlLogBridge } from "./agent-errors.js";
 import { effectiveBehaviours } from "./managers/behaviours.js";
 import { adoptBaselineIfAbsent } from "./managers/behaviour-state.js";
@@ -230,6 +231,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   );
   // Managers M8: Home's behaviour DEFINITIONS reach every project's agent config.
   herdctl.setRootProvider(() => projects.get(ROOT_KEY));
+  // Managers M9: project `mcp:` connection diagnostics go to the registration
+  // log (every line is secret-free: names, keys, variable names, describeServer).
+  herdctl.setProjectMcpLog((level, message) => app.log[level](message));
   const git = new GitService(cfg.projectsRoot, cfg.gitAuthor);
   // Managers M5 (plan §2.6): every state write schedules a commit of the owned
   // state paths; a turn ending flushes its workspace's pending commit at once.
@@ -473,6 +477,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     );
   }
 
+  // Managers M9: a project DTO never echoes an inline `mcp:` value (headers,
+  // env, args, a url's query) — `env:VAR` names pass, everything else is redacted.
+  app.addHook("preSerialization", async (_req, _reply, payload) => redactMcpInPayload(payload));
   await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, managers, autocommit, cfg });
 
   await app.register(async (scoped) => {

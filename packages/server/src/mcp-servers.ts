@@ -151,7 +151,7 @@ const KNOWN_KEYS = new Set(["command", "args", "env", "url", "type", "headers"])
  * closely enough to describe it, and this module's whole posture is that it
  * never looks at a value it is not about to hand to a server process.
  */
-const SECRET_ISH_KEY_RE = /(TOKEN|SECRET|KEY|PASSWORD|PASSWD|CREDENTIAL|AUTH|PAT|COOKIE)/i;
+export const SECRET_ISH_KEY_RE = /(TOKEN|SECRET|KEY|PASSWORD|PASSWD|CREDENTIAL|AUTH|PAT|COOKIE)/i;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);

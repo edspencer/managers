@@ -15,6 +15,7 @@ import { type RecoveryOverride } from "./recovery-config.js";
 import { type CurationOverride } from "./curation-config.js";
 import { type AttachmentsOverride } from "./attachments-config.js";
 import { type BehaviourConfig } from "./managers/behaviours.js";
+import { type ProjectMcpConfig } from "./managers/project-mcp.js";
 
 // Re-export the config types so importers reaching through projects.js (which
 // re-exports this module) keep finding them in one place, as before.
@@ -313,6 +314,15 @@ export interface ProjectYaml {
    * Absent/empty ⇒ nothing defined here.
    */
   behaviours?: Record<string, BehaviourConfig>;
+  /**
+   * Managers M9: this workspace's MCP connections (`managers/project-mcp.ts`),
+   * keyed by connection name — attached to its keeper and triggers. Secrets are
+   * `env:VAR` references; an inline credential is refused. NOT cascaded from the
+   * root (a connection is a credential). Not patchable through the generic
+   * PATCH: edited in the file. Carried verbatim so an invalid entry survives a
+   * save and its error stays visible. Absent/empty ⇒ no connections.
+   */
+  mcp?: Record<string, ProjectMcpConfig>;
 }
 
 /** API-facing project DTO (adds derived fields). */

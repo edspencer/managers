@@ -91,6 +91,7 @@ import {
   type PaddockTrigger,
 } from "./trigger-config.js";
 import { effectiveBehaviours, type EffectiveBehaviour } from "./managers/behaviours.js";
+import { projectMcpNotices, resolveProjectMcp, type ProjectMcpResolution } from "./managers/project-mcp.js";
 import {
   buildAgentConfig,
   buildSweeperConfig,
@@ -506,6 +507,35 @@ export class HerdctlService {
     this.rootProvider = fn;
   }
 
+  /**
+   * Managers M9: the environment project `mcp:` connections resolve their
+   * `env:VAR` references against (the server's own), and where their
+   * diagnostics go. Both injectable for tests.
+   */
+  private mcpEnv: Record<string, string | undefined> = process.env;
+  private mcpLog: ((level: "info" | "warn" | "error", message: string) => void) | null = null;
+
+  /** Wire the registration log for project MCP connections (Managers M9). Secret-free lines only. */
+  setProjectMcpLog(fn: (level: "info" | "warn" | "error", message: string) => void): void {
+    this.mcpLog = fn;
+  }
+
+  /** Override the env project connections resolve against (tests). */
+  setProjectMcpEnv(env: Record<string, string | undefined>): void {
+    this.mcpEnv = env;
+  }
+
+  /**
+   * A workspace's resolved `mcp:` connections (Managers M9). `log` is set on the
+   * REGISTRATION paths (boot, ensureProjectAgent) so every error and warning
+   * reaches the log once per registration, via `describeServer` only.
+   */
+  projectMcpOf(project: Pick<Project, "slug" | "mcp">, log = false): ProjectMcpResolution {
+    const res = resolveProjectMcp(project, this.mcpEnv);
+    if (log && this.mcpLog) for (const n of projectMcpNotices(project.slug, res)) this.mcpLog(n.level, n.message);
+    return res;
+  }
+
   /** A workspace's effective behaviours against the cached Home definitions (Managers M8). */
   private behavioursOf(project: Project): EffectiveBehaviour[] {
     return effectiveBehaviours(project, project.slug === "" ? project : this.rootRecord);
@@ -622,12 +652,13 @@ export class HerdctlService {
       // project workingDir === dir, so this is the classic behavior.
       await this.ensureChats(project.workingDir, project.dir);
       await this.ensureSweeperHome(project);
-      await this.fleet.addAgent(this.keeperAgentConfig(project), { replace: true });
+      const mcp = this.projectMcpOf(project, true);
+      await this.fleet.addAgent(this.keeperAgentConfig(project, undefined, mcp), { replace: true });
       await this.fleet.addAgent(this.sweeperAgentConfig(project), { replace: true });
       // Register each EVENT trigger as its own agent `trigger-<slug>-<name>` (Epic T /
       // T1). Schedule triggers ride the keeper's forwarded `schedules` block (above);
       // webhook triggers are reserved.
-      await this.registerTriggerAgents(project);
+      await this.registerTriggerAgents(project, mcp);
       this.agentModels.set(keeperAgentName(project.slug), project.model ?? DEFAULT_MODEL);
       this.agentWorkingDirs.set(keeperAgentName(project.slug), project.workingDir);
       this.agentChatsHostDirs.set(keeperAgentName(project.slug), project.dir);
@@ -702,12 +733,13 @@ export class HerdctlService {
     else if (this.rootProvider) this.rootRecord = await this.rootProvider().catch(() => this.rootRecord);
     await this.ensureChats(project.workingDir, project.dir);
     await this.ensureSweeperHome(project);
-    await this.fleet.addAgent(this.keeperAgentConfig(project), { replace: true });
+    const mcp = this.projectMcpOf(project, true);
+    await this.fleet.addAgent(this.keeperAgentConfig(project, undefined, mcp), { replace: true });
     await this.fleet.addAgent(this.sweeperAgentConfig(project), { replace: true });
     // Re-register the project's EVENT-trigger agents (Epic T / T1) from the live
     // record (schedule triggers ride the keeper's forwarded `schedules` block above;
     // webhook triggers are reserved).
-    await this.registerTriggerAgents(project);
+    await this.registerTriggerAgents(project, mcp);
     // Record the keeper's resolved model so per-chat overrides can detect a
     // no-op. ensureProjectAgent re-registers at project.model (the persisted
     // default), so a model change via PATCH takes effect here too.
@@ -727,14 +759,15 @@ export class HerdctlService {
    * turn executes on this scoped agent. A trigger-less project is a no-op. Called at
    * boot ({@link init}) and on every {@link ensureProjectAgent}.
    */
-  async registerTriggerAgents(project: Project): Promise<void> {
+  async registerTriggerAgents(project: Project, mcp?: ProjectMcpResolution): Promise<void> {
     if (!this.fleet) return;
+    const resolved = mcp ?? this.projectMcpOf(project);
     for (const [name, trigger] of Object.entries(project.triggers ?? {})) {
       // The post-turn CURATOR (event/afterTurn) trigger, T5, never runs as its own
       // agent — SweepService executes it via the project's `sweeper-<slug>` agent.
       // Registering a `trigger-<slug>-<name>` for it would be a dead, never-fired agent.
       if (!triggerRunsOnOwnAgent(trigger) || isCuratorTrigger(trigger)) continue;
-      await this.fleet.addAgent(this.triggerAgentConfig(project, name, trigger), { replace: true });
+      await this.fleet.addAgent(this.triggerAgentConfig(project, name, trigger, resolved), { replace: true });
     }
   }
 
@@ -2152,6 +2185,7 @@ export class HerdctlService {
   private keeperAgentConfig(
     project: Project,
     modelOverride?: string,
+    mcp?: ProjectMcpResolution,
   ): Record<string, unknown> & { name: string } {
     return buildAgentConfig(
       this.cfg,
@@ -2160,6 +2194,7 @@ export class HerdctlService {
       this.mcpSources,
       this.hostPlugins,
       this.behavioursOf(project),
+      mcp ?? this.projectMcpOf(project),
     );
   }
 
@@ -2200,8 +2235,16 @@ export class HerdctlService {
     project: Project,
     triggerName: string,
     trigger: PaddockTrigger,
+    mcp?: ProjectMcpResolution,
   ): Record<string, unknown> & { name: string } {
-    return buildTriggerConfig(this.cfg, project, triggerName, trigger, this.behavioursOf(project));
+    return buildTriggerConfig(
+      this.cfg,
+      project,
+      triggerName,
+      trigger,
+      this.behavioursOf(project),
+      mcp ?? this.projectMcpOf(project),
+    );
   }
 
   private async ensureConfigFile(): Promise<void> {

@@ -52,6 +52,7 @@ import {
   triggerGatePredicate,
   type EffectiveBehaviour,
 } from "./managers/behaviours.js";
+import { EMPTY_PROJECT_MCP, triggerConnections, type ProjectMcpResolution } from "./managers/project-mcp.js";
 
 /**
  * Managers M8: the `denied_tools` every keeper and trigger agent carries — the
@@ -129,6 +130,7 @@ export function buildAgentConfig(
   mcpSources: McpSources = EMPTY_MCP_SOURCES,
   hostPlugins: HostPluginSource = EMPTY_HOST_PLUGINS,
   behaviours?: EffectiveBehaviour[],
+  projectMcp: ProjectMcpResolution = EMPTY_PROJECT_MCP,
 ): Record<string, unknown> & { name: string } {
   const effective = behavioursOf(project, behaviours);
   const config: Record<string, unknown> & { name: string } = {
@@ -209,7 +211,10 @@ export function buildAgentConfig(
   // start here. A declared collision is warned about by name at boot
   // (`declaredMcpNotices`) so it is not silent.
   const browser = browserMcpServers(cfg.browserMcp);
-  const external = mcpServersFor(mcpSources, project.workingDir);
+  // Managers M9: the project's own `mcp:` connections (already resolved and
+  // validated — see managers/project-mcp.ts) win over the instance/host ones;
+  // the browser server still wins over everything (its name is reserved anyway).
+  const external = { ...mcpServersFor(mcpSources, project.workingDir), ...projectMcp.servers };
   const servers = { ...external, ...(browser ?? {}) };
   if (Object.keys(servers).length > 0) config.mcp_servers = servers;
   // Widen the allowlist by exactly those servers' tool patterns. WITHOUT this
@@ -230,9 +235,15 @@ export function buildAgentConfig(
   // tool namespace and need the same allowlist widening, under names paddock has
   // to derive rather than read (`claude-plugins.ts`).
   if (hostPlugins.plugins.length > 0) config.plugins = hostPlugins.plugins;
+  // A project connection contributes its EXACT patterns (its `tools:` narrowing),
+  // not `mcp__<name>__*`; every other external server keeps the wildcard.
+  const projectNames = new Set(Object.keys(projectMcp.servers));
   const extra = [
-    ...Object.keys(external).map(mcpToolPattern),
-    ...hostPlugins.toolPatterns,
+    ...new Set([
+      ...Object.keys(external).filter((n) => !projectNames.has(n)).map(mcpToolPattern),
+      ...projectMcp.toolPatterns,
+      ...hostPlugins.toolPatterns,
+    ]),
   ].filter((pattern) => !FLEET_ALLOWED_TOOLS.includes(pattern));
   if (extra.length > 0) config.allowed_tools = [...FLEET_ALLOWED_TOOLS, ...extra];
   return config;
@@ -376,6 +387,7 @@ export function buildTriggerConfig(
   triggerName: string,
   trigger: PaddockTrigger,
   behaviours?: EffectiveBehaviour[],
+  projectMcp: ProjectMcpResolution = EMPTY_PROJECT_MCP,
 ): Record<string, unknown> & { name: string } {
   const config: Record<string, unknown> & { name: string } = {
     name: triggerAgentName(project.slug, triggerName),
@@ -400,7 +412,13 @@ export function buildTriggerConfig(
   };
   if (project.docker) config.docker = { enabled: true };
   const browser = browserMcpServers(cfg.browserMcp);
-  if (browser) config.mcp_servers = browser;
+  // Managers M9: a scoped trigger gets a project connection ONLY when its own
+  // `run.tools` names it, and then only what the connection's `tools:` allows —
+  // its allow-list is its whole capability (see triggerConnections).
+  const scoped = triggerConnections(trigger.run.tools ?? [], projectMcp);
+  if (Object.keys(scoped.servers).length > 0) config.allowed_tools = scoped.allowedTools;
+  const servers = { ...scoped.servers, ...(browser ?? {}) };
+  if (Object.keys(servers).length > 0) config.mcp_servers = servers;
   return config;
 }
 

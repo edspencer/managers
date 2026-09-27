@@ -10,7 +10,7 @@
  *   1  Header          project, now, run, trigger, why woken
  *   2  Protocol        MANAGER_PROTOCOL (protocol.ts)
  *   3  Behaviours      ON behaviours with their instructions, then "Not permitted" (M8)
- *   4  Connections     placeholder until M9 (names only)
+ *   4  Connections     the project's own MCP connections: names, descriptions, callable tools (M9)
  *   5  Shared memory   root memory/MEMORY.md          (≤20k chars)
  *      Project memory  <project>/memory/MEMORY.md     (≤20k chars)
  *   6  Objective(s)    the bound objective in full plus its recent journal, or
@@ -31,6 +31,12 @@
  * The total is about 40k characters (≈10k tokens) for a typical project; the
  * worst case, with both memory files at their cap, is about 90k.
  */
+import {
+  connectionsBriefingBody,
+  resolveProjectMcp,
+  type ProjectMcpConfig,
+  type ProjectMcpResolution,
+} from "./project-mcp.js";
 import { promises as fs } from "node:fs";
 import type { PaddockTrigger } from "../trigger-config.js";
 import type { ManagersState } from "./state.js";
@@ -121,6 +127,8 @@ export interface BriefingSources {
   behaviours?: EffectiveBehaviour[];
   /** M8: alerts computed outside the pure M6 set (the out-of-UI behaviour change). */
   extraAlerts?: () => Promise<Alert[]>;
+  /** M9: the workspace's resolved `mcp:` connections (none when absent). */
+  connections?: ProjectMcpResolution;
 }
 
 export interface Briefing {
@@ -400,7 +408,11 @@ export async function buildBriefing(src: BriefingSources, p: BriefingParams): Pr
     title: "Behaviours",
     body: behavioursBriefingBody(effective),
   };
-  const connections: Section = { name: "Connections", title: "Connections", body: "(none configured)" };
+  const connections: Section = {
+    name: "Connections",
+    title: "Connections",
+    body: src.connections ? connectionsBriefingBody(src.connections) : "(none configured)",
+  };
 
   // 5 Memory
   const shared = await memorySection("Shared memory", state.rootLayout, "memory/MEMORY.md at the root");
@@ -497,12 +509,17 @@ type BriefedWorkspace = {
   dir: string;
   triggers?: Record<string, PaddockTrigger>;
   behaviours?: Record<string, BehaviourConfig>;
+  mcp?: Record<string, ProjectMcpConfig>;
 };
 
 export interface BriefingDeps<P extends BriefedWorkspace> {
   state: ManagersState;
   projects: { get(slug: string): Promise<P>; readOverview(slug: string): Promise<string> };
-  herdctl?: { listAgentSchedules(project: P): Promise<AlertSchedule[]> };
+  herdctl?: {
+    listAgentSchedules(project: P): Promise<AlertSchedule[]>;
+    /** M9: the live connection resolver (its env); `process.env` when absent. */
+    projectMcpOf?(project: P): ProjectMcpResolution;
+  };
 }
 
 /** Resolve a workspace (throws the ProjectStore's not-found) and build its briefing. */
@@ -525,6 +542,10 @@ export async function briefingForWorkspace<P extends BriefedWorkspace>(
         const a = await behaviourDriftAlert(p.dir, behaviours, p.triggers);
         return a ? [a] : [];
       },
+      connections:
+        typeof deps.herdctl?.projectMcpOf === "function"
+          ? deps.herdctl.projectMcpOf(p)
+          : resolveProjectMcp(p, process.env),
     },
     params,
   );

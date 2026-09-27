@@ -48,6 +48,7 @@ import {
 import { sanitizeRecoveryOverride } from "./recovery-config.js";
 import { sanitizeCurationOverride } from "./curation-config.js";
 import { sanitizeBehaviours, isBehaviourName } from "./managers/behaviours.js";
+import { sanitizeProjectMcp } from "./managers/project-mcp.js";
 import { sanitizeAttachmentsOverride } from "./attachments-config.js";
 import {
   PROJECT_SCHEMA_VERSION,
@@ -1533,6 +1534,13 @@ export class ProjectStore {
       ...(() => {
         const b = sanitizeBehaviours(p.behaviours);
         return b ? { behaviours: b } : {};
+      })(),
+      // mcp (Managers M9): carried verbatim when it is a non-empty mapping, so an
+      // invalid connection survives a save and its error stays visible (it is
+      // validated at every agent registration, never here).
+      ...(() => {
+        const m = sanitizeProjectMcp(p.mcp);
+        return m ? { mcp: m } : {};
       })(),
     };
   }

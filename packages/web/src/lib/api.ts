@@ -58,6 +58,8 @@ import {
   type RunRecord,
   type RunDetail,
   type BehaviourList,
+  type ConnectionProbeResult,
+  type ManagersConnection,
   type BehaviourSwitchResult,
   type ManagersAlert,
   type ReportTypeSummary,
@@ -1256,6 +1258,22 @@ export const api = {
     return req<BehaviourSwitchResult>(`${mgr(slug)}/behaviours/${encodeURIComponent(name)}`, {
       method: "PATCH",
       body: JSON.stringify({ enabled }),
+    });
+  },
+
+  // --- Managers connections (M9) -------------------------------------------------
+
+  /** The workspace's own MCP connections (never inherited), secret-free. */
+  async managersConnections(slug: string): Promise<ManagersConnection[]> {
+    const { connections } = await req<{ connections: ManagersConnection[] }>(`${mgr(slug)}/connections`);
+    return connections;
+  },
+
+  /** "Test connection": initialize + tools/list against one connection (10 s bound). */
+  async managersProbeConnection(slug: string, name: string): Promise<ConnectionProbeResult> {
+    return req<ConnectionProbeResult>(`${mgr(slug)}/connections/${encodeURIComponent(name)}/probe`, {
+      method: "POST",
+      body: "{}",
     });
   },
 

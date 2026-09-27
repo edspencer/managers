@@ -19,6 +19,7 @@ import { Caution, Hint, ReadOnly } from "./settings/fields";
 import { DangerZoneSection } from "./settings/DangerZoneSection";
 import { DerivedSection } from "./settings/DerivedSection";
 import { BehavioursSection } from "./settings/BehavioursSection";
+import { ConnectionsSection } from "./settings/ConnectionsSection";
 import { RepoBackingSection } from "./settings/RepoBackingSection";
 
 const STATUSES: ProjectStatus[] = ["idea", "active", "paused", "blocked", "done", "abandoned"];
@@ -517,6 +518,9 @@ export function SettingsPane({
 
           {/* Managers M8: autonomy switches. Saves per switch, outside the Save bar. */}
           <BehavioursSection slug={project.slug} />
+
+          {/* Managers M9: this workspace's MCP connections (read-only; edited in project.yaml). */}
+          <ConnectionsSection slug={project.slug} />
 
           <Section
             title="Claude"

@@ -2269,3 +2269,42 @@ export interface BehaviourSwitchResult {
   changed: boolean;
   episode?: { id: string; file: string };
 }
+
+// --- Managers M9: per-project MCP connections --------------------------------
+
+/** One `env:VAR` reference in a connection: the variable NAME and whether it is set (never its value). */
+export interface ConnectionEnvRef {
+  name: string;
+  /** e.g. `url`, `headers.Authorization`. */
+  where: string;
+  set: boolean;
+}
+
+/** A project MCP connection, secret-free (`GET …/managers/connections`). */
+export interface ManagersConnection {
+  name: string;
+  description: string | null;
+  transport: "http" | "sse" | "stdio" | null;
+  /** Query string and userinfo stripped. */
+  url: string | null;
+  command: string | null;
+  headerKeys: string[];
+  envRefs: ConnectionEnvRef[];
+  /** The `tools:` narrowing, or null for every tool. */
+  tools: string[] | null;
+  /** The exact allowlist patterns the manager gets. */
+  allow: string[];
+  attached: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/** `POST …/managers/connections/:name/probe`. */
+export interface ConnectionProbeResult {
+  name: string;
+  ok: boolean;
+  tools: string[];
+  /** Sanitised: "401 Unauthorized", "ECONNREFUSED", "timed out after 10s", … */
+  error: string | null;
+  ms: number;
+}

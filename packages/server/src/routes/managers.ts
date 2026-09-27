@@ -38,6 +38,11 @@
  *   PATCH managers/behaviours/:name              {enabled}: writes project.yaml, re-arms, #autonomy episode, commit
  *   POST  managers/behaviours/acknowledge        accept an out-of-UI change (clears the alert)
  *
+ * Connections (M9): the project's `mcp:` block, secret-free.
+ *
+ *   GET   managers/connections                   name, redacted url, header KEYS, env var names + set?, allowlist, errors
+ *   POST  managers/connections/:name/probe       initialize + tools/list against the connection (10 s), sanitised error
+ *
  * Write errors: 400 `invalid` (validation), 404 `not_found`, 409 `conflict`
  * (e.g. answering a task that is not awaiting-ed, creating an objective that exists).
  *
@@ -63,6 +68,8 @@ import {
 } from "../managers/behaviours.js";
 import { behavioursChangedOutsideUi, writeBaseline } from "../managers/behaviour-state.js";
 import { workspaceLabel } from "../managers/state-writes.js";
+import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
+import { probeConnection } from "../managers/mcp-probe.js";
 import type { Project } from "../projects.js";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -1002,6 +1009,75 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const project = await projects.get(req.params.slug);
         await writeBaseline(project.dir, await behavioursFor(projects, project), project.triggers, "acknowledged");
         return { ok: true };
+      }),
+  );
+
+  // --- connections (M9) ---------------------------------------------------------
+
+  /** A workspace's resolved connections: the live resolver when herdctl has one. */
+  const connectionsOf = (project: Project): ProjectMcpResolution =>
+    typeof ctx.herdctl?.projectMcpOf === "function"
+      ? ctx.herdctl.projectMcpOf(project)
+      : resolveProjectMcp(project, process.env);
+
+  /** The secret-free view of a connection (drops the resolved server). */
+  const connectionView = (c: ProjectConnection) => {
+    const { server: _server, ...view } = c;
+    void _server;
+    return view;
+  };
+
+  app.get<{ Params: { slug: string } }>(
+    "/managers/connections",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "List the workspace's MCP connections",
+        description:
+          "The `mcp:` block of THIS workspace's `project.yaml` (never inherited from Home), resolved against the " +
+          "server's environment. Each connection has `name`, `description`, `transport`, `url` (query and userinfo " +
+          "stripped), `command` (basename), `headerKeys` (names only), `envRefs` (`{ name, where, set }` — variable " +
+          "names and whether each is set, never values), `tools` (the narrowing, or null), `allow` (the exact " +
+          "allowlist patterns the keeper gets), `attached`, `errors` and `warnings`. No value from the environment " +
+          "is ever returned. Returns `{ connections }`.",
+        params: paramsSchema(),
+        response: ok200("`{ connections }`."),
+      },
+    },
+    (req, reply) =>
+      withWorkspace(req, reply, async () => {
+        const project = await projects.get(req.params.slug);
+        return { connections: connectionsOf(project).connections.map(connectionView) };
+      }),
+  );
+
+  app.post<{ Params: { slug: string; name: string } }>(
+    "/managers/connections/:name/probe",
+    {
+      schema: {
+        tags: TAGS,
+        summary: "Test an MCP connection",
+        description:
+          "Connects to the named connection the way an agent would (streamable HTTP or SSE, with its resolved " +
+          "headers), runs `initialize` then `tools/list` with a 10 s timeout, and disconnects. A connection that " +
+          "does not resolve (an unset env var, an inline secret, a reserved name…) is not contacted: `ok: false` " +
+          "with its first resolution error. Errors are sanitised to a short category (`401 Unauthorized`, " +
+          "`ECONNREFUSED`, `timed out after 10s`) with no stack, url or header text. 404 for an unknown connection. " +
+          "Returns `{ name, ok, tools, error, ms }`.",
+        params: paramsSchema({ name: { description: "Connection name." } }),
+        response: ok200("`{ name, ok, tools, error, ms }`."),
+      },
+    },
+    (req, reply) =>
+      withWorkspace(req, reply, async () => {
+        const project = await projects.get(req.params.slug);
+        const conn = connectionsOf(project).connections.find((c) => c.name === req.params.name);
+        if (!conn) return notFound(reply, `No such connection: ${req.params.name}`);
+        if (!conn.attached || !conn.server) {
+          return { name: conn.name, ok: false, tools: [], error: conn.errors[0] ?? "not attached", ms: 0 };
+        }
+        const r = await probeConnection(conn.server);
+        return { name: conn.name, ...r };
       }),
   );
 }
