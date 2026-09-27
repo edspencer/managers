@@ -39,7 +39,7 @@
    * Brandable seam. Server-injected override lands on these three, in this
    * exact format. Do not rename, do not convert to oklch.
    */
-  --accent: 47 106 224; /* #c2603c */
+  --accent: 47 106 224; /* #2f6ae0 */
   --accent-600: 35 91 200; /* #a84e2f */
   --accent-700: 27 73 163; /* #8a3f26 */
 
