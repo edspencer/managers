@@ -770,6 +770,13 @@ async function main() {
   // reply. Failures become `is_error: true` results; the turn always carries on.
   const mcpDirectives = parseMcpDirectives(prompt);
   if (mcpDirectives.length > 0) {
+    // Let herdctl discover the transcript first. It polls the session dir every
+    // 200ms (cli-runtime waitForNewSessionFile) and only then yields the `init`
+    // that carries session_id; the server attributes a tool's writes to the chat
+    // from that id (e.g. memory_op's "as Ed asked (chat <id>)"). Calling ~60ms
+    // after the file appears races that poll and loses under CI load. A real
+    // model takes seconds before its first tool call; same margin as a fork.
+    if (!resuming) sleep(350);
     const servers = parseMcpConfig(flags.mcpConfig);
     for (const d of mcpDirectives) {
       const toolUseId = `toolu_${crypto.randomBytes(8).toString("hex")}`;
