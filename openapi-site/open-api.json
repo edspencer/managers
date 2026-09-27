@@ -86,6 +86,29 @@
         }
       }
     },
+    "/api/security": {
+      "get": {
+        "summary": "Security posture",
+        "tags": [
+          "System"
+        ],
+        "description": "Reports the auth mode, the instance drive mode, whether batch drive mode is allowed, and a `warnings` list with one entry per dangerous setting this instance booted with (`no-auth`, `trusted-header`, `jwt-any-audience`, `batch-drive`).",
+        "responses": {
+          "200": {
+            "description": "The security posture.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The security posture.",
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health check",
