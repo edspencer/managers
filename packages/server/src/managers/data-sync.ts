@@ -100,6 +100,12 @@ export interface DataSyncOptions {
   log?: { info(obj: object, msg: string): void; warn(obj: object, msg: string): void };
   /** Extra env for git (tests: an isolated HOME). */
   env?: NodeJS.ProcessEnv;
+  /**
+   * The committer identity a rebase uses when it replays local commits (their
+   * authors are kept). Without it a service user with no git identity fails
+   * every pull that has something to rebase. Default `managers-bot`.
+   */
+  committer?: { name: string; email: string };
 }
 
 function errText(err: unknown): string {
@@ -227,12 +233,26 @@ export class DataSync {
     if (remoteHasBranch) {
       const before = await this.tryGit(["rev-parse", "HEAD"]);
       try {
-        await this.git(["pull", "--rebase", "--autostash", "--no-edit", remote, branch]);
+        const who = this.opts.committer ?? { name: "managers-bot", email: "managers-bot@localhost" };
+        await this.git([
+          "-c",
+          `user.name=${who.name}`,
+          "-c",
+          `user.email=${who.email}`,
+          "pull",
+          "--rebase",
+          "--autostash",
+          "--no-edit",
+          remote,
+          branch,
+        ]);
       } catch (err) {
         const message = errText(err);
         const inRebase = await this.rebaseInProgress();
         if (inRebase) await this.tryGit(["rebase", "--abort"]);
-        const conflict = inRebase || /conflict/i.test(message);
+        // A rebase can stop for reasons other than a conflict (no committer
+        // identity, a hook): only git's own conflict report counts as one.
+        const conflict = /CONFLICT|could not apply/i.test(message);
         return fail(
           "pull",
           conflict,

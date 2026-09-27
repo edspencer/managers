@@ -278,6 +278,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     config: cfg.dataSync ?? { enabled: false, intervalMs: 0 },
     serialize: (fn) => autocommit.exclusive(fn),
     log: app.log,
+    committer: cfg.botGitAuthor,
   });
   managers.dataSync = dataSync;
   if (dataSync.status.enabled) {
