@@ -29,6 +29,7 @@ import {
   isKnownDriveMode,
   isKnownModel,
 } from "./models.js";
+import { envTruthy } from "./boot-posture.js";
 import { SCHEMA_VERSION_KEY, configSchemaRefusal } from "./schema-version.js";
 import { enforceDataDirGuard } from "./data-dir-guard.js";
 import { isValidMaxSpawnDepth } from "./spawn-capability.js";
@@ -103,6 +104,12 @@ export interface AuthConfig {
   jwtIssuer?: string;
   /** jwt: expected `aud` claim (validated when set). */
   jwtAudience?: string;
+  /**
+   * jwt: accept tokens without an `iss`/`aud` check (M14.5). Boot refuses jwt mode
+   * unless both `jwtIssuer` and `jwtAudience` are set, or this is. Driven by
+   * `MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE` (1/true/yes).
+   */
+  jwtAllowAnyAudience?: boolean;
   /** jwt: claim to read the username from (falls back preferred_username→email→sub). */
   usernameClaim?: string;
   /** jwt: claim to read groups from (default `groups`). */
@@ -225,6 +232,18 @@ export interface PaddockConfig {
    * refuses). Driven by `MANAGERS_DANGEROUSLY_ALLOW_OPEN`; accepts 1/true/yes.
    */
   dangerouslyAllowOpen: boolean;
+  /**
+   * M14.5: opt in to `auth.mode === "none"` at all. Boot refuses `none` without it,
+   * because with no auth every local process (every agent's Bash) can act as Ed.
+   * `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH` (1/true/yes).
+   */
+  dangerouslyAllowNoAuth: boolean;
+  /**
+   * M14.5: opt in to `driveMode: batch` (instance default or per project). herdctl's
+   * CLI runtime exposes each turn's injected MCP servers over an unauthenticated
+   * HTTP bridge. `MANAGERS_ALLOW_BATCH_DRIVE` (1/true/yes).
+   */
+  allowBatchDrive: boolean;
   /** Absolute (canonical) path to the data root. Holds state files (e.g. sweep). */
   dataDir: string;
   /** Absolute path to the root that contains per-project directories. */
@@ -897,6 +916,7 @@ function loadAuthConfig(file: PaddockConfigFile["auth"] = {}): AuthConfig {
     jwtAudience: envOpt("MANAGERS_AUTH_JWT_AUDIENCE") ?? fileOpt(file.jwtAudience),
     usernameClaim: envOpt("MANAGERS_AUTH_USERNAME_CLAIM") ?? fileOpt(file.usernameClaim),
     groupsClaim: envOr("MANAGERS_AUTH_GROUPS_CLAIM", fileOr(file.groupsClaim, "groups")),
+    jwtAllowAnyAudience: envTruthy(process.env.MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE),
   };
 }
 
@@ -1050,6 +1070,8 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
     // is its boundary and Docker can't reach 127.0.0.1 inside the container.)
     host: envOr("HOST", envOr("MANAGERS_HOST", fileOr(file.host, "127.0.0.1"))),
     dangerouslyAllowOpen: loadDangerouslyAllowOpen(),
+    dangerouslyAllowNoAuth: envTruthy(process.env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH),
+    allowBatchDrive: envTruthy(process.env.MANAGERS_ALLOW_BATCH_DRIVE),
     dataDir,
     projectsRoot,
     stateDir,

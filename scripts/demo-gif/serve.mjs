@@ -58,6 +58,9 @@ export function demoEnv({ dataDir, port, home, fakeScript }) {
   // batch drive-mode → herdctl spawns the fake `claude` from PATH.
   env.MANAGERS_DRIVE_MODE = "batch";
   env.MANAGERS_AUTH_MODE = "none";
+  // M14.5: refused at boot without their explicit opt-ins (boot-posture.ts).
+  env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH = "1";
+  env.MANAGERS_ALLOW_BATCH_DRIVE = "1";
   env.MANAGERS_DANGEROUSLY_ALLOW_OPEN = "1";
   // The sweeper would rewrite the seeded OVERVIEW.md/CHANGELOG.md mid-shoot.
   env.MANAGERS_SWEEP_MIN_INTERVAL_MS = "999999999";

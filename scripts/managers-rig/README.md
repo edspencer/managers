@@ -28,7 +28,9 @@ or another real data dir.** `seed.mjs` refuses those paths, but don't rely on it
 - `HOME` to the rig home, and `test/bin` first on `PATH` (the fake `claude`);
 - `HOST=127.0.0.1` (forced), `PORT`;
 - `MANAGERS_DATA_DIR`, `MANAGERS_PROJECTS_DIR`, `MANAGERS_WEB_DIST`;
-- `MANAGERS_DRIVE_MODE=batch`, `MANAGERS_AUTH_MODE=none`;
+- `MANAGERS_DRIVE_MODE=batch`, `MANAGERS_AUTH_MODE=none`, plus their M14.5 opt-ins
+  `MANAGERS_ALLOW_BATCH_DRIVE=1` and `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1` (so the UI shows
+  the red "No authentication" banner, by design);
 - nothing for the `managers` MCP (the target of `[[MCP managers.*]]`): since M5 it
   is injected on every keeper and trigger turn for its state tools
   (`record_episode`, `upsert_task`, `list_tasks`, …), and its chat-read block

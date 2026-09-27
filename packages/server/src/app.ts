@@ -44,6 +44,8 @@ import { makeTranscriber, type Transcriber } from "./transcribe.js";
 import { registerRoutes } from "./routes.js";
 import { registerAuth } from "./auth.js";
 import { evaluateBindSafety } from "./bind-safety.js";
+import { evaluateBootPosture, bootPostureInput } from "./boot-posture.js";
+import { installHerdctlBridgeLoopbackBind } from "./herdctl-bridge-bind.js";
 import { renderIndexHtml } from "./brand.js";
 import { makeChatHandler } from "./ws.js";
 import type { SessionHub } from "./session-hub.js";
@@ -148,6 +150,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // `@herdctl/core`, and `setLogHandler` is the supported way to reach them from
   // out here. `MANAGERS_QUIET` is set by `cli/managers.ts` unless `--verbose`.
   installHerdctlLogBridge({ quiet: (process.env.MANAGERS_QUIET ?? "") !== "" });
+  // M14.5: herdctl's per-turn MCP bridge (batch drive mode) binds 0.0.0.0 with no
+  // auth; rebind it to loopback before any turn can start one.
+  installHerdctlBridgeLoopbackBind();
 
   const app = Fastify({
     logger: { level: cfg.logLevel },
@@ -167,6 +172,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     });
     if (decision.action === "refuse") throw new Error(decision.message);
     if (decision.action === "warn") app.log.warn(decision.message);
+  }
+
+  // --- M14.5 security posture -------------------------------------------
+  // Refuse auth=none, jwt without iss/aud, and batch drive mode unless each has
+  // its explicit opt-in (boot-posture.ts). Each opted-in danger is logged loudly
+  // here and served at GET /api/security for the web banner.
+  {
+    const decision = evaluateBootPosture(bootPostureInput(cfg));
+    if (decision.action === "refuse") throw new Error(decision.message);
+    for (const w of decision.posture.warnings) app.log.warn(`SECURITY: ${w.detail}`);
   }
 
   // --- auth (provider-agnostic) -----------------------------------------

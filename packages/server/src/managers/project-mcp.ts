@@ -40,6 +40,9 @@ import { MCP_SECRET_ENV_PREFIX, isSequesteredName } from "./mcp-secret-env.js";
 import {
   ENV_REF_PREFIX,
   SECRET_ISH_KEY_RE,
+  looksLikeSecretValue,
+  secretArgIndices,
+  isSecretPathSegment,
   describeServer,
   redactUrl,
   resolveDeclaredMcpServers,
@@ -174,13 +177,28 @@ function inlineSecretErrors(where: string, raw: Record<string, unknown>): string
     const m = raw[block];
     if (!isRecord(m)) continue;
     for (const [key, value] of Object.entries(m)) {
-      if (typeof value === "string" && !value.startsWith(ENV_REF_PREFIX) && SECRET_ISH_KEY_RE.test(key)) {
+      if (
+        typeof value === "string" &&
+        !value.startsWith(ENV_REF_PREFIX) &&
+        (SECRET_ISH_KEY_RE.test(key) || looksLikeSecretValue(value))
+      ) {
         errors.push(
           `${where}.${block}.${key}: looks like a credential written into project.yaml itself, which is committed ` +
             `to the data repo — write \`${key}: ${ENV_REF_PREFIX}MANAGERS_MCP_<CONN>_<PROJECT>\` and set the value ` +
             `in the server's environment. Not attached`,
         );
       }
+    }
+  }
+  // M14.5: `args` values too — `["--token", "x"]`, `--api-key=x`, or a value that
+  // looks like a token by itself.
+  if (Array.isArray(raw.args)) {
+    for (const i of secretArgIndices(raw.args)) {
+      errors.push(
+        `${where}.args[${i}]: looks like a credential written into project.yaml itself, which is committed to ` +
+          `the data repo — write \`${ENV_REF_PREFIX}MANAGERS_MCP_<CONN>_<PROJECT>\` there and set the value in the ` +
+          `server's environment. Not attached`,
+      );
     }
   }
   if (typeof raw.url === "string" && !raw.url.startsWith(ENV_REF_PREFIX)) {
@@ -190,6 +208,12 @@ function inlineSecretErrors(where: string, raw: Record<string, unknown>): string
         errors.push(
           `${where}.url: carries a query string or userinfo (where an API key usually rides) in project.yaml ` +
             `itself — use \`url: ${ENV_REF_PREFIX}VAR_NAME\`. Not attached`,
+        );
+      }
+      if (u.pathname.split("/").some(isSecretPathSegment)) {
+        errors.push(
+          `${where}.url: a path segment looks like a credential, in project.yaml itself — use ` +
+            `\`url: ${ENV_REF_PREFIX}VAR_NAME\`. Not attached`,
         );
       }
     } catch {

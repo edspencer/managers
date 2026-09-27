@@ -388,6 +388,8 @@ all of these, and some have no file equivalent at all:
 |-----|---------|---------|
 | `MANAGERS_DATA_DIR` | `./data` | Data root — holds `projects/`, `.herdctl/` state, the generated `herdctl.yaml`, and the config file itself. Setting it cascades all derived paths. (There *is* a `dataDir:` key, but the file is located *under* the data dir, so it can only re-base the derived paths — not say where to find itself.) |
 | `MANAGERS_CONFIG` | — | Explicit path to the config file, instead of the default location. Pointing it at a missing file is a startup error, not a silent fallback. |
+| `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH` | — | Managers M14.5: required to boot with `auth.mode: none` at all (agents on the host could otherwise act as you; see AUTH.md). Shows a permanent banner. |
+| `MANAGERS_ALLOW_BATCH_DRIVE` | — | Managers M14.5: required for `driveMode: batch`, instance-wide or per project (see AUTH.md). |
 | `MANAGERS_DANGEROUSLY_ALLOW_OPEN` | — | Required to bind a routable interface with `auth.mode: none`. Without it Paddock refuses to start — it runs code and spends your Claude tokens. **No file equivalent by design**: it is an explicit act at deploy time, not a stored setting. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | Claude auth — Max/Pro plan (OAuth). Credentials are read from the environment and never written to the config file. |
 | `ANTHROPIC_API_KEY` | — | Claude auth — API-key billing. Same. |

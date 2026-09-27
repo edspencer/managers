@@ -523,6 +523,15 @@ export function registerProjectWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
             .code(400)
             .send({ error: `Unknown drive mode: ${body.driveMode}`, code: "invalid" });
         }
+        // M14.5: batch drive mode exposes each turn's tools over an unauthenticated
+        // local HTTP bridge (boot-posture.ts), so it needs the instance opt-in.
+        if (body.driveMode === "batch" && !cfg.allowBatchDrive) {
+          return reply.code(400).send({
+            error:
+              "Batch drive mode is disabled on this instance: herdctl serves each batch turn's tools over an unauthenticated local HTTP bridge. Set MANAGERS_ALLOW_BATCH_DRIVE=1 to allow it (test rigs only).",
+            code: "batch_drive_disabled",
+          });
+        }
         // `null` is valid — it clears the per-project override (inherit the
         // instance default, #262). Only a non-null, out-of-range value is a 400.
         if (

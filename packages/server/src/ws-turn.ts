@@ -20,7 +20,8 @@ import type {
 import { createSDKMessageHandler, type SDKMessage as ChatSDKMessage } from "@herdctl/chat";
 import { keeperAgentName, keeperSlugFromAgent } from "./herdctl.js";
 import type { Project } from "./projects.js";
-import { isKnownDriveMode, getContextLimit } from "./models.js";
+import { getContextLimit } from "./models.js";
+import { resolveProjectDriveMode } from "./boot-posture.js";
 import { SessionHub, type TurnHandle } from "./session-hub.js";
 import { type RunProvenanceStore } from "./run-provenance.js";
 import {
@@ -852,10 +853,7 @@ const injectRecoveryNudge = async (project: Project, sessionId: string): Promise
   try {
     // Only re-drive a real, existing session (a live kept-alive keeper chat).
     if (!(await deps.herdctl.sessionExists(project, sessionId).catch(() => false))) return;
-    const driveMode =
-      project.driveMode && isKnownDriveMode(project.driveMode)
-        ? project.driveMode
-        : deps.cfg.driveMode;
+    const driveMode = resolveProjectDriveMode(project, deps.cfg);
     await startAgentTurn({
       projectSlug: slug,
       agentName: keeperAgentName(slug),

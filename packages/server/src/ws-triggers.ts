@@ -13,7 +13,7 @@
 import { promises as fs } from "node:fs";
 import type { TriggerInfo } from "@herdctl/core";
 import type { DriveMode } from "./models.js";
-import { isKnownDriveMode } from "./models.js";
+import { resolveProjectDriveMode } from "./boot-posture.js";
 import {
   keeperAgentName,
   keeperSlugFromAgent,
@@ -94,9 +94,7 @@ export function makeTriggerCluster(
 ): TriggerCluster {
 /** Resolve a project's effective keeper drive mode (override else instance default). */
 function resolveDriveMode(project: Awaited<ReturnType<typeof deps.projects.get>>): DriveMode {
-  return project.driveMode && isKnownDriveMode(project.driveMode)
-    ? project.driveMode
-    : deps.cfg.driveMode;
+  return resolveProjectDriveMode(project, deps.cfg);
 }
 
 // Drive scheduler-fired chats onto the hub (issue #265 / DD-1, DD-2). herdctl's
@@ -154,8 +152,8 @@ async function maybeEarlyConsolidate(slug: string): Promise<void> {
     const enabled = !!trig && trig.enabled === true && triggerGate(CONSOLIDATE_TRIGGER_NAME, trig, behaviours).open;
     if (!enabled) return;
     const layout = state.layout(project.dir);
-    const history = await consolidationHistory(state, layout);
     const now = new Date();
+    const history = await consolidationHistory(state, layout, now);
     const window = consolidationWindow(history, now);
     const episodes = await state.episodes.since(layout, Date.parse(window.sinceIso)).catch(() => []);
     const decision = earlyFireDecision({

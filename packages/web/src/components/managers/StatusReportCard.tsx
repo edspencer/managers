@@ -10,6 +10,11 @@
  * only the rest of the stored text (see `reportBody`). A day-old report can
  * therefore never hide a new request or show a stale one.
  *
+ * "Live" means re-read, not just read at mount (M14.5, audit M9–M14 #7): Needs
+ * you and Alerts are re-read every {@link LIVE_POLL_MS} while the page is
+ * visible, and at once when it becomes visible again, so an ask an agent raises
+ * while the page is open shows up without a reload.
+ *
  * The three reads are independent: if the report will not load, Needs you and
  * Alerts still render and the report slot shows the error with Retry.
  *
@@ -35,6 +40,10 @@ const TYPE = "status";
 /** How often the card polls a refresh run, and for how long at most. */
 export const REFRESH_POLL_MS = 1500;
 const REFRESH_GIVE_UP_MS = 10 * 60 * 1000;
+/** Asks the card lists before "Show all N in Tasks" (M14.5). */
+export const CARD_NEEDS_CAP = 5;
+/** How often Needs you and Alerts are re-read while the page is visible. */
+export const LIVE_POLL_MS = 10_000;
 
 type Refresh =
   | { phase: "idle" }
@@ -60,7 +69,10 @@ export function StatusReportCard({
   onOpenRun,
   onRunFinished,
   pollMs = REFRESH_POLL_MS,
+  livePollMs = LIVE_POLL_MS,
 }: {
+  /** How often Needs you and Alerts are re-read (tests shorten it). */
+  livePollMs?: number;
   /** How often to poll a refresh run (tests shorten it). */
   pollMs?: number;
   slug: string;
@@ -96,17 +108,25 @@ export function StatusReportCard({
     }
   }, [slug]);
 
+  // Errors are cleared on success rather than up front, so a failing periodic
+  // re-read does not flicker the error text off and on.
   const loadLive = useCallback(async () => {
-    setNeedsError(null);
-    setAlertsError(null);
     await Promise.all([
       api
         .managersTasks(slug, { status: ["awaiting-ed"] })
-        .then((r) => alive.current && setNeeds(r.tasks))
+        .then((r) => {
+          if (!alive.current) return;
+          setNeeds(r.tasks);
+          setNeedsError(null);
+        })
         .catch((e) => alive.current && setNeedsError(errorText(e, "unknown error"))),
       api
         .managersAlerts(slug)
-        .then((a) => alive.current && setAlerts(a))
+        .then((a) => {
+          if (!alive.current) return;
+          setAlerts(a);
+          setAlertsError(null);
+        })
         .catch((e) => alive.current && setAlertsError(errorText(e, "unknown error"))),
     ]);
   }, [slug]);
@@ -115,6 +135,23 @@ export function StatusReportCard({
     void loadReport();
     void loadLive();
   }, [loadReport, loadLive]);
+
+  // Keep Needs you and Alerts live: a quiet re-read on an interval while the
+  // page is visible, and on becoming visible again.
+  useEffect(() => {
+    const visible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
+    const id = setInterval(() => {
+      if (visible()) void loadLive();
+    }, livePollMs);
+    const onVisible = () => {
+      if (visible()) void loadLive();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadLive, livePollMs]);
 
   const refreshNow = async () => {
     setRefresh({ phase: "starting" });
@@ -250,7 +287,7 @@ export function StatusReportCard({
               <p className="text-sm text-fg-subtle">Nothing needs you right now.</p>
             ) : (
               <ul className="space-y-2">
-                {needs.map((t) => (
+                {needs.slice(0, CARD_NEEDS_CAP).map((t) => (
                   <li key={t.id} className="flex items-start gap-2">
                     <StatusDot tone="warn" className="mt-1.5" />
                     <div className="min-w-0">
@@ -264,6 +301,16 @@ export function StatusReportCard({
                     </div>
                   </li>
                 ))}
+                {needs.length > CARD_NEEDS_CAP && (
+                  <li data-testid="status-needs-more">
+                    <Link
+                      to={tasksUrl(base)}
+                      className="text-sm text-fg-muted underline underline-offset-2 focus-visible:focus-ring"
+                    >
+                      Show all {needs.length} in Tasks
+                    </Link>
+                  </li>
+                )}
               </ul>
             )}
           </div>

@@ -245,6 +245,14 @@ export const runReadSchema = z.looseObject({
     .record(z.string(), z.record(z.string(), count))
     .nullish()
     .transform((v) => v ?? {}),
+  /**
+   * M14.5: a consolidation run's memory ops, recorded as each one is applied, so a
+   * run interrupted by a restart can still get its `#reflection` episode.
+   */
+  memoryOps: z
+    .array(z.looseObject({ op: strOrNull, name: strOrNull, type: strOrNull }))
+    .nullish()
+    .transform((v) => v ?? []),
   expect: expectRead.nullish().transform((v) => v ?? null),
   expectResult: z.enum(EXPECT_RESULTS).nullish().transform((v) => v ?? null),
   briefing: z
@@ -285,6 +293,16 @@ export const runWriteSchema = z.strictObject({
   mcpCalls: z.record(z.string(), z.record(z.string(), count)),
   /** M9.5: written only when a call errored (so older records round-trip unchanged). */
   mcpErrors: z.record(z.string(), z.record(z.string(), count)).optional(),
+  /** M14.5: written only by a consolidation run's memory ops (older records round-trip unchanged). */
+  memoryOps: z
+    .array(
+      z.strictObject({
+        op: z.enum(["add", "update", "supersede", "noop"]),
+        name: z.string().min(1),
+        type: z.string().min(1).optional(),
+      }),
+    )
+    .optional(),
   expect: z
     .strictObject({
       kind: z.enum(EXPECT_KINDS),

@@ -113,6 +113,9 @@ delete env.CLAUDE_SECURESTORAGE_CONFIG_DIR;
 // shipped defaults, not on whatever a dev box happens to export.
 delete env.MANAGERS_CLAUDE_INSTRUCTIONS;
 delete env.MANAGERS_CLAUDE_HOOKS;
+// M14.5: boot refuses auth=none without this opt-in (boot-posture.ts). The E2E
+// server is a local, credential-free test instance, which is what it is for.
+env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH = "1";
 
 if (live) {
   // Live: keep the real claude on PATH, require the Max token.
@@ -133,6 +136,8 @@ if (live) {
   // explicitly (also overriding any leaked MANAGERS_DRIVE_MODE from the
   // host env). Live mode (real claude) leaves the default in place.
   env.MANAGERS_DRIVE_MODE = "batch";
+  // M14.5: batch needs its explicit opt-in (the fake `claude` rig is its use).
+  env.MANAGERS_ALLOW_BATCH_DRIVE = "1";
 }
 
 const child = spawn("node", [serverEntry], { env, stdio: "inherit" });

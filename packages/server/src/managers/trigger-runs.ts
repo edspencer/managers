@@ -17,6 +17,7 @@ import type { GitAuthor } from "./autocommit.js";
 import type { ManagersState } from "./state.js";
 import type { WriteActor, WriteWorkspace } from "./state-writes.js";
 import type { RunWrite } from "./schemas.js";
+import { REFLECTION_TAG, reflectionEpisodeText, type MemoryOpRecord } from "./consolidation.js";
 
 export interface TriggerRunHandle {
   runId: string;
@@ -159,6 +160,32 @@ export async function failInterruptedRuns(p: {
       done.push(r.id);
     } catch {
       /* already finished, or hand-broken: leave it */
+      continue;
+    }
+    // M14.5 (audit M9–M14 #5): an interrupted consolidation still gets its
+    // #reflection episode, listing the ops its record says were applied, so a
+    // fact it wrote before the restart never stands without a log trail.
+    if (r.kind === "consolidation") {
+      const ops: MemoryOpRecord[] = (r.memoryOps ?? [])
+        .filter((o) => ["add", "update", "supersede", "noop"].includes(String(o.op)) && typeof o.name === "string")
+        .map((o) => ({
+          op: o.op as MemoryOpRecord["op"],
+          name: String(o.name),
+          ...(typeof o.type === "string" ? { type: o.type } : {}),
+        }));
+      await p.state.writer
+        .recordEpisode(
+          ws,
+          {
+            text: reflectionEpisodeText(r.id, ops, "interrupted"),
+            importance: 2,
+            tags: [REFLECTION_TAG],
+            refs: [r.id],
+          },
+          { kind: "agent", name: "manager", author: p.author, runId: r.id },
+          { internal: true },
+        )
+        .catch(() => undefined);
     }
   }
   return done;

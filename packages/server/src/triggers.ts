@@ -86,7 +86,8 @@ export class TriggerService {
   async set(
     slug: string,
     name: string,
-    trigger: unknown,
+    /** A record, or a function of the existing trigger evaluated under the lock (M14.5). */
+    trigger: unknown | ((existing: PaddockTrigger | undefined) => unknown),
     guard?: (current: Project) => void | Promise<void>,
   ): Promise<TriggerDto> {
     // M9.5: `guard` (a policy check) runs against the record read under the

@@ -153,6 +153,98 @@ const KNOWN_KEYS = new Set(["command", "args", "env", "url", "type", "headers"])
  */
 export const SECRET_ISH_KEY_RE = /(TOKEN|SECRET|KEY|PASSWORD|PASSWD|CREDENTIAL|AUTH|PAT|COOKIE)/i;
 
+/**
+ * M14.5 (audit M9–M14 #4): a VALUE that is probably a credential, whatever key it
+ * sits under. The key-name heuristic above missed `X-Relay: "Bearer …"`,
+ * `args: ["--token", "…"]` and `GH: "ghp_…"`. Checked only on inline values (an
+ * `env:VAR` reference is a name) and only to refuse or redact them — never to
+ * describe one.
+ *
+ *  - an HTTP auth scheme followed by a credential (`Bearer x`, `Basic x`, `Token x`);
+ *  - a well-known token prefix (Paddock `pdk_`, GitHub `ghp_`/`gho_`/`ghu_`/`ghs_`/
+ *    `ghr_`/`github_pat_`, OpenAI/Anthropic-style `sk-`, Stripe `sk_live_`/`sk_test_`,
+ *    Slack `xox?-`, GitLab `glpat-`, AWS `AKIA…`, Google `AIza…`);
+ *  - a long, high-entropy run: ≥ 32 characters of a token alphabet, both letters
+ *    and digits, ≥ 3.5 bits of entropy per character, and not a path or a URL.
+ */
+export function looksLikeSecretValue(raw: string): boolean {
+  const v = raw.trim();
+  if (!v || v.startsWith(ENV_REF_PREFIX)) return false;
+  if (/^(?:bearer|basic|token|bot)\s+\S{4,}/i.test(v)) return true;
+  if (
+    /^(?:pdk_|ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|sk-|sk_live_|sk_test_|xox[abprs]-|glpat-|AIza)[A-Za-z0-9_\-]{4,}/.test(v) ||
+    /^AKIA[0-9A-Z]{12,}$/.test(v)
+  ) {
+    return true;
+  }
+  return isHighEntropyToken(v);
+}
+
+/** See {@link looksLikeSecretValue}: a long, random-looking, path-free token. */
+export function isHighEntropyToken(v: string): boolean {
+  if (v.length < 32 || /\s/.test(v)) return false;
+  if (v.startsWith("/") || v.startsWith("./") || v.startsWith("~") || v.includes("://")) return false;
+  if (!/^[A-Za-z0-9_\-+/=.]+$/.test(v)) return false;
+  if (!/[A-Za-z]/.test(v) || !/\d/.test(v)) return false;
+  const counts = new Map<string, number>();
+  for (const ch of v) counts.set(ch, (counts.get(ch) ?? 0) + 1);
+  let bits = 0;
+  for (const n of counts.values()) {
+    const p = n / v.length;
+    bits -= p * Math.log2(p);
+  }
+  return bits >= 3.5;
+}
+
+/**
+ * A command-line flag whose NEXT argument (or `=value`) is probably a credential:
+ * `--token x`, `--api-key=x`, `-p x` is not matched (too short to judge).
+ */
+export const SECRET_ISH_FLAG_RE = /^--?[A-Za-z0-9_-]*(?:token|secret|key|password|passwd|credential|auth|pat|cookie)[A-Za-z0-9_-]*$/i;
+
+/**
+ * Indices of `args` entries that are inline credentials: a secret-looking value,
+ * the value after a secret-ish flag, or the `=value` of `--secret-ish=value`.
+ */
+export function secretArgIndices(args: readonly unknown[]): number[] {
+  const out: number[] = [];
+  args.forEach((a, i) => {
+    if (typeof a !== "string" || a.startsWith(ENV_REF_PREFIX)) return;
+    const eq = a.indexOf("=");
+    if (a.startsWith("-") && eq > 0) {
+      const value = a.slice(eq + 1);
+      if (value && !value.startsWith(ENV_REF_PREFIX) && (SECRET_ISH_FLAG_RE.test(a.slice(0, eq)) || looksLikeSecretValue(value))) {
+        out.push(i);
+      }
+      return;
+    }
+    const prev = i > 0 ? args[i - 1] : undefined;
+    if (typeof prev === "string" && !prev.includes("=") && SECRET_ISH_FLAG_RE.test(prev) && !a.startsWith("-")) {
+      out.push(i);
+      return;
+    }
+    if (looksLikeSecretValue(a)) out.push(i);
+  });
+  return out;
+}
+
+/**
+ * A url path segment that is probably a credential: a secret-looking value, or a
+ * segment naming one AND carrying a digit (`/mcp/token-9f3a…`, `/INLINE-SECRET-3`),
+ * so an ordinary route word like `/tokens` is not flagged.
+ */
+export function isSecretPathSegment(segment: string): boolean {
+  let s = segment;
+  try {
+    s = decodeURIComponent(segment);
+  } catch {
+    /* keep raw */
+  }
+  if (!s) return false;
+  if (looksLikeSecretValue(s)) return true;
+  return /(token|secret|passw(?:or)?d|credential|api[-_]?key|apikey)/i.test(s) && /\d/.test(s);
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -167,7 +259,12 @@ export function redactUrl(raw: string): string {
   try {
     const u = new URL(raw);
     const auth = u.username || u.password ? "<redacted>@" : "";
-    return `${u.protocol}//${auth}${u.host}${u.pathname}${u.search ? "?<redacted>" : ""}`;
+    // M14.5: a credential can ride in the PATH too (`/mcp/<token>`).
+    const pathname = u.pathname
+      .split("/")
+      .map((seg) => (isSecretPathSegment(seg) ? "<redacted>" : seg))
+      .join("/");
+    return `${u.protocol}//${auth}${u.host}${pathname}${u.search ? "?<redacted>" : ""}`;
   } catch {
     return "<unparseable url>";
   }
@@ -360,6 +457,12 @@ function narrowDeclaration(
       args.push(res.value);
     }
     if (args.length > 0) server.args = args;
+    for (const i of secretArgIndices(raw.args as string[])) {
+      warnings.push(
+        `${where}.args[${i}]: looks like a credential and is written into the config file itself, which is ` +
+          `git-tracked — prefer \`${ENV_REF_PREFIX}VAR_NAME\` and set the value in the environment`,
+      );
+    }
   }
 
   if (raw.env !== undefined) {
@@ -374,7 +477,7 @@ function narrowDeclaration(
       const res = resolveLeaf(value, env, `${where}.env.${key}`);
       if (!res.ok) return { errors, warnings: [...warnings, `${res.error} — server not attached`] };
       resolved[key] = res.value;
-      if (!value.startsWith(ENV_REF_PREFIX) && SECRET_ISH_KEY_RE.test(key)) {
+      if (!value.startsWith(ENV_REF_PREFIX) && (SECRET_ISH_KEY_RE.test(key) || looksLikeSecretValue(value))) {
         warnings.push(
           `${where}.env.${key}: looks like a credential and is written into the config file ` +
             `itself, which is git-tracked — prefer \`${key}: ${ENV_REF_PREFIX}VAR_NAME\` and set ` +
@@ -403,7 +506,7 @@ function narrowDeclaration(
       // Same heuristic as `env`, one rule to learn — and `Authorization` is the
       // usual reason a header is declared at all, so this fires on the common
       // case rather than the exotic one.
-      if (!value.startsWith(ENV_REF_PREFIX) && SECRET_ISH_KEY_RE.test(key)) {
+      if (!value.startsWith(ENV_REF_PREFIX) && (SECRET_ISH_KEY_RE.test(key) || looksLikeSecretValue(value))) {
         warnings.push(
           `${where}.headers.${key}: looks like a credential and is written into the config file ` +
             `itself, which is git-tracked — prefer \`${key}: ${ENV_REF_PREFIX}VAR_NAME\` and set ` +

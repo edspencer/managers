@@ -185,6 +185,21 @@ export interface Me {
   anonymous?: boolean;
 }
 
+/** One dangerous setting this instance was explicitly allowed to boot with (M14.5). */
+export interface SecurityWarning {
+  code: "no-auth" | "trusted-header" | "jwt-any-audience" | "batch-drive";
+  title: string;
+  detail: string;
+}
+
+/** GET /api/security (M14.5). */
+export interface SecurityPosture {
+  authMode: string;
+  driveMode: string;
+  batchDriveAllowed: boolean;
+  warnings: SecurityWarning[];
+}
+
 /**
  * Client-side mirror of the server's `DEFAULT_UI` (issue #914) — the value used
  * when `/api/models` has not answered or failed. Kept in step with
@@ -204,6 +219,11 @@ export const api = {
    */
   async me(): Promise<Me> {
     return req<Me>("/api/me");
+  },
+
+  /** The instance's security posture and its opted-in dangers (M14.5). */
+  async security(): Promise<SecurityPosture> {
+    return req<SecurityPosture>("/api/security");
   },
 
   /**

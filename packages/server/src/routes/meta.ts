@@ -22,6 +22,7 @@ import {
 import { TranscriptionError } from "../transcribe.js";
 import { resolveModels, resolveDefaultModel } from "../models.js";
 import { sendProjectError } from "../route-errors.js";
+import { evaluateBootPosture, bootPostureInput } from "../boot-posture.js";
 import { cspFor, parseRangeHeader } from "../http-bytes.js";
 import { type RouteCtx, type MultipartRequest, type UploadedFile } from "../route-context.js";
 
@@ -140,6 +141,34 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
       },
     },
     async (req) => req.user,
+  );
+
+  // --- M14.5: security posture (the doctor/meta view of boot-posture.ts) ----
+  // Which dangerous settings this instance booted with, each by its explicit
+  // opt-in. The web app shows a persistent banner for every warning. No secrets:
+  // only modes and fixed text.
+  app.get(
+    "/api/security",
+    {
+      schema: {
+        tags: ["System"],
+        summary: "Security posture",
+        description:
+          "Reports the auth mode, the instance drive mode, whether batch drive mode is allowed, and a `warnings` list with one entry per dangerous setting this instance booted with (`no-auth`, `trusted-header`, `jwt-any-audience`, `batch-drive`).",
+        response: {
+          200: {
+            description: "The security posture.",
+            type: "object",
+            additionalProperties: true,
+          },
+        },
+      },
+    },
+    async () => {
+      const d = evaluateBootPosture(bootPostureInput(cfg));
+      // buildApp refused to boot on "refuse", so this is always "allow".
+      return d.action === "allow" ? d.posture : { warnings: [] };
+    },
   );
 
   app.get(

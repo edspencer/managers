@@ -14,6 +14,7 @@ import {
 } from "../lib/lastSeen";
 import { TagPill } from "./TagPill";
 import { FleetReadout } from "./FleetReadout";
+import { SecurityBanner } from "./SecurityBanner";
 import { CogIcon, FolderIcon, HomeIcon, LinkIcon, MenuIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, XIcon } from "./icons";
 import { NewProjectModal } from "./NewProjectModal";
 import { PaneResizer, usePaneWidth } from "./PaneResizer";
@@ -460,6 +461,7 @@ export function AppShell() {
           "the route's own content". Folding a persistent status bar into that
           landmark would quietly change what every one of them is scoped to. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <SecurityBanner />
         <FleetReadout unread={fleetUnread} />
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <Suspense fallback={<RouteFallback />}>

@@ -70,7 +70,7 @@ import { ROOT_KEY, isRootKey } from "../project-paths.js";
 import { sendProjectError } from "../route-errors.js";
 import type { RouteCtx } from "../route-context.js";
 import { ManagersState } from "../managers/state.js";
-import { loadAlerts, type Alert } from "../managers/alerts.js";
+import { loadAlerts, sortAlerts, configUnreadableAlert, type Alert } from "../managers/alerts.js";
 import { briefingForWorkspace } from "../managers/briefing.js";
 import { boundObjective } from "../managers/trigger-runs.js";
 import {
@@ -88,7 +88,7 @@ import { workspaceLabel } from "../managers/state-writes.js";
 import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
 import { probeConnection } from "../managers/mcp-probe.js";
 import { EvidenceResolver } from "../managers/evidence-links.js";
-import { collectNeedsYou } from "../managers/needs-you.js";
+import { collectNeedsYou, type NeedsYouWorkspace } from "../managers/needs-you.js";
 import { CONSOLIDATE_TRIGGER_NAME, effectiveTriggersFor, reportTypesFor } from "../managers/effective-triggers.js";
 import {
   consolidationBehaviour,
@@ -281,6 +281,24 @@ async function workspaceAlerts(ctx: RouteCtx, state: ManagersState, slug: string
 }
 
 /**
+ * M14.5: the alerts of a project whose `project.yaml` cannot be read — a
+ * `config-unreadable` error, plus whatever its run records alone say (a failed
+ * or stuck run). Trigger-derived alerts (stale, schedule-stalled) need the file.
+ */
+async function unreadableProjectAlerts(
+  state: ManagersState,
+  u: { slug: string; dir: string; error: string },
+): Promise<Alert[]> {
+  const runAlerts = await loadAlerts({ state, project: { dir: u.dir }, schedules: async () => [] }).catch(
+    () => [] as Alert[],
+  );
+  const message =
+    `${u.error}. This project is missing from the project list and its triggers do not run ` +
+    "until project.yaml is fixed by hand.";
+  return sortAlerts([configUnreadableAlert(message), ...runAlerts]);
+}
+
+/**
  * Managers instance-level routes (M13) — registered ONCE, outside the workspace
  * mount, because they look across every workspace:
  *
@@ -321,12 +339,23 @@ export function registerManagerInstanceRoutes(app: FastifyInstance, ctx: RouteCt
         return invalid(reply, `all must be 1 or 0, got ${JSON.stringify(all)}`);
       }
       const { projects } = ctx;
-      const [root, list] = await Promise.all([projects.get(ROOT_KEY), projects.list()]);
-      const workspaces = [root, ...list].map((p) => ({ slug: p.slug, name: p.name, dir: p.dir }));
+      const [root, list, unreadable] = await Promise.all([
+        projects.get(ROOT_KEY),
+        projects.list(),
+        projects.listUnreadable(),
+      ]);
+      const workspaces: NeedsYouWorkspace[] = [root, ...list].map((p) => ({ slug: p.slug, name: p.name, dir: p.dir }));
+      // M14.5 (audit #3): a project whose project.yaml will not parse is missing
+      // from `list()`; collate it anyway from its own files.
+      const broken = new Map(unreadable.map((u) => [u.slug, u]));
+      for (const u of unreadable) workspaces.push({ slug: u.slug, name: u.slug, dir: u.dir, configError: u.error });
       return collectNeedsYou({
         state,
         workspaces,
-        alertsOf: (slug) => workspaceAlerts(ctx, state, slug),
+        alertsOf: (slug) => {
+          const u = broken.get(slug);
+          return u ? unreadableProjectAlerts(state, u) : workspaceAlerts(ctx, state, slug);
+        },
         all: all === "1" || all === "true",
       });
     },

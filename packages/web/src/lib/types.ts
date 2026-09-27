@@ -2421,6 +2421,11 @@ export interface NeedsYouGroup {
   status: { generated: string | null; stale: boolean };
   /** Task files that will not parse (an ask could be hiding in one). */
   parseErrors: ManagersParseError[];
+  /**
+   * M14.5: this project's `project.yaml` cannot be read, so it is missing from the
+   * project list. Its asks and run alerts are still shown, read-only.
+   */
+  configError?: string;
 }
 
 /** A workspace the collation could not read. */

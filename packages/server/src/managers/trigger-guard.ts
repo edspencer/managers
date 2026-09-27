@@ -51,21 +51,69 @@ export function gatedTriggerNames(behaviours: EffectiveBehaviour[], triggers: Tr
   return [...out].sort();
 }
 
-export async function readGatedTombstones(dir: string): Promise<Set<string>> {
-  try {
-    const raw = JSON.parse(await fs.readFile(path.join(dir, GATED_TRIGGERS_FILE), "utf8")) as { names?: unknown };
-    return new Set(Array.isArray(raw.names) ? raw.names.filter((n): n is string => typeof n === "string") : []);
-  } catch {
-    return new Set();
+/**
+ * M14.5 (audit M9–M14 #14): the names this process has seen gated, per workspace
+ * directory. The file is `.managers/state/`, which a keeper's Bash can write, so
+ * the in-memory copy is united with it on every read: deleting or truncating the
+ * file cannot reopen a name while the server is up.
+ */
+const seenGated = new Map<string, Set<string>>();
+
+/** Thrown when the tombstone file exists but cannot be read as a list (fail closed). */
+export class TombstonesUnreadableError extends Error {
+  constructor(why: string) {
+    super(`${GATED_TRIGGERS_FILE} cannot be read (${why})`);
+    this.name = "TombstonesUnreadableError";
   }
 }
 
-/** Add `names` to the workspace's tombstones (a write only when something is new). */
+/** The file's names; an absent file is an empty list, anything unreadable throws. */
+async function readTombstoneFile(dir: string): Promise<Set<string>> {
+  let text: string;
+  try {
+    text = await fs.readFile(path.join(dir, GATED_TRIGGERS_FILE), "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return new Set();
+    throw new TombstonesUnreadableError((err as NodeJS.ErrnoException).code ?? "read error");
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new TombstonesUnreadableError("not valid JSON");
+  }
+  const names = (raw as { names?: unknown } | null)?.names;
+  if (!raw || typeof raw !== "object" || !Array.isArray(names) || !names.every((n) => typeof n === "string")) {
+    throw new TombstonesUnreadableError("not a { names: [...] } list");
+  }
+  return new Set(names as string[]);
+}
+
+/**
+ * Every name ever seen gated in `dir`: the file united with this process's
+ * memory. Throws {@link TombstonesUnreadableError} when the file exists but is
+ * damaged (the agent guard then refuses every trigger write there).
+ */
+export async function readGatedTombstones(dir: string): Promise<Set<string>> {
+  const key = path.resolve(dir);
+  const out = await readTombstoneFile(dir);
+  for (const n of seenGated.get(key) ?? []) out.add(n);
+  return out;
+}
+
+/**
+ * Add `names` to the workspace's tombstones (a write only when something is
+ * new). A damaged file is never overwritten, since that would drop the names it
+ * holds; the names are kept in memory and the error is rethrown.
+ */
 export async function recordGatedTombstones(dir: string, names: string[]): Promise<Set<string>> {
-  const have = await readGatedTombstones(dir);
-  const fresh = names.filter((n) => !have.has(n));
-  if (fresh.length === 0) return have;
-  for (const n of fresh) have.add(n);
+  const key = path.resolve(dir);
+  const mem = seenGated.get(key) ?? new Set<string>();
+  for (const n of names) mem.add(n);
+  seenGated.set(key, mem);
+  const onDisk = await readTombstoneFile(dir);
+  const have = new Set([...onDisk, ...mem]);
+  if (have.size === onDisk.size) return have;
   await writeFileAtomic(
     path.join(dir, GATED_TRIGGERS_FILE),
     `${JSON.stringify({ names: [...have].sort() }, null, 2)}\n`,
@@ -106,9 +154,23 @@ export function agentTriggerGuard(projects: Store, op: "set_trigger" | "remove_t
       throw new GatedTriggerError(op, name, "is reserved", `${RESERVED_TRIGGER_MESSAGE[0]!.toUpperCase()}${RESERVED_TRIGGER_MESSAGE.slice(1)}.`);
     }
     const list = await behavioursFor(projects, current);
-    const tombs = await recordGatedTombstones(current.dir, gatedTriggerNames(list, current.triggers)).catch(() =>
-      readGatedTombstones(current.dir),
-    );
+    let tombs: Set<string>;
+    try {
+      tombs = await recordGatedTombstones(current.dir, gatedTriggerNames(list, current.triggers));
+    } catch (err) {
+      if (err instanceof TombstonesUnreadableError) {
+        // M14.5: fail closed — which names were ever gated here is unknown.
+        throw new GatedTriggerError(
+          op,
+          name,
+          "cannot be checked",
+          `${err.message}, so which triggers were ever behaviour-gated here is unknown and agents cannot write ` +
+            "any trigger in this workspace until Ed fixes or deletes the file.",
+        );
+      }
+      // A write failure (disk full, …): the memory still holds every name.
+      tombs = await readGatedTombstones(current.dir).catch(() => new Set<string>(seenGated.get(path.resolve(current.dir)) ?? []));
+    }
     const gate = triggerGate(name, current.triggers?.[name], list);
     if (gate.behaviours.length > 0) {
       const which = gate.behaviours.map((b) => `"${b}"`).join(", ");

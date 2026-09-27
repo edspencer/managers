@@ -37,6 +37,7 @@ import {
   sanitizeTriggers,
   isValidTriggerName,
   TRIGGER_PROMPT_DIR,
+  type PaddockTrigger,
 } from "./trigger-config.js";
 import { RESERVED_STATE_DIRS, isReservedSlug } from "./managers/layout.js";
 import {
@@ -342,6 +343,67 @@ export class ProjectStore {
     }
     projects.sort((a, b) => (a.updated < b.updated ? 1 : a.updated > b.updated ? -1 : 0));
     return projects;
+  }
+
+  /**
+   * Managers M14.5 (audit M9–M14 #3): the project directories `list()` skips
+   * because their `project.yaml` EXISTS but cannot be read as a record (not
+   * valid YAML, not a mapping, from a newer schema, or an I/O error). Home's
+   * "Needs you" shows each as an error row with a `config-unreadable` alert, so
+   * a typo in one file can no longer hide that project's asks. Never includes the
+   * root (its unreadable file is `configError` on its DTO) or a directory with no
+   * `project.yaml` at all (that is not a project).
+   */
+  async listUnreadable(): Promise<Array<{ slug: string; dir: string; error: string }>> {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(this.root, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const out: Array<{ slug: string; dir: string; error: string }> = [];
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith("_") || e.name.startsWith(".")) continue;
+      const dir = this.dirFor(e.name);
+      const file = path.join(dir, PROJECT_FILE);
+      let raw: string;
+      try {
+        raw = await fs.readFile(file, "utf8");
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ENOTDIR") continue;
+        out.push({ slug: e.name, dir, error: `project.yaml could not be read (${code ?? "error"})` });
+        continue;
+      }
+      let parsed: unknown;
+      try {
+        parsed = YAML.parse(raw);
+      } catch (err) {
+        out.push({ slug: e.name, dir, error: `project.yaml is not valid YAML (${firstLine(err)})` });
+        continue;
+      }
+      if (parsed === null || parsed === undefined) {
+        // `readSafe` treats an empty project file as "no record" and `list()` skips
+        // it, so it hides the project exactly as a broken one does.
+        out.push({ slug: e.name, dir, error: "project.yaml is empty" });
+        continue;
+      }
+      if (typeof parsed !== "object" || Array.isArray(parsed)) {
+        out.push({ slug: e.name, dir, error: "project.yaml is not a mapping" });
+        continue;
+      }
+      const declared = (parsed as Record<string, unknown>)[SCHEMA_VERSION_KEY];
+      if (projectSchemaSkip(declared, file) !== undefined) {
+        out.push({
+          slug: e.name,
+          dir,
+          error: "project.yaml was written by a newer version of Managers and is skipped",
+        });
+      }
+    }
+    out.sort((a, b) => a.slug.localeCompare(b.slug));
+    return out;
   }
 
   /**
@@ -679,6 +741,13 @@ export class ProjectStore {
         "invalid",
       );
     }
+    // M14.5 (audit M9–M14 #13): check-then-create under the slug's project.yaml
+    // lock, so two concurrent creates of one slug cannot both pass the check,
+    // and a create cannot interleave with a remove or a locked write.
+    return this.withYamlLock(slug, () => this.createLocked(input, name, slug));
+  }
+
+  private async createLocked(input: CreateProjectInput, name: string, slug: string): Promise<Project> {
     if (await this.exists(slug)) {
       throw new ProjectError(`Project already exists: ${slug}`, "exists");
     }
@@ -1309,13 +1378,22 @@ export class ProjectStore {
   async setTrigger(
     slug: string,
     name: string,
-    trigger: unknown,
+    /**
+     * The trigger record, or (M14.5, audit M9–M14 #13) a function that derives it
+     * from the trigger as it stands UNDER the lock — so a partial update merged
+     * into the existing record cannot lose an edit made between a read and this
+     * write.
+     */
+    trigger: unknown | ((existing: PaddockTrigger | undefined) => unknown),
     guard?: (current: Project) => void | Promise<void>,
   ): Promise<Project> {
     return this.withYamlLock(slug, async () => {
     const current = await this.getForWrite(slug);
     // M9.5: a caller's policy check runs against the record read under the lock.
     if (guard) await guard(current);
+    if (typeof trigger === "function") {
+      trigger = (trigger as (existing: PaddockTrigger | undefined) => unknown)(current.triggers?.[name]);
+    }
     if (!isValidTriggerName(name)) {
       throw new ProjectError(`Invalid trigger name: ${name}`, "invalid");
     }
@@ -1391,6 +1469,13 @@ export class ProjectStore {
     if (isRootKey(slug)) {
       throw new ProjectError("Refusing to delete the root workspace", "invalid");
     }
+    // M14.5 (audit M9–M14 #13): under the project.yaml lock, so a locked write
+    // queued behind it re-reads, finds no record and fails (not_found) instead of
+    // recreating the deleted directory with only project.yaml in it.
+    return this.withYamlLock(slug, () => this.removeLocked(slug));
+  }
+
+  private async removeLocked(slug: string): Promise<Project> {
     const project = await this.get(slug); // throws not_found
     // Only ever the METADATA dir — never `project.workingDir`. For a LINKED
     // project (issue #206) those differ and the working dir is the user's real

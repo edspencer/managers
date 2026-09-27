@@ -14,7 +14,12 @@
  *   - each alert is a row with its severity that opens the project's Home, where
  *     the status card shows the same alert live;
  *   - a workspace the server could not read is an error row of its own, and
- *     never hides the others.
+ *     never hides the others;
+ *   - a project whose `project.yaml` cannot be read (M14.5) keeps its group, with
+ *     an error row on top; its asks are listed read-only (answering needs the
+ *     project, which is missing everywhere else until the file is fixed);
+ *   - a group shows at most {@link GROUP_CAP} asks and alerts each, with
+ *     "Show all N" (or, past {@link PAGE_SIZE}, "Show N more") and "Show fewer".
  *
  * Empty: "Nothing needs you — N projects checked". Failed: an error Callout with
  * Retry. Paddock's Running/Unread feeds stay below it, untouched.
@@ -47,6 +52,19 @@ const SEVERITY_LABEL: Record<ManagersAlert["severity"], string> = {
 };
 
 const isError = (e: NeedsYouEntry): e is NeedsYouError => "error" in e;
+
+/** Asks (and, separately, alerts) a group shows before "Show all". */
+export const GROUP_CAP = 5;
+/** Past this many, "Show all" becomes "Show N more", a page at a time. */
+export const PAGE_SIZE = 50;
+
+/**
+ * A capped list's state: `limit` items shown; the next step either shows every
+ * item (when that is at most a page more) or one more page.
+ */
+export function nextLimit(limit: number, total: number): number {
+  return total - limit <= PAGE_SIZE ? total : limit + PAGE_SIZE;
+}
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -171,7 +189,28 @@ export function NeedsYouPanel() {
   );
 }
 
-function GroupHeader({ slug, name, children }: { slug: string; name: string; children?: ReactNode }) {
+function GroupHeader({
+  slug,
+  name,
+  children,
+  linked = true,
+}: {
+  slug: string;
+  name: string;
+  children?: ReactNode;
+  /** False for a project whose page cannot open (its project.yaml is unreadable). */
+  linked?: boolean;
+}) {
+  if (!linked) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="min-w-0 truncate text-sm font-semibold text-fg" data-testid={`needs-you-project-${keyOf(slug)}`}>
+          {name}
+        </span>
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <Link
@@ -197,11 +236,16 @@ function Group({
   const base = viewBase(group.slug);
   const [wake, setWake] = useState<WakeAvailability | null>(null);
   const hasAsks = group.needsYou.length > 0;
+  const broken = !!group.configError;
+  const [askLimit, setAskLimit] = useState(GROUP_CAP);
+  const [alertLimit, setAlertLimit] = useState(GROUP_CAP);
+  const asks = group.needsYou.slice(0, askLimit);
+  const alerts = group.alerts.slice(0, alertLimit);
 
   // Whether an answer can wake THIS workspace's manager — only asked when there
   // is something to answer.
   useEffect(() => {
-    if (!hasAsks) return;
+    if (!hasAsks || broken) return;
     let live = true;
     api
       .managersWake(group.slug)
@@ -210,11 +254,11 @@ function Group({
     return () => {
       live = false;
     };
-  }, [group.slug, hasAsks]);
+  }, [group.slug, hasAsks, broken]);
 
   return (
     <Card className="min-w-0 space-y-3 p-4" data-testid={`needs-you-group-${keyOf(group.slug)}`}>
-      <GroupHeader slug={group.slug} name={group.name}>
+      <GroupHeader slug={group.slug} name={group.name} linked={!broken}>
         {hasAsks && (
           <Chip tone="warn" shape="pill">
             {plural(group.needsYou.length, "ask")}
@@ -232,42 +276,74 @@ function Group({
         )}
       </GroupHeader>
 
+      {broken && (
+        <div data-testid="needs-you-config-error">
+        <Callout tone="danger" icon={<AlertIcon width={14} height={14} />}>
+          <span className="break-words">
+            This project&rsquo;s <span className="font-mono">project.yaml</span> can&rsquo;t be read:{" "}
+            <span className="font-mono">{group.configError}</span>. It is missing from the project list until
+            you fix the file by hand{hasAsks ? ", so its asks below can’t be answered from here yet" : ""}.
+          </span>
+        </Callout>
+        </div>
+      )}
+
       {hasAsks && (
         <ul className="space-y-3">
-          {group.needsYou.map((t) => (
-            <AskRow
-              key={t.id}
-              slug={group.slug}
-              base={base}
-              task={t}
-              wake={wake}
-              onAnswered={(result, answer) => onAnswered(t.id, answeredMessage(result, answer, !!result.wake))}
-            />
-          ))}
+          {asks.map((t) =>
+            broken ? (
+              <ReadOnlyAskRow key={t.id} task={t} />
+            ) : (
+              <AskRow
+                key={t.id}
+                slug={group.slug}
+                base={base}
+                task={t}
+                wake={wake}
+                onAnswered={(result, answer) => onAnswered(t.id, answeredMessage(result, answer, !!result.wake))}
+              />
+            ),
+          )}
         </ul>
       )}
+      <MoreControls
+        what="ask"
+        testId={`needs-you-more-asks-${keyOf(group.slug)}`}
+        limit={askLimit}
+        total={group.needsYou.length}
+        onChange={setAskLimit}
+        tasksHref={broken ? null : tasksUrl(base)}
+      />
 
       {group.alerts.length > 0 && (
         <ul className="space-y-1" data-testid="needs-you-alerts">
-          {group.alerts.map((a) => (
+          {alerts.map((a) => (
             <li key={a.id}>
-              <Link
-                to={homeUrl(base)}
-                className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:focus-ring can-hover:hover:bg-surface-hover"
-                data-testid={`needs-you-alert-${a.id}`}
-              >
-                <Chip tone={ALERT_SEVERITY_TONE[a.severity]} shape="pill" dot className="mt-0.5 shrink-0">
-                  {SEVERITY_LABEL[a.severity]}
-                </Chip>
-                <span className="min-w-0 flex-1">
-                  <span className="block break-words text-sm text-fg">{a.message}</span>
-                  <span className="block font-mono text-2xs text-fg-subtle">{a.id}</span>
-                </span>
-              </Link>
+              {broken ? (
+                <div className="-mx-2 flex items-start gap-2 px-2 py-1.5" data-testid={`needs-you-alert-${a.id}`}>
+                  <AlertBody alert={a} />
+                </div>
+              ) : (
+                <Link
+                  to={homeUrl(base)}
+                  className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:focus-ring can-hover:hover:bg-surface-hover"
+                  data-testid={`needs-you-alert-${a.id}`}
+                >
+                  <AlertBody alert={a} />
+                </Link>
+              )}
             </li>
           ))}
         </ul>
       )}
+      <MoreControls
+        what="alert"
+        testId={`needs-you-more-alerts-${keyOf(group.slug)}`}
+        limit={alertLimit}
+        total={group.alerts.length}
+        onChange={setAlertLimit}
+        tasksHref={null}
+      />
 
       {group.parseErrors.length > 0 && (
         <p className="text-xs text-warn" data-testid="needs-you-parse-errors">
@@ -278,6 +354,79 @@ function Group({
         </p>
       )}
     </Card>
+  );
+}
+
+function AlertBody({ alert: a }: { alert: ManagersAlert }) {
+  return (
+    <>
+      <Chip tone={ALERT_SEVERITY_TONE[a.severity]} shape="pill" dot className="mt-0.5 shrink-0">
+        {SEVERITY_LABEL[a.severity]}
+      </Chip>
+      <span className="min-w-0 flex-1">
+        <span className="block break-words text-sm text-fg">{a.message}</span>
+        <span className="block font-mono text-2xs text-fg-subtle">{a.id}</span>
+      </span>
+    </>
+  );
+}
+
+/**
+ * "Show all N asks" / "Show 50 more (N hidden)" / "Show fewer" under a capped
+ * list. Renders nothing when everything fits under the cap.
+ */
+function MoreControls({
+  what,
+  testId,
+  limit,
+  total,
+  onChange,
+  tasksHref,
+}: {
+  what: string;
+  testId: string;
+  limit: number;
+  total: number;
+  onChange: (limit: number) => void;
+  /** The Tasks tab, offered beside a long list; null where it cannot open. */
+  tasksHref: string | null;
+}) {
+  if (total <= GROUP_CAP) return null;
+  const hidden = total - limit;
+  const next = nextLimit(limit, total);
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-testid={testId}>
+      {hidden > 0 && (
+        <Button variant="ghost" size="sm" onClick={() => onChange(next)}>
+          {next === total
+            ? `Show all ${plural(total, what)}`
+            : `Show ${next - limit} more (${plural(hidden, what)} hidden)`}
+        </Button>
+      )}
+      {limit > GROUP_CAP && (
+        <Button variant="ghost" size="sm" onClick={() => onChange(GROUP_CAP)}>
+          Show fewer
+        </Button>
+      )}
+      {hidden > 0 && tasksHref && total > PAGE_SIZE && (
+        <Link to={tasksHref} className="text-fg-muted underline underline-offset-2">
+          Open Tasks
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/** An ask in a project whose page cannot open: its title and age, no answer form. */
+function ReadOnlyAskRow({ task }: { task: TaskSummary }) {
+  const waiting = task.updated ?? task.created;
+  return (
+    <li className="min-w-0 border-t border-edge-subtle pt-3 first:border-t-0 first:pt-0" data-testid={`needs-you-task-${task.id}`}>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="min-w-0 break-words text-sm font-medium text-fg">{task.title}</span>
+        {waiting && <span className="text-2xs text-fg-subtle">asked {relativeTime(waiting)}</span>}
+      </div>
+    </li>
   );
 }
 

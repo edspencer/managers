@@ -91,6 +91,9 @@ export LOG_LEVEL=info
 # DEFAULT drive mode is `session`, which uses the SDK runtime, ignores PATH
 # entirely, and would call the real API. This line is what stops real billing.
 export MANAGERS_DRIVE_MODE=batch
+# M14.5: auth=none and batch are refused at boot without their explicit opt-ins.
+export MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1
+export MANAGERS_ALLOW_BATCH_DRIVE=1
 export PATH="$CLONE/test/bin:$PATH"
 
 # A prompt -> reply JSON map, so the replies that land ON CAMERA are authored

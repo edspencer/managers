@@ -88,6 +88,10 @@ export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv
   env.MANAGERS_WEB_DIST = path.join(REPO_ROOT, "packages", "web", "dist");
   env.MANAGERS_DRIVE_MODE = "batch";
   env.MANAGERS_AUTH_MODE = "none";
+  // M14.5: both are refused at boot without their explicit opt-ins
+  // (packages/server/src/boot-posture.ts); a credential-free rig is their use.
+  env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH = "1";
+  env.MANAGERS_ALLOW_BATCH_DRIVE = "1";
   // The sweeper would rewrite seeded OVERVIEW.md/CHANGELOG.md mid-QA.
   env.MANAGERS_SWEEP_MIN_INTERVAL_MS = "999999999";
   env.LOG_LEVEL = env.LOG_LEVEL || "warn";

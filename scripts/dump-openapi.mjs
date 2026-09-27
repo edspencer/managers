@@ -35,6 +35,9 @@ mkdirSync(process.env.MANAGERS_PROJECTS_DIR, { recursive: true });
 process.env.MANAGERS_AUTH_MODE = "jwt";
 process.env.MANAGERS_AUTH_JWT_HEADER = "Authorization"; // canonical → bearer scheme
 process.env.MANAGERS_AUTH_JWKS_URL = "https://auth.example.com/.well-known/jwks.json";
+// M14.5: jwt mode refuses to boot without an issuer and audience check.
+process.env.MANAGERS_AUTH_JWT_ISSUER = "https://auth.example.com/";
+process.env.MANAGERS_AUTH_JWT_AUDIENCE = "managers";
 process.env.MANAGERS_OPENAPI_ENABLED = "1";
 process.env.LOG_LEVEL = "silent";
 delete process.env.MANAGERS_WEB_DIST;

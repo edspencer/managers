@@ -269,6 +269,19 @@ export async function loadAlerts(opts: {
   return extra.length ? sortAlerts([...out, ...extra]) : out;
 }
 
+/** The one `config-unreadable` alert shape (M9.5; M14.5 reuses it for a hidden project). */
+export function configUnreadableAlert(message: string): Alert {
+  return {
+    id: "config-unreadable:",
+    kind: "config-unreadable",
+    trigger: "",
+    severity: SEVERITY["config-unreadable"],
+    message,
+    runId: null,
+    at: null,
+  };
+}
+
 /** M9.5: the `config-unreadable` and `bypass-permissions` alerts (pure). */
 export function configAlerts(
   project: { permissionMode?: string; mcp?: Record<string, unknown> },
@@ -277,15 +290,7 @@ export function configAlerts(
   const out: Alert[] = [];
   const broken = behaviours.find((b) => b.name === CONFIG_UNREADABLE_BEHAVIOUR);
   if (broken) {
-    out.push({
-      id: "config-unreadable:",
-      kind: "config-unreadable",
-      trigger: "",
-      severity: SEVERITY["config-unreadable"],
-      message: broken.description,
-      runId: null,
-      at: null,
-    });
+    out.push(configUnreadableAlert(broken.description));
   }
   if (project.permissionMode === "bypassPermissions") {
     const gatedTools = behaviours.some((b) => !b.enabled && b.tools.length > 0);

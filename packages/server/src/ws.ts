@@ -73,9 +73,9 @@ import {
   isKnownModel,
   getContextLimit,
   DEFAULT_MODEL,
-  isKnownDriveMode,
   type DriveMode,
 } from "./models.js";
+import { resolveProjectDriveMode } from "./boot-posture.js";
 import { SessionHub, type TurnHandle, type ActiveInfo, type HubSocket } from "./session-hub.js";
 import { BackgroundRegistry } from "./background-live.js";
 import {
@@ -941,10 +941,8 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
 
           // Per-project driveMode override wins over the global default
           // (Paddock#111). An absent/invalid value inherits the global.
-          driveMode =
-            project.driveMode && isKnownDriveMode(project.driveMode)
-              ? project.driveMode
-              : deps.cfg.driveMode;
+          // M14.5: a `batch` override runs as `session` unless batch is allowed.
+          driveMode = resolveProjectDriveMode(project, deps.cfg);
 
           // T3 trigger-management gate (REUSES the hooks-MCP gate): the per-project
           // override wins, else the instance default. Only takes effect when the

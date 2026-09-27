@@ -88,12 +88,28 @@ function render(kept: { f: IndexFact; sup: boolean }[], dropped: number): string
   return lines;
 }
 
-/** Split an existing `MEMORY.md` into Ed's preamble (kept verbatim) and the rest. */
+/**
+ * Split an existing `MEMORY.md` into Ed's preamble and the rest. The preamble is
+ * every byte before the marker, EXACTLY (M14.5, audit M9–M14 #10: trailing
+ * spaces, CRLF line ends and blank lines included), so regenerating the index
+ * never touches it. A file with no marker is all preamble.
+ */
 export function memoryPreamble(existing: string | null): string {
   if (existing === null) return DEFAULT_MEMORY_PREAMBLE;
-  const src = existing.replace(/\r\n?/g, "\n");
-  const at = src.indexOf(MEMORY_INDEX_MARKER);
-  return (at === -1 ? src : src.slice(0, at)).trimEnd();
+  const at = existing.indexOf(MEMORY_INDEX_MARKER);
+  return at === -1 ? existing : existing.slice(0, at);
+}
+
+/**
+ * The preamble followed by the marker. A preamble that already ends in a blank
+ * line (every one this module wrote) is used as is, so a rewrite is byte-stable;
+ * otherwise just enough newlines are added to put the marker on its own line
+ * after a blank one. Nothing in the preamble itself is changed.
+ */
+function withMarker(preamble: string): string {
+  if (!preamble) return MEMORY_INDEX_MARKER;
+  const sep = /(\r?\n)\1$/.test(preamble) ? "" : /\r?\n$/.test(preamble) ? (preamble.endsWith("\r\n") ? "\r\n" : "\n") : "\n\n";
+  return `${preamble}${sep}${MEMORY_INDEX_MARKER}`;
 }
 
 /**
@@ -103,7 +119,7 @@ export function memoryPreamble(existing: string | null): string {
 export function renderMemoryFile(preamble: string, facts: IndexFact[], today: string): string {
   const all = facts.map((f) => ({ f, sup: isSupersededFact(f, today) }));
   const order = [...all].sort(dropOrder);
-  const compose = (lines: string[]) => `${preamble ? `${preamble}\n\n` : ""}${MEMORY_INDEX_MARKER}\n${lines.join("\n")}\n`;
+  const compose = (lines: string[]) => `${withMarker(preamble)}\n${lines.join("\n")}\n`;
   let dropped = 0;
   for (;;) {
     const gone = new Set(order.slice(0, dropped));

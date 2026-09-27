@@ -111,10 +111,21 @@ export class BehaviourLkg {
     await writeFileAtomic(file, `${JSON.stringify({ sha256: sha, behaviours: defs }, null, 2)}\n`);
   }
 
+  /**
+   * The remembered definitions, or null when the file is not a record this module
+   * wrote. M14.5 (audit M9–M14 #14): `{}` (no `behaviours` key), a non-object
+   * `behaviours`, or a `sha256` that does not match its definitions is NOT "known,
+   * empty" — that would skip the fail-closed wildcard gate. It is unknown.
+   */
   private parse(text: string): Entry | null {
-    const raw = JSON.parse(text) as { behaviours?: unknown };
-    const defs = definitionsOnly(sanitizeBehaviours(raw.behaviours));
-    return { sha: hashOf(defs), defs };
+    const raw = JSON.parse(text) as { behaviours?: unknown; sha256?: unknown } | null;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const b = raw.behaviours;
+    if (!b || typeof b !== "object" || Array.isArray(b)) return null;
+    const defs = definitionsOnly(sanitizeBehaviours(b));
+    const sha = hashOf(defs);
+    if (raw.sha256 !== sha) return null;
+    return { sha, defs };
   }
 
   private async load(key: string, cache = true): Promise<Entry | null> {

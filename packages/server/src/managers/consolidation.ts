@@ -101,6 +101,11 @@ export class ConsolidationTracker {
     return this.active.get(runId)?.slug === slug;
   }
 
+  /** Whether `runId` is a live consolidation run of any workspace. */
+  isLive(runId: string): boolean {
+    return this.active.has(runId);
+  }
+
   /** Whether any consolidation run of `slug` is in flight. */
   hasActive(slug: string): boolean {
     for (const r of this.active.values()) if (r.slug === slug) return true;
@@ -143,11 +148,29 @@ export interface ConsolidationHistory {
   running: RunSummary | null;
 }
 
-export async function consolidationHistory(state: ManagersState, layout: WorkspaceLayout): Promise<ConsolidationHistory> {
+/**
+ * The workspace's consolidation runs, read from disk, with the IN-MEMORY
+ * registry as the authority on what is running (M14.5, audit M9–M14 #6): a
+ * record saying `running` whose id this process never started (a hand-edited or
+ * agent-forged file, or one a crash left behind) is ignored entirely — it neither
+ * blocks a real run nor moves the gap. So is a record claiming to have started in
+ * the future (which would hold the gap shut forever).
+ */
+export async function consolidationHistory(
+  state: ManagersState,
+  layout: WorkspaceLayout,
+  now: Date = new Date(),
+): Promise<ConsolidationHistory> {
   const page = await state.runs
     .list(layout, { trigger: CONSOLIDATE_TRIGGER_NAME, months: CONSOLIDATION_RUN_MONTHS })
     .catch(() => null);
-  const runs = (page?.runs ?? []).filter((r) => r.kind === "consolidation");
+  const horizon = now.getTime() + 60_000;
+  const runs = (page?.runs ?? []).filter((r) => {
+    if (r.kind !== "consolidation") return false;
+    if (r.status === "running" && !state.consolidations.isLive(r.id)) return false;
+    const t = r.started ? Date.parse(r.started) : NaN;
+    return !(Number.isFinite(t) && t > horizon);
+  });
   return {
     last: runs[0] ?? null,
     lastSucceeded: runs.find((r) => r.status === "succeeded") ?? null,
@@ -232,8 +255,17 @@ function opLine(r: MemoryOpRecord): string {
 }
 
 /** The run's `#reflection` episode text: every op it performed, in order. Deterministic. */
-export function reflectionEpisodeText(runId: string, ops: MemoryOpRecord[], outcome: "succeeded" | "failed" | "cancelled"): string {
-  const ended = outcome === "succeeded" ? "" : ` (the run ${outcome})`;
+export function reflectionEpisodeText(
+  runId: string,
+  ops: MemoryOpRecord[],
+  outcome: "succeeded" | "failed" | "cancelled" | "interrupted",
+): string {
+  const ended =
+    outcome === "succeeded"
+      ? ""
+      : outcome === "interrupted"
+        ? " (the run was interrupted by a restart)"
+        : ` (the run ${outcome})`;
   if (ops.length === 0) return `Consolidation run ${runId} performed no memory ops${ended}.`;
   const head = `Consolidation run ${runId} performed ${ops.length} memory op${ops.length === 1 ? "" : "s"}${ended}: `;
   const parts: string[] = [];

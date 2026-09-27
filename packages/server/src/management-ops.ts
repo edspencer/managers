@@ -40,7 +40,8 @@
  */
 import type { ChatHandlerContext } from "./ws-context.js";
 import { keeperAgentName } from "./herdctl.js";
-import { isKnownModel, isKnownDriveMode, type DriveMode } from "./models.js";
+import { isKnownModel, type DriveMode } from "./models.js";
+import { resolveProjectDriveMode } from "./boot-posture.js";
 import type {
   SelfMcpContext,
   SelfMcpWriteContext,
@@ -50,7 +51,7 @@ import { ROOT_KEY, type CreateProjectInput } from "./projects.js";
 import { type RunProvenance, childOf } from "./run-provenance.js";
 import type { MessageSender } from "./message-provenance.js";
 import { resolveMaxSpawnDepth } from "./spawn-capability.js";
-import { isCuratorTrigger, mergeTriggerUpdate, type TriggerDto } from "./trigger-config.js";
+import { isCuratorTrigger, mergeTriggerUpdate, type PaddockTrigger, type TriggerDto } from "./trigger-config.js";
 import {
   assertOperation,
   assertProject,
@@ -352,7 +353,7 @@ export function buildManagementOps(
   if (!includeWrite) return { read: readBlock, state };
 
   const driveModeFor = (p: Awaited<ReturnType<typeof deps.projects.get>>): DriveMode =>
-    p.driveMode && isKnownDriveMode(p.driveMode) ? p.driveMode : deps.cfg.driveMode;
+    resolveProjectDriveMode(p, deps.cfg);
   // The child runs in its TARGET project, so its spawn bound comes from THAT
   // project's override (else the instance default), not the parent's (#262) —
   // then narrowed by any caller-scoped cap (never widened).
@@ -571,21 +572,26 @@ export function buildManagementOps(
     },
     setTrigger: async (projectSlug, name, incoming) => {
       if (!deps.triggers) throw new Error("trigger management is unavailable");
-      const existing = await deps.triggers.get(projectSlug, name).catch(() => null);
-      const record = mergeTriggerUpdate(existing, incoming);
-      // Managers M8: agents get no tool to change their own autonomy, and a
-      // trigger's `run.behaviour` binding IS autonomy — rebinding or unbinding it
-      // would ungate the trigger. Only Ed changes it (project.yaml / git).
-      const before = existing?.run.behaviour ?? null;
-      const after = (record.run as { behaviour?: unknown } | undefined)?.behaviour ?? null;
-      if (before !== after) {
-        throw new Error(
-          "set_trigger cannot change a trigger's run.behaviour (its autonomy gate); Ed changes that in project.yaml",
-        );
-      }
+      // M14.5 (audit M9–M14 #13): the partial update is merged into the trigger
+      // as read UNDER the project.yaml lock, not a read taken before it, so an
+      // edit Ed saves in between is kept.
+      const merge = (existing: PaddockTrigger | undefined) => {
+        const record = mergeTriggerUpdate(existing, incoming);
+        // Managers M8: agents get no tool to change their own autonomy, and a
+        // trigger's `run.behaviour` binding IS autonomy — rebinding or unbinding it
+        // would ungate the trigger. Only Ed changes it (project.yaml / git).
+        const before = existing?.run.behaviour ?? null;
+        const after = (record.run as { behaviour?: unknown } | undefined)?.behaviour ?? null;
+        if (before !== after) {
+          throw new Error(
+            "set_trigger cannot change a trigger's run.behaviour (its autonomy gate); Ed changes that in project.yaml",
+          );
+        }
+        return record;
+      };
       // M9.5 (audit #3): no agent creates, changes or removes a gated trigger (or
       // one that was ever gated) — checked under the project.yaml lock.
-      const dto = await deps.triggers.set(projectSlug, name, record, agentTriggerGuard(deps.projects, "set_trigger", name));
+      const dto = await deps.triggers.set(projectSlug, name, merge, agentTriggerGuard(deps.projects, "set_trigger", name));
       const p = await deps.projects.get(projectSlug).catch(() => null);
       const runtime = p ? await deps.herdctl.listAgentSchedules(p).catch(() => []) : [];
       const info = runtime.find((s) => s.name === name);
@@ -692,8 +698,25 @@ export function enforceManagementPolicy(
   principal: ManagementPrincipal,
 ): ManagementOps {
   const state = ops.state ? enforceStatePolicy(ops.state, principal) : undefined;
-  // The chat ops pass through untouched (same objects); only `state` is wrapped.
-  if (isInternalPrincipal(principal)) return state ? { ...ops, state } : ops;
+  // The chat ops pass through untouched (same objects); only `state` is wrapped,
+  // plus (M14.5, audit M9–M14 #12) the in-process agent's trigger WRITES, which
+  // are confined to its own project: a manager must not rewrite another
+  // project's triggers (e.g. the `wake` Ed's "Wake the manager now" fires).
+  if (isInternalPrincipal(principal)) {
+    const w = ops.write;
+    const write: SelfMcpWriteContext | undefined = w && {
+      ...w,
+      setTrigger: async (projectSlug, name, trigger) => {
+        assertOwnProjectTriggerWrite("set_trigger", projectSlug, w.currentProjectSlug);
+        return w.setTrigger(projectSlug, name, trigger);
+      },
+      removeTrigger: async (projectSlug, name) => {
+        assertOwnProjectTriggerWrite("remove_trigger", projectSlug, w.currentProjectSlug);
+        return w.removeTrigger(projectSlug, name);
+      },
+    };
+    return { ...ops, ...(write ? { write } : {}), ...(state ? { state } : {}) };
+  }
   const { scope } = principal;
 
   const r = ops.read;
@@ -780,6 +803,16 @@ export function enforceManagementPolicy(
   };
 
   return { read, write, state };
+}
+
+/** M14.5: an in-process agent writes triggers only in the project it runs in. */
+function assertOwnProjectTriggerWrite(op: string, projectSlug: string, current: string): void {
+  if (projectSlug !== current) {
+    throw new Error(
+      `${op} refused: a manager can change triggers only in its own project (${current || "Home"}), ` +
+        `not in ${projectSlug || "Home"}. Ask Ed, or raise a task in that project.`,
+    );
+  }
 }
 
 /**

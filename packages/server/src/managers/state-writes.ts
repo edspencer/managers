@@ -264,9 +264,24 @@ function oneLine(s: string, max: number): string {
  * headings (episode blocks, objective and task sections). A `## ` line inside it
  * would be read back as a new block/section, so it is refused, not escaped.
  */
+/**
+ * Refuse a text that would render a section heading of its own. The section
+ * split (`## History`, an objective's `## Journal`, …) keys on `## ` at the start
+ * of a line, but Markdown renders more than that as a heading, so a body could
+ * still show Ed a forged "History" (M14.5, audit M9–M14 #9). Refused:
+ *   - a `##` heading indented by up to 3 spaces (4 is a code block);
+ *   - a setext level-2 heading (a text line underlined with `---`);
+ *   - a heading of ANY level, ATX or setext, whose text is "History".
+ */
 function assertNoH2(text: string, what: string): void {
-  if (/^## /m.test(text)) {
+  if (/^ {0,3}##(?:[ \t]|$)/m.test(text)) {
     throw invalid(`${what} must not contain a line starting with "## " (use "###" for sub-headings)`);
+  }
+  if (/^ {0,3}[^\s#>*+\-|][^\n]*\n {0,3}-+[ \t]*$/m.test(text)) {
+    throw invalid(`${what} must not contain a heading underlined with "---" (use "###" for sub-headings)`);
+  }
+  if (/^ {0,3}#{1,6}[ \t]+history[ \t#]*$/im.test(text) || /^ {0,3}history[ \t]*\n {0,3}(?:=+|-+)[ \t]*$/im.test(text)) {
+    throw invalid(`${what} must not contain a "History" heading (the server writes the history)`);
   }
 }
 
@@ -338,6 +353,11 @@ function normaliseRun(r: Record<string, unknown>): Record<string, unknown> {
   for (const k of ["episodes", "tasksTouched", "reports"]) out[k] = (listOr(out[k]) as unknown[]).map(String);
   out.artifacts = (listOr(out.artifacts) as unknown[]).map(dropNulls);
   if (out.mcpCalls === undefined || out.mcpCalls === null) out.mcpCalls = {};
+  // M14.5: optional; an empty list is not written, so older records round-trip.
+  if (Array.isArray(out.memoryOps)) {
+    out.memoryOps = (out.memoryOps as unknown[]).map(dropNulls);
+    if ((out.memoryOps as unknown[]).length === 0) delete out.memoryOps;
+  } else delete out.memoryOps;
   if (out.usage === undefined || out.usage === null) {
     out.usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 };
   }
@@ -801,7 +821,26 @@ export class StateWriter {
    * WHO may call it is the caller's business (state-ops.ts): only Ed's live turn
    * and a consolidation run. `who` is the `## History` attribution.
    */
-  async memoryOp(ws: WriteWorkspace, input: MemoryOpInput, actor: WriteActor, who: string): Promise<MemoryOpResult> {
+  async memoryOp(
+    ws: WriteWorkspace,
+    input: MemoryOpInput,
+    actor: WriteActor,
+    who: string,
+    /**
+     * M14.5: a consolidation run to note the applied op on (its record's
+     * `memoryOps`), under the same lock as the fact write, so a restart that
+     * interrupts the run still leaves the list its `#reflection` episode needs.
+     */
+    opts: {
+      noteOnRun?: string | null;
+      /**
+       * M14.5 (audit M9–M14 #11): the op comes from an unattended consolidation
+       * run, not from Ed's own turn. Then an `add` must cite evidence, and a
+       * `user` fact (what Ed wants) must cite at least one episode Ed wrote.
+       */
+      unattended?: boolean;
+    } = {},
+  ): Promise<MemoryOpResult> {
     const OPS = ["add", "update", "supersede", "noop"] as const;
     const op = input.op;
     if (!(OPS as readonly string[]).includes(op)) throw invalid(`op must be one of ${OPS.join(", ")}`);
@@ -836,7 +875,10 @@ export class StateWriter {
       const rel = ws.layout.rel(file);
       const existing = (await exists(file)) ? rawDoc(await fs.readFile(file, "utf8"), rel) : null;
 
-      if (op === "noop") return { op, name, exists: existing !== null };
+      if (op === "noop") {
+        await this.noteMemoryOp(ws, opts.noteOnRun, { op, name });
+        return { op, name, exists: existing !== null };
+      }
 
       // Evidence must EXIST (an index lookup over this workspace's journals and log).
       const idx = evidence.length ? await this.episodes.index(ws.layout) : new Map();
@@ -845,6 +887,27 @@ export class StateWriter {
         throw invalid(
           `evidence not found in this workspace's journals or log: ${missing.join(", ")}. Cite episode ids from the briefing.`,
         );
+      }
+      if (opts.unattended) {
+        if (op === "add" && evidence.length === 0) {
+          throw invalid(
+            "a consolidation run must cite at least 1 evidence episode for a new fact; cite the episodes it came from",
+          );
+        }
+        const priorType = existing && typeof existing.data.type === "string" ? existing.data.type : undefined;
+        const resultType = input.type ?? priorType;
+        const claimChanges =
+          op === "add" ||
+          (op === "update" && ((input.type !== undefined && input.type !== priorType) || description !== undefined));
+        if (resultType === "user" && claimChanges) {
+          const cited = await Promise.all(evidence.map((id) => this.episodes.get(ws.layout, id).catch(() => null)));
+          if (!cited.some((e) => e?.source === "ed")) {
+            throw invalid(
+              "a user fact (what Ed wants) written by a consolidation run must cite at least 1 episode Ed wrote " +
+                "(source ed); an agent's own episodes are not evidence of what Ed wants",
+            );
+          }
+        }
       }
       const stamp = `${isoMinute(now).slice(0, 10)} ${isoMinute(now).slice(11, 16)}Z`;
       const cite = (ids: string[]) => (ids.length ? ` — evidence ${ids.join(", ")}` : "");
@@ -922,9 +985,26 @@ export class StateWriter {
       if (!r.success) throw zodFail("fact", r.error);
       await writeFileAtomic(file, stringifyFrontmatter({ ...r.data, ...extra }, text));
       const index = await this.rewriteMemoryIndex(ws, today);
+      await this.noteMemoryOp(ws, opts.noteOnRun, { op, name, type: r.data.type });
       this.notify(ws, actor, `memory_op (${op} ${name})`);
       return { op, name, file: rel, index, type: r.data.type, until: r.data.until, evidence: r.data.evidence };
     });
+  }
+
+  /** Append one applied memory op to a run record's `memoryOps`. Best effort; call under the lock. */
+  private async noteMemoryOp(
+    ws: WriteWorkspace,
+    runId: string | null | undefined,
+    record: { op: string; name: string; type?: string },
+  ): Promise<void> {
+    if (!runId || !isRunId(runId)) return;
+    await this.mutateRun(ws, runId, (known) => ({
+      ...known,
+      memoryOps: [
+        ...(listOr(known.memoryOps) as unknown[]).map(dropNulls),
+        { op: record.op, name: record.name, ...(record.type ? { type: record.type } : {}) },
+      ],
+    })).catch(() => undefined);
   }
 
   /** The ids among `ids` that exist in the workspace's episode index. */

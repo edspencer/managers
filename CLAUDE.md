@@ -289,6 +289,25 @@ What changed from Paddock, and what did not:
   one `#reflection` episode listing the ops (never counted toward the threshold). `GET
   …/managers/consolidation` feeds the Memory header ("Last consolidated …", "Run consolidation
   now" when on); Settings → Behaviours shows its schedule chips.
+- **Security posture (M14.5, `boot-posture.ts`, `herdctl-bridge-bind.ts`, AUTH.md).** Boot
+  REFUSES `MANAGERS_AUTH_MODE=none` (the default) unless `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1`
+  (agents on this host can otherwise act as Ed over REST/WS), `jwt` without BOTH
+  `MANAGERS_AUTH_JWT_ISSUER` and `MANAGERS_AUTH_JWT_AUDIENCE` unless
+  `MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE=1`, and `MANAGERS_DRIVE_MODE=batch` unless
+  `MANAGERS_ALLOW_BATCH_DRIVE=1` (herdctl's CLI runtime serves each turn's injected MCP tools
+  over an unauthenticated HTTP bridge). A project's `driveMode: batch` runs as session without
+  that flag (`resolveProjectDriveMode`, the ONE resolver) and the PATCH is a 400
+  `batch_drive_disabled`. Every opted-in danger (plus `trusted-header`) is a `SECURITY:` boot
+  warning, a `warnings[]` entry of `GET /api/security`, and a persistent `SecurityBanner` in the
+  shell. The rig, E2E server, docs-media/demo-gif rigs and `test/helpers/app.ts` set the opt-ins.
+  `installHerdctlBridgeLoopbackBind` (buildApp) makes `http.Server.prototype.listen` rewrite
+  exactly `listen(0, "0.0.0.0")` from herdctl's `mcp-http-bridge` (not `container-runner`) to
+  `127.0.0.1`. Also M14.5: a project with an unreadable `project.yaml` is collated on Home's
+  Needs you (`ProjectStore.listUnreadable`, `configError` + a `config-unreadable` alert); an
+  in-process agent writes triggers only in its OWN project; an unattended consolidation's
+  `add` needs evidence and a `user` fact needs an episode Ed wrote; consolidation ops are
+  noted on the run (`memoryOps`) so a restart-interrupted run still gets its `#reflection`;
+  a `running` consolidation record counts only if `ConsolidationTracker` knows the id.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and

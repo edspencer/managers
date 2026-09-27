@@ -13,7 +13,79 @@ The auth layer is **provider-agnostic** — driven entirely by `MANAGERS_AUTH_*`
 environment variables — so it is not tied to any single proxy or IdP. It works
 with Authentik, oauth2-proxy, Authelia, Cloudflare Access, Keycloak, and others.
 
-All of it is **optional**. The default (`MANAGERS_AUTH_MODE=none`) is fully open.
+The default mode is `none`, but **Managers refuses to boot in it** unless you also
+set `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1` (see "Agents and `none` mode" below).
+Real installs use `jwt`.
+
+---
+
+## Agents and `none` mode (Managers M14.5)
+
+Managers is different from Paddock in one way that matters here: it runs **agents
+on this host, as your Unix user**, with Bash. In `none` mode every request is you,
+so every one of those agents can call the REST and WebSocket API **as you**:
+
+- turn a behaviour on (`PATCH …/managers/behaviours/:name`), which is the whole
+  autonomy switch;
+- answer a task, start a consolidation, edit a trigger;
+- send a chat turn over `/ws`, which counts as a turn *you* sent (so it may call
+  `memory_op`, and anything it writes says "as Ed asked").
+
+Binding loopback does not help: the agents are on loopback too. This cannot be
+closed inside `none` mode at all, because the agent *is* a local process running
+as the same user. So `none` is an explicit, loud opt-in:
+
+- **Boot refuses `MANAGERS_AUTH_MODE=none`** unless
+  `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1` is also set. Only the credential-free test
+  rigs (`scripts/managers-rig/`, the E2E server, `tools/docs-media/`,
+  `scripts/demo-gif/`) and the integration-test harness set it.
+- When it is set, boot logs a `SECURITY:` warning, every page shows a persistent
+  red banner, **"No authentication: agents on this host can act as you"**, and
+  `GET /api/security` lists it (`warnings[].code: "no-auth"`).
+
+Use `jwt` mode for anything that is not a throwaway rig. In `jwt` mode an agent's
+`curl` to the API gets `401`: it has no token, and a forged `X-Authentik-*` or
+`Remote-User` header, or an `alg: none` token, is rejected.
+
+### `jwt` must check the issuer and the audience
+
+A signed token is only proof that *your identity provider* issued it, not that it
+issued it *for Managers*. If the IdP signs tokens for several applications with the
+same key (Authentik does, per provider), a token for another app verifies against
+the same JWKS. So in `jwt` mode **boot refuses unless both
+`MANAGERS_AUTH_JWT_ISSUER` and `MANAGERS_AUTH_JWT_AUDIENCE` are set**. If you really
+cannot pin them, `MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE=1` boots anyway, with a boot
+warning, a banner and a `jwt-any-audience` entry in `GET /api/security`.
+
+### Batch drive mode exposes each turn's tools
+
+In `driveMode: batch`, herdctl's CLI runtime serves each turn's injected MCP tools
+(Managers' `managers` state tools, `memory_op` included) over an **unauthenticated
+HTTP bridge**. herdctl binds it to `0.0.0.0`, which put those tools on the LAN;
+Managers rebinds it to `127.0.0.1` (`herdctl-bridge-bind.ts`), but any local process
+that learns the port (it is in the child's argv) can still call it. The default
+`session` drive mode uses in-process MCP and starts no listener.
+
+So **boot refuses `MANAGERS_DRIVE_MODE=batch`** unless `MANAGERS_ALLOW_BATCH_DRIVE=1`
+is set, and without it a project's `driveMode: batch` override runs as `session`
+(and Settings refuses to save one, `400 batch_drive_disabled`). With it set, boot
+warns and `GET /api/security` lists `batch-drive`. Only the fake-`claude` rigs need
+batch mode.
+
+### `trusted-header` has the same problem
+
+A header is only as trustworthy as the network path, and an agent on this host is
+on that path: it can send `X-Forwarded-User: ed` to the loopback port itself. So
+`trusted-header` boots (it may be all a proxy offers), but with a boot warning, a
+banner and a `trusted-header` entry in `GET /api/security`. Prefer `jwt`.
+
+### What is still open
+
+- **Same-UID reads.** A keeper's Bash can read `/proc/<server-pid>/environ` (the
+  `MANAGERS_MCP_*` tokens) and, in batch mode, a sibling turn's argv. Closing that
+  needs a separate Unix user or container per project.
+- **Same-UID file writes.** A keeper's Bash can edit `project.yaml` and the files
+  under `.managers/`. The out-of-UI alert and git history are the backstops.
 
 ---
 
@@ -88,13 +160,17 @@ carries the safe host-side publish — see the Securing guide.)
 | `MANAGERS_AUTH_GROUPS_HEADER` | trusted-header (also jwt override) | — | Optional header carrying groups (comma/space-split) |
 | `MANAGERS_AUTH_JWT_HEADER` | jwt | `Authorization` | Header carrying the JWT. If `Authorization`, a leading `Bearer ` is stripped |
 | `MANAGERS_AUTH_JWKS_URL` | jwt | — | **Required in jwt mode.** The IdP's JWKS endpoint |
-| `MANAGERS_AUTH_JWT_ISSUER` | jwt | — | Optional; validate the `iss` claim |
-| `MANAGERS_AUTH_JWT_AUDIENCE` | jwt | — | Optional; validate the `aud` claim |
+| `MANAGERS_AUTH_JWT_ISSUER` | jwt | — | **Required in jwt mode** (M14.5); validate the `iss` claim |
+| `MANAGERS_AUTH_JWT_AUDIENCE` | jwt | — | **Required in jwt mode** (M14.5); validate the `aud` claim |
+| `MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE` | jwt | off | Boot in jwt mode without the issuer/audience check (warns) |
+| `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH` | none | off | Boot in `none` mode at all (warns; test rigs only) |
+| `MANAGERS_ALLOW_BATCH_DRIVE` | all | off | Allow `driveMode: batch`, instance default or per project (warns; test rigs only) |
 | `MANAGERS_AUTH_USERNAME_CLAIM` | jwt | — | Claim to read the username from. Default tries `preferred_username` → `email` → `sub` |
 | `MANAGERS_AUTH_GROUPS_CLAIM` | jwt | `groups` | Claim to read group membership from |
 
-In `jwt` mode, Paddock validates `iss`/`aud` only when you set them, and always
-validates the signature and expiry (`exp`). Supported signature algorithms are
+In `jwt` mode, Managers always validates the signature and expiry (`exp`), and it
+refuses to boot without an `iss` and `aud` to validate (unless
+`MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE=1`). Supported signature algorithms are
 the asymmetric ones JWKS publishes (RS256, ES256, etc.).
 
 If `MANAGERS_AUTH_MODE=jwt` is set **without** `MANAGERS_AUTH_JWKS_URL`, Paddock
@@ -132,9 +208,9 @@ header. Each Authentik *application* exposes its own JWKS at
 MANAGERS_AUTH_MODE=jwt
 MANAGERS_AUTH_JWT_HEADER=X-authentik-jwt
 MANAGERS_AUTH_JWKS_URL=https://sso.example.com/application/o/<app-slug>/jwks/
-# optional hardening:
-# MANAGERS_AUTH_JWT_ISSUER=https://sso.example.com/application/o/<app-slug>/
-# MANAGERS_AUTH_JWT_AUDIENCE=<client-id>
+# required (M14.5): pin the token to THIS application
+MANAGERS_AUTH_JWT_ISSUER=https://sso.example.com/application/o/<app-slug>/
+MANAGERS_AUTH_JWT_AUDIENCE=<client-id>
 ```
 
 Username maps from `preferred_username` by default; groups from `groups`.
@@ -167,6 +243,7 @@ and publishes a JWKS per team.
 MANAGERS_AUTH_MODE=jwt
 MANAGERS_AUTH_JWT_HEADER=Cf-Access-Jwt-Assertion
 MANAGERS_AUTH_JWKS_URL=https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
+MANAGERS_AUTH_JWT_ISSUER=https://<team>.cloudflareaccess.com
 MANAGERS_AUTH_JWT_AUDIENCE=<application-aud-tag>
 MANAGERS_AUTH_USERNAME_CLAIM=email
 ```

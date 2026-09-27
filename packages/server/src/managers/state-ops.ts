@@ -213,7 +213,10 @@ export function buildStateOps(p: StateOpsParams): ManagementStateOps {
       const runId = inRun ? p.currentRunId() : null;
       const session = p.currentSessionId();
       const who = inRun ? `consolidation run ${runId}` : `the manager, as Ed asked${session ? ` (chat ${session})` : ""}`;
-      const result = await state.writer.memoryOp(await ws(project), input, actor(), who);
+      const result = await state.writer.memoryOp(await ws(project), input, actor(), who, {
+        noteOnRun: inRun ? runId : null,
+        unattended: inRun,
+      });
       if (inRun) p.consolidations!.note(runId, { op: result.op, name: result.name, ...(result.type ? { type: result.type } : {}) });
       return result;
     },

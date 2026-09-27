@@ -11,6 +11,10 @@
  * permission error, …) becomes `{ slug, name, error }` and never fails the whole
  * collation: one broken project must not hide every other project's asks.
  *
+ * M14.5: a project whose `project.yaml` cannot be read is still collated from
+ * its own task and run files, with `configError` set and a `config-unreadable`
+ * alert, so the typo that hides it everywhere else does not hide its asks here.
+ *
  * Order (deterministic, see {@link orderGroups}):
  *   1. workspaces with asks, the one whose ask has waited LONGEST first;
  *   2. workspaces that could not be read;
@@ -42,6 +46,12 @@ export interface NeedsYouGroup {
   status: NeedsYouStatus;
   /** Task files in `tasks/open/` that will not parse — a hidden ask could be among them. */
   parseErrors: ParseError[];
+  /**
+   * M14.5: this project's `project.yaml` exists but cannot be read (the project
+   * is missing from every other list). Its tasks and run alerts are still read
+   * from their own files; `alerts` carries a `config-unreadable` alert for it.
+   */
+  configError?: string;
 }
 
 export interface NeedsYouError {
@@ -76,13 +86,15 @@ export interface NeedsYouWorkspace {
   slug: string;
   name: string;
   dir: string;
+  /** M14.5: set for a project whose `project.yaml` cannot be read. */
+  configError?: string;
 }
 
 export const isNeedsYouError = (e: NeedsYouEntry): e is NeedsYouError => "error" in e;
 
 /** Anything to show for this workspace without `all`? */
 export function hasItems(g: NeedsYouGroup): boolean {
-  return g.needsYou.length > 0 || g.alerts.length > 0 || g.parseErrors.length > 0;
+  return g.needsYou.length > 0 || g.alerts.length > 0 || g.parseErrors.length > 0 || !!g.configError;
 }
 
 export function statusOf(generated: string | null, now: Date): NeedsYouStatus {
@@ -127,6 +139,7 @@ function oldestAsk(tasks: TaskSummary[]): string {
 function rank(e: NeedsYouEntry): number {
   if (isNeedsYouError(e)) return 1;
   if (e.needsYou.length > 0) return 0;
+  if (e.configError) return 1;
   if (hasItems(e)) return 2;
   return 3;
 }
@@ -181,6 +194,7 @@ export async function collectNeedsYou(opts: {
           alerts,
           status: statusOf(report ? (report.generated ?? report.updated) : null, now),
           parseErrors: tasks.parseErrors,
+          ...(w.configError ? { configError: w.configError } : {}),
         };
       } catch (err) {
         return { slug: w.slug, name: w.name, error: describeError(err, w.dir) };
@@ -193,6 +207,7 @@ export async function collectNeedsYou(opts: {
       totals.errors += 1;
       continue;
     }
+    if (e.configError) totals.errors += 1;
     totals.needsYou += e.needsYou.length;
     totals.alerts += e.alerts.length;
     if (hasItems(e)) totals.withItems += 1;
