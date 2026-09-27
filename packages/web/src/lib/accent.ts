@@ -41,7 +41,7 @@
  *
  * ── Why it measures the live DOM ─────────────────────────────────────────────
  * Themes derive their accent family differently — foundation and parchment do
- * `--accent-solid: rgb(var(--accent-600))`, scifi mixes toward white, terminal
+ * `--accent-solid: rgb(var(--accent-600))`, terminal
  * uses the raw accent in dark, and parchment inverts the polarity by carrying
  * dark type on a light plate. Rather than model every derivation, this reads
  * the computed value of every derived token off `<html>` after the channels are
@@ -109,7 +109,7 @@ export interface AccentReport {
    * Cached so the pre-paint script in index.html can replay the last answer for
    * this theme+mode on the next load. It has to be the resolved values rather
    * than the three channels: a theme's dark derivation is not the same function
-   * as its light one (scifi mixes toward white, parchment inverts to a light
+   * as its light one (terminal uses the raw accent, parchment inverts to a light
    * plate carrying dark type), so replaying channels alone would paint the
    * first frame with the wrong end of the ramp.
    */

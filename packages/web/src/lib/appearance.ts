@@ -43,12 +43,11 @@ import { resolveColor, rgbToOklch } from "./color";
  * grouping would add chrome to a control whose whole job is to be looked at
  * rather than read.
  *
- * Four, not eight. The design run produced four further directions —
- * `instrument`, `phosphor`, `vellum`, `register` — which were cut on the
- * grounds that they differ from each other mostly in palette and type, so
- * shipping all four bought variety no one could name. Their work is not lost:
- * the token contract every theme here is written against came out of that run,
- * and the branches (`design/instrument` and siblings) are still on the remote.
+ * Three, not four. Paddock's `scifi` (deep-space ground, luminous cyan) was
+ * dropped when Managers' default moved to slate and cobalt: the two became
+ * neighbours in the picker, which is the "variety no one could name" problem
+ * that cut Paddock's own `instrument`/`phosphor`/`vellum`/`register`. A stored
+ * `scifi` choice falls back to foundation in `readAppearance`.
  *
  * `blurb` is the tooltip on each card, which is where the one-word labels get
  * their disambiguation.
@@ -57,7 +56,7 @@ export const THEMES = [
   {
     id: "foundation",
     label: "Foundation",
-    blurb: "The neutral base. Warm ground, terracotta accent.",
+    blurb: "The Managers default. Cool slate ground, cobalt accent.",
   },
   {
     id: "parchment",
@@ -68,11 +67,6 @@ export const THEMES = [
     id: "terminal",
     label: "Terminal",
     blurb: "Green phosphor and ANSI in the dark; greenbar and ribbon ink in the light.",
-  },
-  {
-    id: "scifi",
-    label: "Sci-Fi",
-    blurb: "Deep-space ground and luminous cyan. Hairlines, telemetry, glow.",
   },
 ] as const;
 

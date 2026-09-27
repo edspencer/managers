@@ -15,7 +15,7 @@
  */
 import type { BrandConfig } from "./config.js";
 
-export const DEFAULT_ACCENT = "#c2603c";
+export const DEFAULT_ACCENT = "#2f6ae0";
 
 /** Parse a `#rgb` / `#rrggbb` hex color to `[r, g, b]` (0–255), or null. */
 export function hexToRgb(hex: string): [number, number, number] | null {
@@ -45,7 +45,7 @@ function channels([r, g, b]: [number, number, number]): string {
  * that doesn't parse as hex falls back to null (defaults apply).
  *
  * The 600/700 hover shades are derived by darkening — close enough to the
- * hand-tuned terracotta ramp for a hover/active state, and it means an operator
+ * hand-tuned default ramp for a hover/active state, and it means an operator
  * only has to pick ONE color.
  */
 export function accentRootStyle(accent: string): string | null {

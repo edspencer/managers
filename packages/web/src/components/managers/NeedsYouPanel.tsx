@@ -41,7 +41,7 @@ import type {
 import { homeUrl, tasksUrl, viewBase } from "../../routes/ProjectView/urls";
 import { Toast } from "../Toast";
 import { AlertIcon, CheckIcon, ChevronRightIcon } from "../icons";
-import { Button, Callout, Card, Chip, EmptyState } from "../ui";
+import { Button, Callout, Card, Chip, EmptyState, cx } from "../ui";
 import { TaskAnswer } from "./TaskAnswer";
 import { ALERT_SEVERITY_TONE, ListSkeleton, PaneError, answeredMessage, errorText } from "./shared";
 
@@ -136,9 +136,16 @@ export function NeedsYouPanel() {
   return (
     <section className="@container mb-8" data-testid="needs-you">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-fg-muted">
+        <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-fg">
           Needs you
-          {data && data.totals.needsYou > 0 && <span className="ml-1.5 text-fg-subtle">{data.totals.needsYou}</span>}
+          {data && data.totals.needsYou > 0 && (
+            <span
+              className="inline-flex min-w-[1.5rem] items-center justify-center rounded-md bg-warn-solid px-1.5 py-0.5 text-xs font-bold leading-none tabular text-warn-fg shadow-sm"
+              data-testid="needs-you-count"
+            >
+              {data.totals.needsYou}
+            </span>
+          )}
         </h3>
         {/* Not on the empty state, which already says how many were checked. */}
         {data && data.projects.length > 0 && (
@@ -257,12 +264,15 @@ function Group({
   }, [group.slug, hasAsks, broken]);
 
   return (
-    <Card className="min-w-0 space-y-3 p-4" data-testid={`needs-you-group-${keyOf(group.slug)}`}>
+    <Card
+      className={cx("min-w-0 space-y-3 p-4", hasAsks && "border-warn-edge")}
+      data-testid={`needs-you-group-${keyOf(group.slug)}`}
+    >
       <GroupHeader slug={group.slug} name={group.name} linked={!broken}>
         {hasAsks && (
-          <Chip tone="warn" shape="pill">
+          <span className="inline-flex items-center rounded-full bg-warn-solid px-2 py-0.5 text-2xs font-semibold text-warn-fg">
             {plural(group.needsYou.length, "ask")}
-          </Chip>
+          </span>
         )}
         {group.alerts.length > 0 && (
           <Chip tone={ALERT_SEVERITY_TONE[group.alerts[0]!.severity]} shape="pill">

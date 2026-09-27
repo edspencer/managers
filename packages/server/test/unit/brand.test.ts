@@ -35,7 +35,7 @@ describe("hexToRgb", () => {
 describe("accentRootStyle", () => {
   it("returns null for the default accent (CSS defaults stay authoritative)", () => {
     expect(accentRootStyle(DEFAULT_ACCENT)).toBeNull();
-    expect(accentRootStyle("#C2603C")).toBeNull(); // case-insensitive
+    expect(accentRootStyle("#2F6AE0")).toBeNull(); // case-insensitive
   });
   it("returns null for a non-hex accent (falls back to defaults)", () => {
     expect(accentRootStyle("rebeccapurple")).toBeNull();

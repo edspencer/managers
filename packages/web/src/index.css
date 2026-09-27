@@ -41,7 +41,6 @@
 @import "./styles/theme-foundation.css";
 @import "./styles/theme-parchment.css";
 @import "./styles/theme-terminal.css";
-@import "./styles/theme-scifi.css";
 
 /*
  * Dark mode is class-toggled on <html> (index.html applies it before first
@@ -278,40 +277,10 @@
   }
 
   /*
-   * ------------------------------------------------------- the theme faces --
-   * Every runtime theme's faces, declared together. This costs nothing until a
-   * theme is selected: `@font-face` is LAZY — a browser downloads a face only
-   * when text is actually rendered in it, so every declaration here fetches
-   * exactly the two or three the active theme's `--font-*` stacks name.
-   *
-   * The one thing that is NOT lazy is a `<link rel="preload">`, which fetches
-   * unconditionally. index.html therefore preloads the ACTIVE theme's face from
-   * its pre-paint script rather than hard-coding Inter.
-   *
-   * Only `scifi` is here; `parchment` and `terminal` declare their own faces at
-   * the top of their theme files. Both placements work — this one is a leftover
-   * of the order the themes were written in, not a rule.
+   * Theme faces live at the top of each theme file (`parchment`, `terminal`).
+   * `@font-face` is lazy, so declaring them costs nothing until a theme is
+   * selected; index.html preloads only the ACTIVE theme's primary face.
    */
-
-  /* scifi — Saira / Martian Mono. Both are variable on WIDTH as well as weight,
-     which is the point: the theme's letterspaced micro-labels and its code are
-     real condensed instances (82% and 87.5%), not squashed normal ones. */
-  @font-face {
-    font-family: "Saira";
-    font-style: normal;
-    font-weight: 100 900;
-    font-stretch: 50% 125%;
-    font-display: swap;
-    src: url("/fonts/saira-latin.woff2") format("woff2");
-  }
-  @font-face {
-    font-family: "Martian Mono";
-    font-style: normal;
-    font-weight: 100 800;
-    font-stretch: 75% 112.5%;
-    font-display: swap;
-    src: url("/fonts/martian-mono-latin.woff2") format("woff2");
-  }
 
   /*
    * Tailwind v4 compatibility. v4's preflight defaults `border-color` and

@@ -8,15 +8,22 @@ hand-written `dark:` variants, 200 arbitrary `text-[Npx]` values, zero shared
 React primitives, and a light mode that failed WCAG AA at its four most-used
 tokens.
 
-It describes a **system**, not a look. **Four themes ship**, switchable at
-runtime from Config → Appearance, and they are deliberately far apart:
+It describes a **system**, not a look. **Three themes ship**, switchable at
+runtime from Config → Appearance, and they are deliberately far apart. (Paddock's
+`scifi` was dropped; see the note under the table.)
 
 | theme | it is | file |
 |---|---|---|
-| `foundation` | the neutral base — warm ground, terracotta accent. Also the default when no theme is chosen, because its values *are* `tokens.css`. | `styles/theme-foundation.css` |
+| `foundation` | the Managers default — cool slate ground, cobalt accent (`#2f6ae0`), light and dark. Also the default when no theme is chosen, because its values *are* `tokens.css`. | `styles/theme-foundation.css` |
 | `parchment` | a 90s RPG menu — wine chrome, brass fittings, corner brackets, an old-style serif. | `styles/theme-parchment.css` |
 | `terminal` | green phosphor and ANSI in the dark; greenbar and ribbon ink in the light. | `styles/theme-terminal.css` |
-| `scifi` | deep-space ground and luminous cyan — hairlines, telemetry, glow. | `styles/theme-scifi.css` |
+
+Managers moved `foundation` off Paddock's warm cream and terracotta onto slate
+and cobalt, so the product reads as its own at a glance (and leaves AI-default
+cluster 1 in §7). Paddock's `scifi` — deep navy and cyan — became a
+near-duplicate of the new default and was **dropped**; a stored `scifi` choice
+falls back to `foundation`. `parchment` and `terminal` are kept as opt-ins:
+they are loud on purpose and nowhere near blue.
 
 The design run that produced this system explored four more — `instrument`,
 `phosphor`, `vellum`, `register`. They were **cut**, on the grounds that they
@@ -55,7 +62,7 @@ components/, routes/    ← consume utilities. A theme should not need to open t
 ```
 
 The one qualification, because someone will otherwise infer the stronger claim:
-**"a theme is one file of values" is true for three of the four.** Parchment
+**"a theme is one file of values" is true for two of the three.** Parchment
 needed real texture and ornament — properties, not values — and took a
 deliberate exemption to add gated CSS. See §8, Step 3.
 
@@ -129,7 +136,7 @@ things use the neutral tokens.
 channels**, not OKLCH:
 
 ```css
---accent: 194 96 60; /* #c2603c */
+--accent: 47 106 224; /* #2f6ae0 */
 ```
 
 A running server rewrites exactly those three by injecting
@@ -256,7 +263,7 @@ ffmpeg -v error -i shot.png -vf "crop=8:8:X:Y" -f rawvideo -pix_fmt rgb24 - | od
 
 **And when a human's report and your instrument disagree, check the instrument.**
 
-Today only `parchment` uses a blend mode. `scifi` and `terminal` use alpha and
+Today only `parchment` uses a blend mode. `terminal` uses alpha and
 gradients, which the rendered-node audit already handles. Note that route (b)
 currently lives in parchment's own test file — the shared `themes.test.ts` still
 reads flat tokens, so a fifth theme that composites inherits **no** protection
@@ -391,9 +398,8 @@ to.*
 1. A **warm cream background** near `#F4F1EA` with a high-contrast serif display
    face and a **terracotta** accent. Paddock's pre-token palette was, by
    coincidence, exactly this: canvas `#f7f6f1` is 7/255 from that hex and the
-   accent is terracotta. `foundation` still sits near it, on purpose, because
-   the token migration had to be a refactor. **A new theme must move away from
-   it** — `parchment`, `terminal` and `scifi` all do.
+   accent is terracotta. Managers' `foundation` has since moved to slate and
+   cobalt. **A new theme must move away from it** — every shipped theme does.
 2. A **near-black background** with a single bright acid-green or vermilion
    accent. `terminal` is a deliberate, granted exception: Ed asked for that
    aesthetic by name. A waiver is not a licence to be lazy — it went to real
@@ -510,8 +516,7 @@ Same for `--text-*`, `--shadow-*`, `--ease-*`, `--duration-*`.
 A new face must be **OFL or otherwise permissively licensed, self-hosted as a
 committed woff2 subset** in `packages/web/public/fonts/`, with an `@font-face`
 rule — either at the top of your theme file (Parchment and Terminal do this) or
-in the `@layer base` block of `index.css` (Sci-Fi does). Both work; there is no
-rule, only a leftover of the order the themes were written in. No runtime Google
+in the `@layer base` block of `index.css`. Both work. No runtime Google
 Fonts — the LAN this runs on works offline.
 
 `@font-face` is **lazy**: a face downloads only when text is actually rendered
@@ -535,7 +540,7 @@ rendering as the foundation palette and looking merely disappointing.
 
 ### Step 3 — decoration, only if the palette genuinely cannot carry your idea
 
-A theme is tokens and fonts. That is true for three of the four shipped here —
+A theme is tokens and fonts. That is true for two of the three shipped here —
 and it was **not** enough for Parchment, which needed texture, `border-image`
 ornament frames and corner brackets to read as a 90s game menu at all. Those
 are properties, not values, and no token can express one.
@@ -570,7 +575,7 @@ anyone asked for, and ornament that ate a row on a 34px tool-call plate.
 ### What you do NOT do
 
 - Do not edit `tokens.css` to make your theme work. That is the foundation's
-  palette and the base every other theme inherits; changing it changes all four.
+  palette and the base every other theme inherits; changing it changes all three.
 - Do not add a Tailwind colour to `@theme` that is not backed by a token.
 - Do not reintroduce `tailwind.config.js`. This is Tailwind v4; configuration is
   CSS.

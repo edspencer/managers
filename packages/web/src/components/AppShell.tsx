@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useProjects } from "../lib/projects-context";
 import { useTheme } from "../lib/theme";
 import type { Project } from "../lib/types";
-import { getBrand, getOpenApi, logoIsImage } from "../lib/brand";
+import { DEFAULT_BRAND, getBrand, getOpenApi, logoIsImage } from "../lib/brand";
 import { areaLabel, orderAreaSlugs } from "../lib/areas";
 import { chatClient } from "../lib/ws";
 import {
@@ -14,8 +14,9 @@ import {
 } from "../lib/lastSeen";
 import { TagPill } from "./TagPill";
 import { FleetReadout } from "./FleetReadout";
+import { useNeedsYouCounts } from "../lib/needsYouCounts";
 import { SecurityBanner } from "./SecurityBanner";
-import { CogIcon, FolderIcon, HomeIcon, LinkIcon, MenuIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, XIcon } from "./icons";
+import { CogIcon, FolderIcon, HomeIcon, LinkIcon, ManagersMark, MenuIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon, XIcon } from "./icons";
 import { NewProjectModal } from "./NewProjectModal";
 import { PaneResizer, usePaneWidth } from "./PaneResizer";
 import { SIDENAV_PANE } from "../lib/paneWidth";
@@ -231,6 +232,9 @@ export function AppShell() {
   // are, and two independent counts of the same thing would eventually disagree
   // in front of the user. It also costs nothing — `useProjectBadges` is already
   // running for the sidebar, off the projects payload and the WS active set.
+  // Open asks per workspace, for the amber pills. Home's row carries the FLEET
+  // total, because Home is where every ask is answered.
+  const needsYou = useNeedsYouCounts();
   const fleetUnread = useMemo(() => {
     let n = 0;
     for (const b of badges.values()) n += b.unread;
@@ -254,7 +258,7 @@ export function AppShell() {
           </button>
           <NavLink to="/" className="flex items-center gap-2">
             <BrandLogo brand={brand} className="h-7 w-7 text-sm" />
-            <span className="text-md font-semibold tracking-tight">{brand.name}</span>
+            <span className="text-sm font-bold uppercase tracking-widest">{brand.name}</span>
           </NavLink>
         </header>
       )}
@@ -288,7 +292,7 @@ export function AppShell() {
         <div className="flex items-center gap-2 px-5 py-4">
           <NavLink to="/" className="group flex items-center gap-2">
             <BrandLogo brand={brand} className="h-8 w-8 text-base" />
-            <span className="text-lg font-semibold tracking-tight">{brand.name}</span>
+            <span className="text-sm font-bold uppercase tracking-widest">{brand.name}</span>
           </NavLink>
           <button
             type="button"
@@ -322,7 +326,12 @@ export function AppShell() {
           >
             <HomeIcon width={16} height={16} />
             Home
-            <ProjectBadges badge={rootBadge} className="ml-auto" />
+            <ProjectBadges
+              badge={rootBadge}
+              needsYou={needsYou.total}
+              needsYouTitle={`${needsYou.total} ${needsYou.total === 1 ? "ask" : "asks"} across every project`}
+              className="ml-auto"
+            />
           </NavLink>
         </div>
 
@@ -381,7 +390,12 @@ export function AppShell() {
                   </div>
                 )}
                 {ps.map((p) => (
-                  <ProjectNavLink key={p.slug} project={p} badge={badges.get(p.slug)} />
+                  <ProjectNavLink
+                    key={p.slug}
+                    project={p}
+                    badge={badges.get(p.slug)}
+                    needsYou={needsYou.bySlug.get(p.slug) ?? 0}
+                  />
                 ))}
               </div>
             ))}
@@ -462,7 +476,7 @@ export function AppShell() {
           landmark would quietly change what every one of them is scoped to. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <SecurityBanner />
-        <FleetReadout unread={fleetUnread} />
+        <FleetReadout unread={fleetUnread} needsYou={needsYou.loaded ? needsYou.total : null} />
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <Suspense fallback={<RouteFallback />}>
             <Outlet context={{ openNav: () => setNavOpen(true) } satisfies ShellOutletContext} />
@@ -491,8 +505,10 @@ export function AppShell() {
 }
 
 /**
- * The instance logo chip (issue #34). Renders the configured logo as an <img>
- * when it's a URL/path, otherwise as an inline glyph/emoji. The accent-colored
+ * The instance logo chip (issue #34). The stock logo renders as the inline
+ * {@link ManagersMark} so it follows `--accent` (a branded instance's chip
+ * recolours with it); any other configured logo renders as an <img> when it's a
+ * URL/path, otherwise as an inline glyph/emoji. The accent-colored
  * chip background comes from the runtime `--accent` CSS variable via `bg-accent-solid`.
  */
 function BrandLogo({ brand, className = "" }: { brand: ReturnType<typeof getBrand>; className?: string }) {
@@ -500,7 +516,9 @@ function BrandLogo({ brand, className = "" }: { brand: ReturnType<typeof getBran
     <span
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-accent-solid text-accent-fg shadow-sm ${className}`}
     >
-      {logoIsImage(brand.logo) ? (
+      {brand.logo === DEFAULT_BRAND.logo ? (
+        <ManagersMark width="75%" height="75%" aria-hidden="true" />
+      ) : logoIsImage(brand.logo) ? (
         <img src={brand.logo} alt="" className="h-full w-full object-cover" />
       ) : (
         brand.logo
@@ -525,7 +543,15 @@ function RouteFallback() {
  * editable in Settings); its space now shows two subtle, glanceable counts:
  * unread replies (primary) and in-flight turns (secondary), each only when > 0.
  */
-function ProjectNavLink({ project: p, badge }: { project: Project; badge?: ProjectBadge }) {
+function ProjectNavLink({
+  project: p,
+  badge,
+  needsYou,
+}: {
+  project: Project;
+  badge?: ProjectBadge;
+  needsYou: number;
+}) {
   return (
     <NavLink
       to={`/projects/${p.slug}`}
@@ -544,7 +570,11 @@ function ProjectNavLink({ project: p, badge }: { project: Project; badge?: Proje
           />
           <span className="truncate font-medium">{p.name}</span>
         </span>
-        <ProjectBadges badge={badge} />
+        <ProjectBadges
+          badge={badge}
+          needsYou={needsYou}
+          needsYouTitle={`${needsYou} ${needsYou === 1 ? "ask" : "asks"} waiting on you`}
+        />
       </span>
       {p.domain.length > 0 && (
         <span className="flex min-w-0 items-center gap-1 overflow-hidden pl-[18px]">
@@ -561,23 +591,34 @@ function ProjectNavLink({ project: p, badge }: { project: Project; badge?: Proje
 }
 
 /**
- * The two subtle per-workspace counts shown where the StatusPill used to live
- * (#161): a filled accent pill for UNREAD replies (primary) and a hollow
- * spinner + count for IN-FLIGHT turns (secondary). Each renders only when > 0;
- * nothing renders when the workspace is quiet, keeping the row calm.
+ * The per-workspace counts beside a sidebar row, in priority order:
  *
- * Shared verbatim by the project rows and the ROOT workspace's Home link
- * (#553) — `className` exists only so Home can push it right with `ml-auto`
- * (its row is a `justify-start` button, not a `justify-between` flex). The
- * "nothing at all when quiet" rule lives HERE, which is what keeps a zero-chat
- * root from rendering an empty wrapper or a `0` pill.
+ *   - NEEDS YOU: open asks the manager is waiting on — the one SOLID pill, in
+ *     the warn amber, because it is the thing Managers exists to surface;
+ *   - UNREAD: chats holding a reply you have not read — an accent dot + count,
+ *     deliberately quieter (chat is secondary here, #161's pill demoted);
+ *   - IN FLIGHT: a hollow spinner + count.
+ *
+ * Each renders only when > 0; nothing renders when the workspace is quiet.
+ * Shared by the project rows and the ROOT workspace's Home link (#553) —
+ * `className` exists only so Home can push it right with `ml-auto`.
  */
-function ProjectBadges({ badge, className = "" }: { badge?: ProjectBadge; className?: string }) {
+function ProjectBadges({
+  badge,
+  needsYou = 0,
+  needsYouTitle,
+  className = "",
+}: {
+  badge?: ProjectBadge;
+  needsYou?: number;
+  needsYouTitle?: string;
+  className?: string;
+}) {
   const unread = badge?.unread ?? 0;
   const inflight = badge?.inflight ?? 0;
-  if (unread === 0 && inflight === 0) return null;
+  if (unread === 0 && inflight === 0 && needsYou === 0) return null;
   return (
-    <span className={`flex shrink-0 items-center gap-1.5 ${className}`}>
+    <span className={`flex shrink-0 items-center gap-2 ${className}`}>
       {inflight > 0 && (
         <span
           className="flex items-center gap-1 text-2xs tabular text-fg-muted"
@@ -593,11 +634,23 @@ function ProjectBadges({ badge, className = "" }: { badge?: ProjectBadge; classN
       )}
       {unread > 0 && (
         <span
-          className="inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-accent-solid px-1.5 py-0.5 text-2xs font-semibold leading-none tabular text-accent-fg"
+          className="flex items-center gap-1 text-2xs font-medium tabular text-accent"
           title={`${unread} unread ${unread === 1 ? "reply" : "replies"}`}
           aria-label={`${unread} unread ${unread === 1 ? "reply" : "replies"}`}
+          data-testid="badge-unread"
         >
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent-solid" />
           {unread}
+        </span>
+      )}
+      {needsYou > 0 && (
+        <span
+          className="inline-flex min-w-[1.25rem] items-center justify-center rounded-md bg-warn-solid px-1.5 py-0.5 text-2xs font-bold leading-none tabular text-warn-fg shadow-sm"
+          title={needsYouTitle}
+          aria-label={needsYouTitle}
+          data-testid="badge-needs-you"
+        >
+          {needsYou}
         </span>
       )}
     </span>
