@@ -12,8 +12,11 @@
  *   README.md        a stub saying what this directory is
  *
  * and `git init`s it when it is not a repo yet (unless `gitInit` is false —
- * `MANAGERS_DATA_GIT_INIT=0`). It never commits: the first commit is autocommit's
- * (M5) or the operator's.
+ * `MANAGERS_DATA_GIT_INIT=0`). M15: when the repo has NO commits yet (a fresh
+ * `git init`, or a clone of an empty `managers-data`), it commits the skeleton
+ * files above — and only those — as the repo's first commit, so a later sync has
+ * a branch to push. A repo that already has history is never committed into here;
+ * autocommit (M5) owns every later commit.
  *
  * Idempotent: every piece is written only when missing, and an existing
  * `.gitignore` / `.gitattributes` only ever gains the lines it lacks.
@@ -61,6 +64,8 @@ export interface EnsureDataRepoResult {
   /** Workspace-relative files created or extended. */
   changed: string[];
   gitInitialized: boolean;
+  /** M15: the hash of the skeleton's initial commit, when this call made it. */
+  initialCommit?: string;
   /** True when the root carries the marker after this call. */
   marked: boolean;
 }
@@ -85,9 +90,60 @@ async function ensureLines(file: string, wanted: readonly string[], header: stri
   return true;
 }
 
+/** The skeleton files {@link ensureDataRepo} writes (and first-commits). */
+export const DATA_REPO_SKELETON = [".managers-data", ".gitignore", ".gitattributes", "README.md"] as const;
+
+const DEFAULT_SKELETON_AUTHOR = { name: "Managers", email: "managers@localhost" };
+
+/**
+ * M15: commit the skeleton as the first commit of an unborn repo. Returns the
+ * hash, or undefined when the repo already has commits, nothing was stageable, or
+ * git failed (best-effort: boot never fails over this).
+ */
+async function initialCommit(
+  projectsRoot: string,
+  author: { name: string; email: string },
+): Promise<string | undefined> {
+  const git = (args: string[]) =>
+    run("git", args, { cwd: projectsRoot, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+  try {
+    await git(["rev-parse", "--verify", "-q", "HEAD"]);
+    return undefined; // already has history
+  } catch {
+    /* unborn: fall through */
+  }
+  try {
+    const present: string[] = [];
+    for (const f of DATA_REPO_SKELETON) {
+      if (await fs.stat(path.join(projectsRoot, f)).then(() => true, () => false)) present.push(f);
+    }
+    if (present.length === 0) return undefined;
+    await git(["add", "--", ...present]);
+    const staged = (await git(["diff", "--cached", "--name-only", "--", ...present])).stdout.trim();
+    if (!staged) return undefined;
+    await git([
+      "-c",
+      `user.name=${author.name}`,
+      "-c",
+      `user.email=${author.email}`,
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-q",
+      "-m",
+      "managers: initialise data repo",
+      "--",
+      ...present,
+    ]);
+    return (await git(["rev-parse", "HEAD"])).stdout.trim();
+  } catch {
+    return undefined;
+  }
+}
+
 export async function ensureDataRepo(
   projectsRoot: string,
-  opts: { gitInit?: boolean } = {},
+  opts: { gitInit?: boolean; author?: { name: string; email: string } } = {},
 ): Promise<EnsureDataRepoResult> {
   const changed: string[] = [];
   await fs.mkdir(projectsRoot, { recursive: true });
@@ -138,7 +194,20 @@ export async function ensureDataRepo(
       }
     }
   }
-  return { changed, gitInitialized, marked: hasDataRepoMarker(projectsRoot) };
+  let first: string | undefined;
+  if (opts.gitInit !== false) {
+    const isRepo = await fs
+      .stat(path.join(projectsRoot, ".git"))
+      .then(() => true)
+      .catch(() => false);
+    if (isRepo) first = await initialCommit(projectsRoot, opts.author ?? DEFAULT_SKELETON_AUTHOR);
+  }
+  return {
+    changed,
+    gitInitialized,
+    marked: hasDataRepoMarker(projectsRoot),
+    ...(first ? { initialCommit: first } : {}),
+  };
 }
 
 /** Whether `MANAGERS_DATA_GIT_INIT` allows `git init` (anything but `0`/`false`/`no`/`off`). */

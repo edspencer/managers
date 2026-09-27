@@ -271,6 +271,47 @@ describe("ensureDataRepo", () => {
     expect(r.changed).not.toContain(".managers-data");
   });
 
+  // M15: an unborn repo gets the skeleton as its first commit — and only the skeleton.
+  it("makes the skeleton the first commit of an unborn repo, once", async () => {
+    await fs.rm(proj, { recursive: true, force: true });
+    // A marked root with a stray file of Ed's: the stray is never swept into the commit.
+    await fs.writeFile(path.join(root, DATA_REPO_MARKER), "", "utf8");
+    await fs.writeFile(path.join(root, "stray.txt"), "not ours\n", "utf8");
+    const r1 = await ensureDataRepo(root, { gitInit: true, author: { name: "managers-bot", email: "bot@example.test" } });
+    expect(r1.initialCommit).toMatch(/^[0-9a-f]{40}$/);
+    const g = (...a: string[]) => execFileSync("git", ["-C", root, ...a], { encoding: "utf8" }).trim();
+    expect(g("ls-tree", "--name-only", "HEAD").split("\n").sort()).toEqual(
+      [".gitattributes", ".gitignore", ".managers-data", "README.md"].sort(),
+    );
+    expect(g("log", "-1", "--format=%an %s")).toBe("managers-bot managers: initialise data repo");
+    expect(g("status", "--porcelain")).toBe("?? stray.txt");
+    const r2 = await ensureDataRepo(root, { gitInit: true });
+    expect(r2.initialCommit).toBeUndefined();
+    expect(g("rev-list", "--count", "HEAD")).toBe("1");
+  });
+
+  it("first-commits into an empty clone (only .git) and never into a repo with history", async () => {
+    await fs.rm(proj, { recursive: true, force: true });
+    await fs.rm(root, { recursive: true, force: true });
+    const parent = path.dirname(root);
+    const bare = `${root}-remote.git`;
+    execFileSync("git", ["init", "-q", "--bare", bare]);
+    execFileSync("git", ["clone", "-q", bare, root], { cwd: parent, stdio: "ignore" });
+    try {
+      const r = await ensureDataRepo(root, { gitInit: true });
+      expect(r.gitInitialized).toBe(false);
+      expect(r.marked).toBe(true);
+      expect(r.initialCommit).toMatch(/^[0-9a-f]{40}$/);
+      // A repo with history: extending .gitignore is left to autocommit/the operator.
+      await fs.writeFile(path.join(root, ".gitignore"), "", "utf8");
+      const r2 = await ensureDataRepo(root, { gitInit: true });
+      expect(r2.changed).toContain(".gitignore");
+      expect(r2.initialCommit).toBeUndefined();
+    } finally {
+      await fs.rm(bare, { recursive: true, force: true });
+    }
+  });
+
   it("MANAGERS_DATA_GIT_INIT=0 turns git init off", () => {
     expect(dataGitInitEnabled({})).toBe(true);
     expect(dataGitInitEnabled({ MANAGERS_DATA_GIT_INIT: "0" })).toBe(false);

@@ -25,7 +25,8 @@ holds anything shared across projects.
 
 A manager's state is plain Markdown and YAML files in a git-tracked data
 directory, not a database. You can read and edit all of it by hand, and the
-managers' writes are committed to that repo (locally; Managers never pushes).
+managers' writes are committed to that repo. It stays local unless you turn on
+`MANAGERS_DATA_SYNC=1`, which pulls and pushes it to its `origin` remote.
 
 Managers is a fork of Paddock, so it keeps Paddock's machinery: projects, many
 Claude Code chats per project, triggers (schedules and events), a web UI, and
@@ -131,6 +132,15 @@ export MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1      # read "Security" below first
 node packages/server/dist/cli/managers.js        # http://127.0.0.1:7234
 ```
 
+To back the data directory with a git remote (e.g. a private GitHub repo), clone
+the **empty** repo to the data directory's `projects/` (or `MANAGERS_PROJECTS_DIR`)
+before first boot. Managers claims it, commits its skeleton, and with
+`MANAGERS_DATA_SYNC=1` runs `git pull --rebase --autostash` then `git push` every
+`MANAGERS_DATA_SYNC_INTERVAL` (default `10m`) and after each run. It uses the
+process's ordinary git credentials (a deploy key, a credential helper) and never
+force-pushes; a conflicting pull is aborted and shows as a `data-sync-failed`
+alert on Home.
+
 A new project is seeded with a `wake` trigger that is **disabled**. Enable it in
 the project's Triggers tab when you want its manager to run on a schedule.
 
@@ -162,7 +172,8 @@ Managers runs agents with Bash on your machine, using your Claude login. Read
 - The server binds `127.0.0.1` by default, and refuses a routable interface with
   no auth unless `MANAGERS_DANGEROUSLY_ALLOW_OPEN=1`.
 - The data directory must be empty or already carry the `.managers-data`
-  marker, so an existing directory of other data is refused.
+  marker, so an existing directory of other data is refused. A fresh `git clone`
+  of an empty repo (only `.git/`) counts as empty.
 
 ## Development
 

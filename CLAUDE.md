@@ -5,7 +5,7 @@ at v0.74.1) that turns it into a set of scheduled, per-project **manager agents*
 which track a person's long-running objectives. The human they work for is called
 "Ed" throughout the code (task status `awaiting-ed`, episode `source: ed`, the
 `ed` write actor): read it as "the user". This file covers how to work in the
-code; the milestone labels (M1…M14.5) below name the build steps of v1.
+code; the milestone labels (M1…M15) below name the build steps of v1.
 
 What changed from Paddock, and what did not:
 
@@ -72,7 +72,7 @@ What changed from Paddock, and what did not:
   per workspace — agent writes as `managers-bot` (`MANAGERS_BOT_GIT_*`), UI writes
   as the request's user or `MANAGERS_GIT_AUTHOR_*` — 10 s debounced
   (`MANAGERS_AUTOCOMMIT_DEBOUNCE_MS`), flushed when a turn ends, off with
-  `MANAGERS_AUTOCOMMIT=0`, never pushed. The `managers` MCP server is now injected
+  `MANAGERS_AUTOCOMMIT=0`, never pushed by autocommit itself (M15's opt-in sync pushes). The `managers` MCP server is now injected
   on EVERY keeper and trigger turn: its state block (`self-mcp-state.ts`) is
   always on; the chat-read block keeps `selfMcpEnabled`, spawn-write keeps the
   depth gate. `enforceManagementPolicy` polices state ops for every principal —
@@ -309,6 +309,20 @@ What changed from Paddock, and what did not:
   `add` needs evidence and a `user` fact needs an episode Ed wrote; consolidation ops are
   noted on the run (`memoryOps`) so a restart-interrupted run still gets its `#reflection`;
   a `running` consolidation record counts only if `ConsolidationTracker` knows the id.
+- **Data repo: empty clones and sync (M15, `data-dir-guard.ts`, `managers/data-repo.ts`,
+  `managers/data-sync.ts`).** A root holding ONLY `.git` with nothing committed (a fresh
+  clone of an empty `managers-data`) counts as empty and is claimed; a `--no-checkout` clone
+  of a repo with content is still refused. `ensureDataRepo` makes the skeleton (marker,
+  `.gitignore`, `.gitattributes`, README — nothing else) the FIRST commit of an unborn repo,
+  as `managers-bot`. Opt-in sync, `MANAGERS_DATA_SYNC=1` (`MANAGERS_DATA_SYNC_INTERVAL`,
+  default `10m`, floor `10s`): `git pull --rebase --autostash` then a plain `git push`
+  (`--set-upstream` the first time), at boot, on the interval and debounced after each
+  turn-end commit, serialised on the autocommit chain (`Autocommitter.exclusive`). No remote
+  / unborn / detached → skipped quietly. Never forces; a conflicted rebase is
+  `git rebase --abort`ed and raises Home's `data-sync-failed` alert (error; any other
+  failure is a warning), cleared by the next good sync. Auth is the process's own git
+  credentials; prompts are off and git output is redacted (`redactGitText`). The test
+  helper deletes `MANAGERS_DATA_SYNC*`.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
