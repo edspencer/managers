@@ -23,22 +23,25 @@ export const CONNECTIONS_YAML_EXAMPLE = `mcp:
     description: This project's Paddock`;
 
 function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const flash = (next: "copied" | "failed") => {
+    setState(next);
+    setTimeout(() => setState("idle"), 1500);
+  };
   return (
     <Button
       size="sm"
       variant="subtle"
       onClick={() => {
-        void navigator.clipboard
-          ?.writeText(text)
-          .then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          })
-          .catch(() => undefined);
+        // No clipboard (an insecure origin, a denied permission): say so rather than do nothing.
+        if (!navigator.clipboard) return flash("failed");
+        void navigator.clipboard.writeText(text).then(
+          () => flash("copied"),
+          () => flash("failed"),
+        );
       }}
     >
-      {copied ? "Copied" : "Copy snippet"}
+      {state === "copied" ? "Copied" : state === "failed" ? "Copy failed: select the text" : "Copy snippet"}
     </Button>
   );
 }
