@@ -251,9 +251,9 @@ export function SessionSidebar({
     return (
     <div
       key={c.sessionId}
-      className={`group/chat chat-row chat-row--actions-${actionCount} relative mb-0.5 flex rounded-lg transition-colors ${
+      className={`group/chat chat-row chat-row--actions-${actionCount} relative text-fg-muted can-hover:hover:text-fg mb-0.5 flex rounded-lg transition-colors ${
         activeSession === c.sessionId && view === "chat"
-          ? "bg-surface-selected"
+          ? "bg-surface-selected text-fg"
           : "hover:bg-surface-hover"
       }`}
     >
@@ -323,7 +323,7 @@ export function SessionSidebar({
             </Tooltip>
           )}
           <span
-            className={`min-w-0 flex-1 truncate ${isUnread ? "font-semibold text-fg" : "font-normal text-fg-muted"}`}
+            className={`min-w-0 flex-1 truncate ${isUnread ? "font-semibold text-fg" : "font-normal"}`}
           >
             {c.name}
           </span>
