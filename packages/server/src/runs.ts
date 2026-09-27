@@ -22,6 +22,23 @@
  */
 import type { JobMetadata } from "@herdctl/core";
 import type { RunProvenance, TurnOrigin } from "./run-provenance.js";
+import { PRELOAD_CONTEXT_OPEN, stripPreloadWrapper } from "./preload.js";
+import { stripAttachmentsWrapper } from "./attachments-hint.js";
+
+/**
+ * The prompt a History row is titled with (M9.5, audit #11): the user's (or the
+ * trigger's) REQUEST, with the preload wrapper — since M7 the whole wake
+ * briefing — stripped, the same as chat names (`chat-dto.ts`). A wrapper whose
+ * request marker was cut off (herdctl truncates stored prompts) yields null, so
+ * the row falls back to the job summary or the chat title rather than showing
+ * the briefing.
+ */
+export function runPrompt(prompt: string | null | undefined): string | null {
+  if (!prompt) return null;
+  const s = stripAttachmentsWrapper(stripPreloadWrapper(prompt)).trim();
+  if (!s || s.startsWith(PRELOAD_CONTEXT_OPEN)) return null;
+  return s;
+}
 
 /**
  * Per-run cost, priced from herdctl's persisted per-model token accounting
@@ -154,7 +171,7 @@ export function buildProjectRuns(
       startedAt: job.started_at,
       finishedAt: job.finished_at ?? null,
       durationSeconds: job.duration_seconds ?? null,
-      prompt: job.prompt ?? null,
+      prompt: runPrompt(job.prompt),
       summary: job.summary ?? null,
       isNew,
       cost: null, // P3 seam — see RunCost

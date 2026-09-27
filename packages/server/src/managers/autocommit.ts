@@ -3,7 +3,8 @@
  *
  * Commits ONLY the Managers-owned paths of one workspace
  * ({@link OWNED_STATE_PATHS}: `objectives/ tasks/ log/ runs/ reports/ memory/
- * .gitattributes`, relative to the workspace dir) through
+ * .gitattributes`, relative to the workspace dir) — and inside them only the
+ * files named the way the stores name them ({@link isOwnedStateFile}, M9.5) through
  * `GitService.commitProject(dir, msg, paths, {author})`. Anything else dirty in
  * the workspace — Ed's `notes.md`, a half-edited `CLAUDE.md` — stays exactly as
  * uncommitted as it was. At the root (Home) the same set is used under the
@@ -26,7 +27,7 @@
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { OWNED_STATE_PATHS } from "./layout.js";
+import { OWNED_STATE_PATHS, isOwnedStateFile } from "./layout.js";
 
 export interface GitAuthor {
   name: string;
@@ -41,6 +42,13 @@ export interface AutocommitGit {
     paths?: string[],
     opts?: { author?: GitAuthor },
   ): Promise<{ committed: boolean; hash?: string; error?: string }>;
+  /**
+   * M9.5: the changed files (modified, deleted or untracked-not-ignored) under
+   * `pathspec`, relative to `dir`. When present, autocommit stages only the
+   * store-shaped ones ({@link isOwnedStateFile}); without it (unit fakes) it
+   * stages the owned directories whole, as before.
+   */
+  changedPaths?(dir: string, pathspec: string[]): Promise<string[]>;
 }
 
 export interface AutocommitOptions {
@@ -184,6 +192,29 @@ export class Autocommitter {
     await this.chain.catch(() => undefined);
   }
 
+  /**
+   * Commit exactly `paths` (relative to `dir`) now, as `author`, with `message`
+   * (M9.5). Serialised with every other commit and run under the workspace lock
+   * when one is wired. The behaviour switch uses it to commit `project.yaml` edits
+   * made outside the switch BEFORE its own write, so they are never attributed to
+   * the switch's author. `{ committed: false }` when nothing under `paths` changed.
+   */
+  async commitPaths(dir: string, message: string, paths: string[], author: GitAuthor): Promise<CommitResult> {
+    if (!this.enabled) return { committed: false };
+    const key = path.resolve(dir);
+    const run = async (): Promise<CommitResult> => {
+      const present = await presentPaths(key, paths);
+      if (present.length === 0) return { committed: false };
+      return this.opts.git.commitProject(key, message, present, { author });
+    };
+    const chained = () => {
+      const next = this.chain.then(run, run);
+      this.chain = next.catch(() => undefined);
+      return next;
+    };
+    return this.opts.lock ? this.opts.lock(key, chained) : chained();
+  }
+
   /** Whether a commit is pending for `dir` (tests). */
   isPending(dir: string): boolean {
     return this.pending.has(path.resolve(dir));
@@ -191,7 +222,13 @@ export class Autocommitter {
 
   private commit(p: Pending): Promise<CommitResult> {
     const run = async (): Promise<CommitResult> => {
-      const paths = [...new Set([...(await ownedPathsPresent(p.dir)), ...(await presentPaths(p.dir, [...p.extra]))])];
+      const owned = await ownedPathsPresent(p.dir);
+      // M9.5 (audit #5): only files the stores write, never a stray in an owned folder.
+      const ownedFiles =
+        this.opts.git.changedPaths && owned.length > 0
+          ? (await this.opts.git.changedPaths(p.dir, owned).catch(() => [] as string[])).filter(isOwnedStateFile)
+          : owned;
+      const paths = [...new Set([...ownedFiles, ...(await presentPaths(p.dir, [...p.extra]))])];
       if (paths.length === 0) return { committed: false };
       const reasons = [...p.reasons].sort();
       const message = `managers: update ${p.label} state\n\n${reasons.map((r) => `- ${r}`).join("\n")}`;

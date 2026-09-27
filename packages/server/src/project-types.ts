@@ -373,6 +373,15 @@ export interface Project extends ProjectYaml {
   managed: boolean;
   /** Whether OVERVIEW.md exists in the project dir (sweep-curated context). */
   hasOverview: boolean;
+  /**
+   * Managers M9.5: set when this workspace's `project.yaml` exists but could not
+   * be read as a record (invalid YAML, not a mapping, a malformed `behaviours:`
+   * block). The root reaches the DTO this way for any of these; a project only for
+   * a malformed `behaviours:` block (an unparseable project is not listed at all). While it is set the store REFUSES to rewrite the file (a
+   * rewrite would flatten it to defaults) and every behaviour is treated as OFF.
+   * Never persisted.
+   */
+  configError?: string;
   /** Always present in the DTO (defaults to []). */
   pinned: string[];
   /**

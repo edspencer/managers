@@ -2111,6 +2111,8 @@ export interface RunRecord {
   reports: string[];
   artifacts: { kind: string | null; ref: string | null; note: string | null; at: string | null }[];
   mcpCalls: Record<string, Record<string, number>>;
+  /** M9.5: MCP calls whose result was an error (a permission denial, or a failure). */
+  mcpErrors?: Record<string, Record<string, number>>;
   expect: { kind: "episode" | "report" | "artifact" | "none"; within: string | null; report: string | null; description: string | null } | null;
   expectResult: "met" | "missing" | "n/a" | null;
   briefing: { path: string | null; sha256: string | null } | null;
@@ -2136,7 +2138,11 @@ export type AlertKind =
   | "stale"
   | "artifact-missing"
   /** M8: autonomy changed other than through Settings → Behaviours. */
-  | "behaviours-changed-outside-ui";
+  | "behaviours-changed-outside-ui"
+  /** M9.5: this workspace's or Home's project.yaml could not be read; every behaviour is OFF. */
+  | "config-unreadable"
+  /** M9.5: bypassPermissions on a project with narrowed connections or gated tools. */
+  | "bypass-permissions";
 
 /** One dead-man's-switch alert (M6), `GET …/managers/alerts`. */
 export interface ManagersAlert {

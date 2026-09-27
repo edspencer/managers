@@ -460,6 +460,33 @@ export class GitService {
   }
 
   /**
+   * Managers M9.5: the files under `pathspec` (relative to `dir`) that differ from
+   * HEAD — modified, deleted, or untracked and not ignored — as `dir`-relative
+   * POSIX paths. `[]` outside a repo. Autocommit filters these by the store
+   * naming grammar before staging them.
+   */
+  async changedPaths(dir: string, pathspec: string[]): Promise<string[]> {
+    if (!(await this.isRepoAt(dir))) return [];
+    const safe = pathspec.filter(isSafeRelPath);
+    if (!safe.length) return [];
+    const out = await this.git(dir, [
+      "ls-files",
+      "-z",
+      "--modified",
+      "--deleted",
+      "--others",
+      "--exclude-standard",
+      "--",
+      ...safe,
+    ]);
+    // Also anything staged but not committed (e.g. a commit that failed half-way).
+    const staged = await this.git(dir, ["diff", "--cached", "--name-only", "-z", "--relative", "--", ...safe]).catch(
+      () => "",
+    );
+    return [...new Set([...out.split("\0"), ...staged.split("\0")].filter(Boolean))];
+  }
+
+  /**
    * Uncommitted-file counts per top-level project subtree, in ONE `git status`
    * over the whole store (cheap — no per-project fan-out) so the projects grid
    * can flag "N uncommitted" without opening each project (issue #258). Keyed by

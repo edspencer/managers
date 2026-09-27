@@ -179,6 +179,12 @@ export interface TurnCompletion {
   error?: string;
   /** Calls per declared MCP server and tool (`mcp__<server>__<tool>`), excluding `managers*`. */
   mcpCalls: Record<string, Record<string, number>>;
+  /**
+   * M9.5: the same, for calls whose result was an error — a permission denial
+   * (an OFF behaviour's tool, a narrowed-out tool) or a failed call. Kept apart
+   * so `mcpCalls` means calls that went through.
+   */
+  mcpErrors?: Record<string, Record<string, number>>;
 }
 
 /** The shared per-turn execution engine — resolves the chat's sessionId as soon as known. */

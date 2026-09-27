@@ -47,7 +47,10 @@ import {
 } from "./managers/templates/wake.js";
 import { sanitizeRecoveryOverride } from "./recovery-config.js";
 import { sanitizeCurationOverride } from "./curation-config.js";
-import { sanitizeBehaviours, isBehaviourName } from "./managers/behaviours.js";
+import { sanitizeBehaviours, isBehaviourName, behavioursShapeError } from "./managers/behaviours.js";
+import { WriteQueue, writeFileAtomic } from "./managers/write-queue.js";
+import { BehaviourLkg } from "./managers/behaviour-lkg.js";
+import type { WorkspaceLike } from "./managers/behaviours.js";
 import { sanitizeProjectMcp } from "./managers/project-mcp.js";
 import { sanitizeAttachmentsOverride } from "./attachments-config.js";
 import {
@@ -178,6 +181,12 @@ function nameFor(name: string | undefined, key: string): string {
   return name ?? key;
 }
 
+/** The first line of an error's message (YAML errors carry a multi-line excerpt). */
+function firstLine(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (msg.split("\n")[0] ?? "").slice(0, 200);
+}
+
 /** The on-disk record minus `name` — the root's un-persisted default (#921). */
 function omitName(yaml: ProjectYaml): Omit<ProjectYaml, "name"> {
   const { name: _name, ...rest } = yaml;
@@ -206,6 +215,64 @@ export class ProjectStore {
 
   /** `${file} ${declaredVersion}` pairs already warned about — see {@link warnOnceAboutSchema}. */
   private readonly schemaWarned = new Set<string>();
+
+  /**
+   * Managers M9.5 (audit #1): every read-modify-write of one workspace's
+   * `project.yaml` runs under this per-directory lock, so two concurrent saves
+   * (two Settings PATCHes, a behaviour switch racing a Triggers-tab edit, an
+   * agent's `set_trigger`) serialise instead of the later one writing back a
+   * record read before the earlier one landed. The writes themselves are atomic
+   * (temp file + rename, {@link writeYaml}), so a concurrent READER never sees a
+   * truncated file either — which is what used to normalise the root to blank
+   * defaults and write THAT back, wiping `behaviours:`.
+   */
+  private readonly yamlLocks = new WriteQueue();
+
+  /**
+   * Managers M9.5 (audit #2): the last-known-good behaviour definitions, so an
+   * unreadable `project.yaml` gates what it used to gate. See `behaviour-lkg.ts`.
+   */
+  private readonly lkg = new BehaviourLkg();
+
+  /** The projects root (the root workspace's directory). */
+  get projectsRoot(): string {
+    return this.root;
+  }
+
+  /**
+   * The record the behaviour gate should use for a workspace (M9.5): as read when
+   * its file is clean (remembering its definitions), else with the last-known-good
+   * definitions substituted. Passed to `behavioursFor` as its resolver.
+   */
+  resolveForGate = <T extends WorkspaceLike & { dir?: string }>(ws: T): Promise<T> =>
+    this.lkg.resolve(ws, ws.dir ?? this.dirFor(ws.slug));
+
+  /** The synchronous twin of {@link resolveForGate} (memory, then the state file). */
+  resolveForGateSync<T extends WorkspaceLike & { dir?: string }>(ws: T): T {
+    return this.lkg.resolveSync(ws, ws.dir ?? this.dirFor(ws.slug));
+  }
+
+  /** Run `fn` under `slug`'s `project.yaml` lock. Never nest two calls for one slug. */
+  private withYamlLock<T>(slug: string, fn: () => Promise<T>): Promise<T> {
+    return this.yamlLocks.run(path.resolve(this.dirFor(slug)), fn);
+  }
+
+  /**
+   * The current record for a rewrite, read INSIDE the lock. Refuses a record whose
+   * file could not be read ({@link Project.configError}): rewriting it from the
+   * lenient defaults would silently destroy whatever the file really holds.
+   */
+  private async getForWrite(slug: string): Promise<Project> {
+    const current = await this.get(slug);
+    if (current.configError) {
+      const where = isRootKey(slug) ? "Home's" : `"${slug}"'s`;
+      throw new ProjectError(
+        `Refusing to rewrite ${where} project.yaml: ${current.configError}. Fix the file by hand first.`,
+        "invalid",
+      );
+    }
+    return current;
+  }
 
   /** Ensure the projects root exists. Call once at startup. */
   async init(): Promise<void> {
@@ -919,8 +986,13 @@ export class ProjectStore {
     // CLAUDE.md until after the commit, so a rare `writeYaml` failure can't leave a
     // botched promote's notebook altered (e.g. a `.gitignore` that now ignores
     // `/.chats/`). (Warren #370.)
-    const next: ProjectYaml = {
-      ...this.stripDto(current),
+    // M9.5: the commit point re-reads the record under the project.yaml lock, so
+    // an edit that landed during the clone is kept rather than overwritten.
+    let next!: ProjectYaml;
+    const commit = () => this.withYamlLock(slug, async () => {
+    const fresh = await this.getForWrite(slug);
+    next = {
+      ...this.stripDto(fresh),
       repo,
       // Promotion crosses the managed axis (issue #206): the keeper's cwd becomes
       // a checkout that owns its own CLAUDE.md, which is exactly what unmanaged
@@ -930,8 +1002,10 @@ export class ProjectStore {
       managed: false,
       updated: today(),
     };
+    await this.writeYaml(slug, next);
+    });
     try {
-      await this.writeYaml(slug, next);
+      await commit();
     } catch (err) {
       await this.rmInsideRoot(checkoutDir).catch(() => undefined);
       throw err;
@@ -950,7 +1024,11 @@ export class ProjectStore {
 
   /** Update mutable metadata fields and bump `updated`. */
   async update(slug: string, patch: UpdateProjectInput): Promise<Project> {
-    const current = await this.get(slug);
+    return this.withYamlLock(slug, () => this.updateLocked(slug, patch));
+  }
+
+  private async updateLocked(slug: string, patch: UpdateProjectInput): Promise<Project> {
+    const current = await this.getForWrite(slug);
     // driveMode + maxSpawnDepth are tri-state (set / clear / leave), so they're
     // applied explicitly below rather than via the blanket spread — a plain spread
     // can't express "delete this field", which is how an override is cleared back
@@ -1189,7 +1267,11 @@ export class ProjectStore {
    * if the file doesn't exist or escapes the project dir.
    */
   async pinFile(slug: string, file: string): Promise<Project> {
-    const current = await this.get(slug);
+    return this.withYamlLock(slug, () => this.pinFileLocked(slug, file));
+  }
+
+  private async pinFileLocked(slug: string, file: string): Promise<Project> {
+    const current = await this.getForWrite(slug);
     const name = file?.trim();
     if (!name) throw new ProjectError("File name is required", "invalid");
     // Reuse readFile's traversal guard + existence check (throws if missing).
@@ -1206,11 +1288,13 @@ export class ProjectStore {
 
   /** Unpin a file (no-op if not pinned). Returns the updated project. */
   async unpinFile(slug: string, file: string): Promise<Project> {
-    const current = await this.get(slug);
+    return this.withYamlLock(slug, async () => {
+    const current = await this.getForWrite(slug);
     const pinned = current.pinned.filter((f) => f !== file);
     const next: ProjectYaml = { ...this.stripDto(current), pinned, updated: today() };
     await this.writeYaml(slug, next);
     return this.toDto(current.dir, next, await this.overviewExists(slug));
+    });
   }
 
   /**
@@ -1220,8 +1304,16 @@ export class ProjectStore {
    * + normalised by the Zod schema ({@link sanitizeTrigger}); an invalid name or record
    * throws `ProjectError("invalid")`. Returns the updated project DTO.
    */
-  async setTrigger(slug: string, name: string, trigger: unknown): Promise<Project> {
-    const current = await this.get(slug);
+  async setTrigger(
+    slug: string,
+    name: string,
+    trigger: unknown,
+    guard?: (current: Project) => void | Promise<void>,
+  ): Promise<Project> {
+    return this.withYamlLock(slug, async () => {
+    const current = await this.getForWrite(slug);
+    // M9.5: a caller's policy check runs against the record read under the lock.
+    if (guard) await guard(current);
     if (!isValidTriggerName(name)) {
       throw new ProjectError(`Invalid trigger name: ${name}`, "invalid");
     }
@@ -1231,6 +1323,7 @@ export class ProjectStore {
     const next: ProjectYaml = { ...this.stripDto(current), triggers, updated: today() };
     await this.writeYaml(slug, next);
     return this.toDto(current.dir, next, await this.overviewExists(slug));
+    });
   }
 
   /**
@@ -1241,13 +1334,15 @@ export class ProjectStore {
    * defined somewhere; an invalid name throws `ProjectError("invalid")`.
    */
   async setBehaviourEnabled(slug: string, name: string, enabled: boolean): Promise<Project> {
-    const current = await this.get(slug);
-    if (!isBehaviourName(name)) throw new ProjectError(`Invalid behaviour name: ${name}`, "invalid");
-    const behaviours = { ...(current.behaviours ?? {}) };
-    behaviours[name] = { ...(behaviours[name] ?? {}), enabled };
-    const next: ProjectYaml = { ...this.stripDto(current), behaviours, updated: today() };
-    await this.writeYaml(slug, next);
-    return this.toDto(current.dir, next, await this.overviewExists(slug));
+    return this.withYamlLock(slug, async () => {
+      const current = await this.getForWrite(slug);
+      if (!isBehaviourName(name)) throw new ProjectError(`Invalid behaviour name: ${name}`, "invalid");
+      const behaviours = { ...(current.behaviours ?? {}) };
+      behaviours[name] = { ...(behaviours[name] ?? {}), enabled };
+      const next: ProjectYaml = { ...this.stripDto(current), behaviours, updated: today() };
+      await this.writeYaml(slug, next);
+      return this.toDto(current.dir, next, await this.overviewExists(slug));
+    });
   }
 
   /**
@@ -1255,8 +1350,14 @@ export class ProjectStore {
    * project DTO. The caller disarms the trigger's agent / schedule via `TriggerService`.
    *
    */
-  async removeTrigger(slug: string, name: string): Promise<Project> {
-    const current = await this.get(slug);
+  async removeTrigger(
+    slug: string,
+    name: string,
+    guard?: (current: Project) => void | Promise<void>,
+  ): Promise<Project> {
+    return this.withYamlLock(slug, async () => {
+    const current = await this.getForWrite(slug);
+    if (guard) await guard(current);
     const rest = { ...(current.triggers ?? {}) };
     delete rest[name];
     const stripped = this.stripDto(current);
@@ -1265,6 +1366,7 @@ export class ProjectStore {
     const next: ProjectYaml = { ...stripped, updated: today() };
     await this.writeYaml(slug, next);
     return this.toDto(current.dir, next, await this.overviewExists(slug));
+    });
   }
 
   /**
@@ -1377,11 +1479,35 @@ export class ProjectStore {
     const dir = this.dirFor(key);
     const file = path.join(dir, PROJECT_FILE);
     let yaml: ProjectYaml;
+    // Managers M9.5 (audit #1/#2): an EXISTING root file that cannot be read as a
+    // record still yields the default record (Home must render), but flagged, so
+    // no writer flattens the real file to those defaults and the behaviour gate
+    // fails closed instead of reading "no Home definitions".
+    let configError: string | undefined;
+    let raw: string | null = null;
     try {
-      const raw = await fs.readFile(file, "utf8");
-      const parsed = YAML.parse(raw) as Partial<ProjectYaml> | null;
-      if (!parsed || typeof parsed !== "object") {
+      raw = await fs.readFile(file, "utf8");
+    } catch (err) {
+      if (!isRootKey(key)) return null;
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        configError = `project.yaml could not be read (${(err as NodeJS.ErrnoException).code ?? "error"})`;
+      }
+    }
+    if (raw === null) {
+      yaml = this.normalize({}, key);
+    } else {
+      let parsed: Partial<ProjectYaml> | null = null;
+      let parseFailed: string | undefined;
+      try {
+        parsed = YAML.parse(raw) as Partial<ProjectYaml> | null;
+      } catch (err) {
+        parseFailed = `project.yaml is not valid YAML (${firstLine(err)})`;
+      }
+      if (parseFailed || !parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         if (!isRootKey(key)) return null;
+        // An empty (or comments-only) file is a fresh record, not damage.
+        if (parseFailed) configError = parseFailed;
+        else if (parsed !== null && parsed !== undefined) configError = "project.yaml is not a mapping";
         yaml = this.normalize({}, key);
       } else {
         // The downgrade guard (#724), BEFORE `normalize` gets to be lenient with
@@ -1396,18 +1522,21 @@ export class ProjectStore {
           this.warnOnceAboutSchema(file, declared, skip);
           return null;
         }
+        // A `behaviours:` block the sanitiser would silently thin out (a list, an
+        // entry that is not a mapping, a `triggers:` that is not a list) would drop
+        // gates: fail closed and refuse to rewrite it instead.
+        const shape = behavioursShapeError((parsed as Record<string, unknown>).behaviours);
+        if (shape) configError = shape;
         yaml = this.normalize(parsed, key);
       }
-    } catch {
-      if (!isRootKey(key)) return null;
-      yaml = this.normalize({}, key);
     }
     // A cheap fs.access, done after the yaml parse succeeds. Deliberately the
     // content-dir-in-hand variant: the slug-taking `overviewExists` would re-read
     // this very `project.yaml` to find the content dir, once per project of every
     // `list()`.
     const hasOverview = await this.overviewExistsIn(contentDirFor(dir, yaml));
-    return this.toDto(dir, yaml, hasOverview);
+    const dto = this.toDto(dir, yaml, hasOverview);
+    return configError ? { ...dto, configError } : dto;
   }
 
   /** Fill defaults / coerce a parsed project.yaml into a complete ProjectYaml. */
@@ -1604,7 +1733,8 @@ export class ProjectStore {
     const record: Partial<ProjectYaml> =
       isRootKey(slug) && yaml.name === ROOT_DEFAULT_NAME ? omitName(yaml) : yaml;
     const body = YAML.stringify({ [SCHEMA_VERSION_KEY]: PROJECT_SCHEMA_VERSION, ...record });
-    await fs.writeFile(path.join(this.dirFor(slug), PROJECT_FILE), header + body, "utf8");
+    // M9.5: temp file + rename, so a concurrent reader never parses half a file.
+    await writeFileAtomic(path.join(this.dirFor(slug), PROJECT_FILE), header + body);
   }
 
   /**
@@ -1683,9 +1813,11 @@ export class ProjectStore {
       workingDir: _workingDir,
       contentDir: _contentDir,
       hasOverview: _hasOverview,
+      configError: _configError,
       group,
       ...rest
     } = p;
+    void _configError;
     void _dir;
     void _workingDir;
     void _contentDir;

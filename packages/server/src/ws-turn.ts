@@ -451,14 +451,15 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
   // while the turn runs; and the completion hook, fired exactly once.
   let runActive = opts.runId !== undefined;
   const mcpCalls: Record<string, Record<string, number>> = {};
+  const mcpErrors: Record<string, Record<string, number>> = {};
   let completed = false;
-  const complete = async (r: Omit<TurnCompletion, "mcpCalls">): Promise<void> => {
+  const complete = async (r: Omit<TurnCompletion, "mcpCalls" | "mcpErrors">): Promise<void> => {
     runActive = false;
     if (completed || !opts.onComplete) return;
     completed = true;
     try {
       await Promise.race([
-        Promise.resolve(opts.onComplete({ ...r, mcpCalls })),
+        Promise.resolve(opts.onComplete({ ...r, mcpCalls, mcpErrors })),
         new Promise((res) => setTimeout(res, ON_COMPLETE_BOUND_MS).unref?.()),
       ]);
     } catch {
@@ -558,7 +559,8 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
       });
     },
     onToolCall: (call) => {
-      countMcpCall(mcpCalls, call.toolName);
+      // M9.5: an errored result (a denial included) is not a call that went through.
+      countMcpCall(call.isError ? mcpErrors : mcpCalls, call.toolName);
       turn.emit({
         type: "chat:tool_call",
         payload: {

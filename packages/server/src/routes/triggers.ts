@@ -12,6 +12,7 @@
  * with the `enabled` field flipped; new triggers default disabled.
  */
 import { BehaviourOffError } from "../managers/behaviours.js";
+import { humanTriggerGuard } from "../managers/trigger-guard.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { keeperAgentName } from "../herdctl.js";
 import { GRANTABLE_TOOLS } from "../hook-config.js";
@@ -198,7 +199,8 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         return reply.code(400).send({ error: "Invalid trigger definition", code: "invalid" });
       }
       try {
-        const trigger = await triggers!.set(slug, name, req.body); // throws not_found/invalid
+        // M9.5: a human write records the workspace's gated names (agent tombstones).
+        const trigger = await triggers!.set(slug, name, req.body, humanTriggerGuard(projects)); // throws not_found/invalid
         return { trigger };
       } catch (err) {
         return sendProjectError(reply, err);
@@ -239,7 +241,7 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
       if (!triggersGuard(reply)) return reply;
       const { slug, name } = req.params;
       try {
-        const removed = await triggers!.remove(slug, name); // throws not_found (project)
+        const removed = await triggers!.remove(slug, name, humanTriggerGuard(projects)); // throws not_found (project)
         return reply.code(200).send({ ok: true, name, removed });
       } catch (err) {
         return sendProjectError(reply, err);

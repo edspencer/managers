@@ -18,6 +18,12 @@
  *                     (M8, info) the workspace's autonomy — a behaviour flag,
  *                     definition or trigger binding — changed other than
  *                     through the Behaviours route (`managers/behaviour-state.ts`)
+ *   config-unreadable (M9.5, error) this workspace's or Home's `project.yaml`
+ *                     could not be read, so every behaviour is treated as OFF
+ *   bypass-permissions
+ *                     (M9.5, warning) the keeper runs `bypassPermissions` while
+ *                     a connection is narrowed by `tools:` (an allowlist, which
+ *                     that mode does not enforce) or an OFF behaviour gates tools
  *
  * M8: a trigger whose behaviour is off counts as DISABLED here (it cannot fire,
  * so it is not stale and its schedule is not stalled).
@@ -34,7 +40,7 @@ import type { RunRecord } from "./schemas.js";
 import type { ManagersState } from "./state.js";
 import { withinMs } from "./expect.js";
 import { MAX_PAGE_MONTHS } from "./episodes-store.js";
-import { triggerGatePredicate, type EffectiveBehaviour } from "./behaviours.js";
+import { CONFIG_UNREADABLE_BEHAVIOUR, triggerGatePredicate, type EffectiveBehaviour } from "./behaviours.js";
 import { behaviourDriftAlert } from "./behaviour-state.js";
 
 export const ALERT_KINDS = [
@@ -44,6 +50,8 @@ export const ALERT_KINDS = [
   "stale",
   "artifact-missing",
   "behaviours-changed-outside-ui",
+  "config-unreadable",
+  "bypass-permissions",
 ] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 export type AlertSeverity = "error" | "warning" | "info";
@@ -88,6 +96,8 @@ const SEVERITY: Record<AlertKind, AlertSeverity> = {
   stale: "warning",
   "artifact-missing": "warning",
   "behaviours-changed-outside-ui": "info",
+  "config-unreadable": "error",
+  "bypass-permissions": "warning",
 };
 
 const SEVERITY_RANK: Record<AlertSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -232,7 +242,13 @@ export function monthsToRead(triggers: AlertTrigger[]): number {
 /** Read a workspace's triggers, recent runs and live schedules, then compute its alerts. */
 export async function loadAlerts(opts: {
   state: ManagersState;
-  project: { dir: string; triggers?: Record<string, PaddockTrigger> };
+  project: {
+    dir: string;
+    triggers?: Record<string, PaddockTrigger>;
+    /** M9.5: for the `bypass-permissions` alert. */
+    permissionMode?: string;
+    mcp?: Record<string, unknown>;
+  };
   schedules: () => Promise<AlertSchedule[]>;
   /** M8: the workspace's effective behaviours — gates triggers and checks for out-of-UI changes. */
   behaviours?: EffectiveBehaviour[];
@@ -249,5 +265,50 @@ export async function loadAlerts(opts: {
   const out = computeAlerts({ triggers, runs: page.runs, schedules, now });
   if (!opts.behaviours) return out;
   const drift = await behaviourDriftAlert(opts.project.dir, opts.behaviours, opts.project.triggers).catch(() => null);
-  return drift ? sortAlerts([...out, drift]) : out;
+  const extra = [...(drift ? [drift] : []), ...configAlerts(opts.project, opts.behaviours)];
+  return extra.length ? sortAlerts([...out, ...extra]) : out;
+}
+
+/** M9.5: the `config-unreadable` and `bypass-permissions` alerts (pure). */
+export function configAlerts(
+  project: { permissionMode?: string; mcp?: Record<string, unknown> },
+  behaviours: EffectiveBehaviour[],
+): Alert[] {
+  const out: Alert[] = [];
+  const broken = behaviours.find((b) => b.name === CONFIG_UNREADABLE_BEHAVIOUR);
+  if (broken) {
+    out.push({
+      id: "config-unreadable:",
+      kind: "config-unreadable",
+      trigger: "",
+      severity: SEVERITY["config-unreadable"],
+      message: broken.description,
+      runId: null,
+      at: null,
+    });
+  }
+  if (project.permissionMode === "bypassPermissions") {
+    const gatedTools = behaviours.some((b) => !b.enabled && b.tools.length > 0);
+    const narrowed = Object.entries(project.mcp ?? {})
+      .filter(([, c]) => !!c && typeof c === "object" && (c as { tools?: unknown }).tools !== undefined)
+      .map(([name]) => name);
+    if (gatedTools || narrowed.length > 0) {
+      const why = [
+        narrowed.length ? `the connection tool list (${narrowed.join(", ")}) is an allowlist this mode does not enforce` : null,
+        gatedTools ? "OFF behaviours' tools are denied only by deny rules" : null,
+      ].filter(Boolean);
+      out.push({
+        id: "bypass-permissions:",
+        kind: "bypass-permissions",
+        trigger: "",
+        severity: SEVERITY["bypass-permissions"],
+        message:
+          `This project's keeper runs with permissionMode bypassPermissions: ${why.join("; ")}. ` +
+          "Switch Settings → Permission mode back to a prompting mode unless you mean it.",
+        runId: null,
+        at: null,
+      });
+    }
+  }
+  return out;
 }

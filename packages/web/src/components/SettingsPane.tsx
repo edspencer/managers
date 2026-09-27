@@ -570,7 +570,7 @@ export function SettingsPane({
                 {permissionMode === "bypassPermissions" ? (
                   <Caution>
                     Claude runs every tool without asking — it can edit files and run commands
-                    unprompted.
+                    unprompted, and a connection's <code>tools:</code> list is no longer enforced.
                   </Caution>
                 ) : (
                   <Hint>How much Claude asks before acting.</Hint>
@@ -767,9 +767,11 @@ export function SettingsPane({
 
           <Section
             title="Curation budgets"
-            description="Per-file token limits the post-turn sweeper keeps this project's OVERVIEW.md, CHANGELOG.md and CLAUDE.md under. Leave a field blank to inherit the instance default."
+            description="Per-file token limits the post-turn sweeper keeps this project's OVERVIEW.md and CHANGELOG.md under. Leave a field blank to inherit the instance default."
           >
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {/* M9.5: no CLAUDE.md field — the sweeper no longer curates CLAUDE.md (M3). A
+                budget already on disk is still carried through a save untouched. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="field-label">OVERVIEW.md (tokens)</span>
                 <input
@@ -794,18 +796,6 @@ export function SettingsPane({
                   aria-label="CHANGELOG.md token budget"
                 />
               </label>
-              <label className="block">
-                <span className="field-label">CLAUDE.md (tokens)</span>
-                <input
-                  type="number"
-                  min={1}
-                  className="input"
-                  placeholder={`Instance default (${curationDefault?.claudeMaxTokens ?? LOADING_DEFAULT})`}
-                  value={claudeBudget}
-                  onChange={(e) => setClaudeBudget(e.target.value)}
-                  aria-label="CLAUDE.md token budget"
-                />
-              </label>
             </div>
             {curationInvalid ? (
               <Hint>Each budget must be a whole number of tokens (1 or more), or blank to inherit.</Hint>
@@ -815,8 +805,7 @@ export function SettingsPane({
                 {curationDefault && (
                   <>
                     {" "}
-                    ({curationDefault.overviewMaxTokens}/{curationDefault.changelogMaxTokens}/
-                    {curationDefault.claudeMaxTokens})
+                    ({curationDefault.overviewMaxTokens}/{curationDefault.changelogMaxTokens})
                   </>
                 )}{" "}
                 for the fields set above.{" "}
@@ -825,14 +814,12 @@ export function SettingsPane({
                   onClick={() => {
                     setOverviewBudget("");
                     setChangelogBudget("");
-                    setClaudeBudget("");
                   }}
                   className="font-medium text-accent hover:underline"
                 >
                   Reset all to instance defaults
                 </button>
-                . Repo-backed projects never have their CLAUDE.md curated, so that budget is moot for
-                them.
+                .
               </Hint>
             ) : curationDefault === null ? (
               <Hint>
@@ -844,10 +831,9 @@ export function SettingsPane({
               <Hint>
                 Inheriting the instance defaults:{" "}
                 <span className="tabular font-medium text-fg">
-                  {curationDefault.overviewMaxTokens}/{curationDefault.changelogMaxTokens}/
-                  {curationDefault.claudeMaxTokens}
+                  {curationDefault.overviewMaxTokens}/{curationDefault.changelogMaxTokens}
                 </span>{" "}
-                tokens (OVERVIEW/CHANGELOG/CLAUDE). Lower a budget to shrink the context this project
+                tokens (OVERVIEW/CHANGELOG). Lower a budget to shrink the context this project
                 injects into every chat.
               </Hint>
             )}

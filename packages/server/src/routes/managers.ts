@@ -61,12 +61,15 @@ import { loadAlerts, type Alert } from "../managers/alerts.js";
 import { briefingForWorkspace } from "../managers/briefing.js";
 import { boundObjective } from "../managers/trigger-runs.js";
 import {
+  CONFIG_UNREADABLE_BEHAVIOUR,
   behavioursFor,
   isBehaviourName,
   triggerGate,
   type EffectiveBehaviour,
 } from "../managers/behaviours.js";
 import { behavioursChangedOutsideUi, writeBaseline } from "../managers/behaviour-state.js";
+import { WriteQueue } from "../managers/write-queue.js";
+import { mcpResolveEnv } from "../managers/mcp-secret-env.js";
 import { workspaceLabel } from "../managers/state-writes.js";
 import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
 import { probeConnection } from "../managers/mcp-probe.js";
@@ -210,6 +213,9 @@ function objectiveInput(id: string, b: Body): UpdateObjectiveInput {
     triggers: listField(b, "triggers"),
   };
 }
+
+/** M9.5: behaviour switches are serialised per workspace directory (both mounts share it). */
+const toggleLocks = new WriteQueue();
 
 export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteCtx): void {
   const { projects } = ctx;
@@ -943,53 +949,90 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         if (!isBehaviourName(name)) throw new Invalid(`Invalid behaviour name: ${name}`);
         const enabled = bodyOf(req).enabled;
         if (typeof enabled !== "boolean") throw new Invalid("enabled must be a boolean");
-        const project = await projects.get(req.params.slug);
-        const before = (await behavioursFor(projects, project)).find((b) => b.name === name);
-        if (!before) return notFound(reply, `No such behaviour: ${name}`);
-        if (before.enabled === enabled) return { behaviour: behaviourView(before, project), changed: false };
-
-        const updated = await projects.setBehaviourEnabled(req.params.slug, name, enabled);
-        const after = await behavioursFor(projects, updated);
-        const now = after.find((b) => b.name === name)!;
-        // Re-arm schedules and re-deny tools from the new state. A registration
-        // failure must not undo Ed's switch: the fire path re-checks the gate.
-        await ctx.herdctl.ensureProjectAgent(updated).catch((err: unknown) => {
-          req.log.warn({ err, behaviour: name }, "behaviour switched but agent re-registration failed");
-        });
-        const scope = [
-          now.triggers.length || behaviourView(now, updated).boundTriggers.length
-            ? `triggers: ${behaviourView(now, updated).boundTriggers.map((t) => t.name).join(", ")}`
-            : null,
-          now.tools.length ? `tools: ${now.tools.join(", ")}` : null,
-        ]
-          .filter(Boolean)
-          .join("; ");
-        const episode = await state.writer.recordEpisode(
-          ws,
-          {
-            text:
-              `Ed turned behaviour ${name} ${enabled ? "ON: it may now act" : "OFF: it must not happen, nor be proposed"}` +
-              `${scope ? ` (${scope})` : ""}.`,
-            importance: 7,
-            tags: ["autonomy"],
-          },
-          actor,
-        );
-        await writeBaseline(updated.dir, after, updated.triggers, "ed").catch(() => undefined);
-        // project.yaml rides in the same commit as the log, committed now rather than debounced.
-        if (ctx.autocommit) {
-          ctx.autocommit.schedule(
-            updated.dir,
-            workspaceLabel(req.params.slug),
-            actor.author,
-            `behaviour ${name} ${enabled ? "on" : "off"}`,
-            ["project.yaml"],
-          );
-          await ctx.autocommit.flush(updated.dir).catch(() => null);
-        }
-        return { behaviour: behaviourView(now, updated), changed: true, episode };
+        // M9.5 (audit #4): one switch per workspace at a time, so the before/after
+        // comparison below is not raced — two identical switches give ONE change
+        // and ONE #autonomy episode, not two.
+        return toggleLocks.run(ws.layout.dir, () => toggle(req, reply, ws, actor, name, enabled));
       }),
   );
+
+  async function toggle(
+    req: FastifyRequest<{ Params: { slug: string; name: string } }>,
+    reply: FastifyReply,
+    ws: WriteWorkspace,
+    actor: WriteActor,
+    name: string,
+    enabled: boolean,
+  ) {
+    const project = await projects.get(req.params.slug);
+    const list = await behavioursFor(projects, project);
+    // M9.5 (audit #2): while a project.yaml (here or Home's) is unreadable every
+    // behaviour is forced OFF; a switch could not take effect, so refuse it.
+    const broken = list.find((b) => b.name === CONFIG_UNREADABLE_BEHAVIOUR);
+    if (broken) {
+      return reply.code(409).send({ error: broken.description, code: "config_unreadable" });
+    }
+    const before = list.find((b) => b.name === name);
+    if (!before) return notFound(reply, `No such behaviour: ${name}`);
+    if (before.enabled === enabled) return { behaviour: behaviourView(before, project), changed: false };
+
+    // M9.5 (audit #6): project.yaml edits that are not this switch (Triggers-tab
+    // saves, an agent's set_trigger, hand edits) are committed on their own
+    // first, as the bot, so the switch's commit holds only the switch.
+    if (ctx.autocommit) {
+      await ctx.autocommit
+        .commitPaths(
+          project.dir,
+          `managers: record ${workspaceLabel(req.params.slug)} project.yaml edits\n\n` +
+            `- uncommitted before Ed switched behaviour ${name}; made outside Settings → Behaviours ` +
+            `(Triggers tab, set_trigger or a hand edit), so the author is not known`,
+          ["project.yaml"],
+          ctx.cfg.botGitAuthor,
+        )
+        .catch(() => null);
+    }
+
+    const updated = await projects.setBehaviourEnabled(req.params.slug, name, enabled);
+    const after = await behavioursFor(projects, updated);
+    const now = after.find((b) => b.name === name)!;
+    // Re-arm schedules and re-deny tools from the new state. A registration
+    // failure must not undo Ed's switch: the fire path re-checks the gate.
+    await ctx.herdctl.ensureProjectAgent(updated).catch((err: unknown) => {
+      req.log.warn({ err, behaviour: name }, "behaviour switched but agent re-registration failed");
+    });
+    const scope = [
+      now.triggers.length || behaviourView(now, updated).boundTriggers.length
+        ? `triggers: ${behaviourView(now, updated).boundTriggers.map((t) => t.name).join(", ")}`
+        : null,
+      now.tools.length ? `tools: ${now.tools.join(", ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("; ");
+    const episode = await state.writer.recordEpisode(
+      ws,
+      {
+        text:
+          `Ed turned behaviour ${name} ${enabled ? "ON: it may now act" : "OFF: it must not happen, nor be proposed"}` +
+          `${scope ? ` (${scope})` : ""}.`,
+        importance: 7,
+        tags: ["autonomy"],
+      },
+      actor,
+    );
+    await writeBaseline(updated.dir, after, updated.triggers, "ed").catch(() => undefined);
+    // project.yaml rides in the same commit as the log, committed now rather than debounced.
+    if (ctx.autocommit) {
+      ctx.autocommit.schedule(
+        updated.dir,
+        workspaceLabel(req.params.slug),
+        actor.author,
+        `behaviour ${name} ${enabled ? "on" : "off"}`,
+        ["project.yaml"],
+      );
+      await ctx.autocommit.flush(updated.dir).catch(() => null);
+    }
+    return { behaviour: behaviourView(now, updated), changed: true, episode };
+  }
 
   app.post<{ Params: { slug: string } }>(
     "/managers/behaviours/acknowledge",
@@ -1018,7 +1061,7 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
   const connectionsOf = (project: Project): ProjectMcpResolution =>
     typeof ctx.herdctl?.projectMcpOf === "function"
       ? ctx.herdctl.projectMcpOf(project)
-      : resolveProjectMcp(project, process.env);
+      : resolveProjectMcp(project, mcpResolveEnv());
 
   /** The secret-free view of a connection (drops the resolved server). */
   const connectionView = (c: ProjectConnection) => {

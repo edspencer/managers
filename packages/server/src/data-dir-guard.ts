@@ -7,11 +7,13 @@
  * or anyone else's, real projects, and then curating, committing into and
  * deleting inside it.
  *
- * The rule: a projects root that already holds projects (any `<child>/project.yaml`)
- * must carry the {@link DATA_REPO_MARKER} file saying Managers owns it, or boot
- * refuses. A root with no projects yet — absent, empty, or holding only loose
- * files — is claimed: the marker is written so the projects created in it later
- * keep booting. `MANAGERS_ADOPT_DATA_DIR=1` is the deliberate override for
+ * The rule: a projects root that is NOT EMPTY must carry the
+ * {@link DATA_REPO_MARKER} file saying Managers owns it, or boot refuses. Only an
+ * absent or empty root is claimed: the marker is written so the projects created
+ * in it later keep booting. (Until M9.5 any root without a `<child>/project.yaml`
+ * was claimed, so a mistyped `MANAGERS_PROJECTS_DIR` pointing at a real directory
+ * of notes or code got a marker, `git init`, a README and `.managers/` written
+ * into it — audit #7.) `MANAGERS_ADOPT_DATA_DIR=1` is the deliberate override for
  * adopting an existing tree; it lets boot proceed but does NOT write the marker,
  * so the choice has to be made again (or the marker added by hand) every time.
  */
@@ -47,6 +49,15 @@ export function projectDirsIn(root: string): string[] {
   return found;
 }
 
+/** Whether `root` is absent or has no entries at all. */
+export function isEmptyOrAbsent(root: string): boolean {
+  try {
+    return fs.readdirSync(root).length === 0;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}
+
 /** Whether `root` carries the ownership marker. */
 export function hasDataRepoMarker(root: string): boolean {
   return fs.existsSync(path.join(root, DATA_REPO_MARKER));
@@ -61,9 +72,18 @@ export function dataDirGuardRefusal(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   if (hasDataRepoMarker(projectsRoot)) return undefined;
-  const projects = projectDirsIn(projectsRoot);
-  if (projects.length === 0) return undefined;
+  if (isEmptyOrAbsent(projectsRoot)) return undefined;
   if (adoptRequested(env)) return undefined;
+  const projects = projectDirsIn(projectsRoot);
+  if (projects.length === 0) {
+    return (
+      `Refusing to start: the projects root ${projectsRoot} is not empty and has no ${DATA_REPO_MARKER} marker, ` +
+      `so it was not created by Managers. Managers only claims an empty or absent directory. ` +
+      `Point MANAGERS_DATA_DIR / MANAGERS_PROJECTS_DIR somewhere else, or — only if you really ` +
+      `mean to adopt this directory — create ${path.join(projectsRoot, DATA_REPO_MARKER)} ` +
+      `or set ${ADOPT_ENV_VAR}=1.`
+    );
+  }
   return (
     `Refusing to start: the projects root ${projectsRoot} already contains ` +
     `${projects.length} project${projects.length === 1 ? "" : "s"} but no ${DATA_REPO_MARKER} marker, ` +
@@ -75,14 +95,13 @@ export function dataDirGuardRefusal(
 }
 
 /**
- * Write the marker into a projects root that holds no projects yet, creating
- * the root if needed. A no-op when the marker exists, and — deliberately —
- * when the root already holds projects (that is the adopt case, which never
- * writes). Best-effort: a failure here only means the next boot re-evaluates.
+ * Write the marker into an empty or absent projects root, creating it if
+ * needed. A no-op when the marker exists, and — deliberately — when the root
+ * holds anything (that is the adopt case, which never writes). Best-effort: a failure here only means the next boot re-evaluates.
  */
 export function claimProjectsRoot(projectsRoot: string): void {
   if (hasDataRepoMarker(projectsRoot)) return;
-  if (projectDirsIn(projectsRoot).length > 0) return;
+  if (!isEmptyOrAbsent(projectsRoot)) return;
   try {
     fs.mkdirSync(projectsRoot, { recursive: true });
     fs.writeFileSync(

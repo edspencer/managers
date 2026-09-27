@@ -156,12 +156,56 @@ export function sanitizeBehaviours(raw: unknown): Record<string, BehaviourConfig
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Managers M9.5 (audit #2): why a raw `behaviours:` value would lose gates if it
+ * went through {@link sanitizeBehaviours}, or `undefined` when it is well-formed
+ * (or absent). The sanitiser is lenient by design; this is what lets the reader
+ * notice the leniency would FAIL OPEN — an entry that is a list, a `triggers:`
+ * that is a string — and fail closed instead. Non-boolean `enabled` is not an
+ * error: dropping it only leaves the behaviour off.
+ */
+export function behavioursShapeError(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) return "behaviours: is not a mapping";
+  for (const [name, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!isBehaviourName(name)) return `behaviours: "${String(name).slice(0, 64)}" is not a valid behaviour name`;
+    if (val === null) continue;
+    if (typeof val !== "object" || Array.isArray(val)) return `behaviours.${name} is not a mapping`;
+    for (const key of ["triggers", "tools"] as const) {
+      const v = (val as Record<string, unknown>)[key];
+      if (v === undefined || v === null) continue;
+      if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) return `behaviours.${name}.${key} is not a list of names`;
+    }
+  }
+  return undefined;
+}
+
 // --- the merge -------------------------------------------------------------------
 
-interface WorkspaceLike {
+export interface WorkspaceLike {
   slug: string;
   behaviours?: Record<string, BehaviourConfig>;
+  /** M9.5: the workspace's `project.yaml` could not be read (see `Project.configError`). */
+  configError?: string;
+  /**
+   * M9.5: set with `configError` when not even a last-known-good copy of the
+   * definitions exists, so which triggers are bound is unknown: every trigger
+   * is then gated.
+   */
+  behavioursUnknown?: boolean;
 }
+
+/**
+ * The synthetic behaviour that stands for "this workspace's (or Home's) config
+ * could not be read" (M9.5). Always OFF; gates every trigger (`*`) when the
+ * bindings are unknown. It appears in the Settings list, the briefing's "Not
+ * permitted" section and the fingerprint, and raises the `config-unreadable`
+ * alert. It cannot be switched on.
+ */
+export const CONFIG_UNREADABLE_BEHAVIOUR = "config-unreadable";
+
+/** The trigger-list wildcard only {@link CONFIG_UNREADABLE_BEHAVIOUR} uses. */
+export const ALL_TRIGGERS = "*";
 
 const DEFINITION_KEYS = ["description", "triggers", "tools", "instructions"] as const;
 
@@ -175,8 +219,14 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
   const isHome = project.slug === "";
   const own = project.behaviours ?? {};
   const home = isHome ? {} : (root?.behaviours ?? {});
-  const names = [...new Set([...Object.keys(BUILTIN_BEHAVIOURS), ...Object.keys(home), ...Object.keys(own)])].sort();
-  return names.map((name) => {
+  // M9.5: an unreadable file here or at Home fails CLOSED — every behaviour off,
+  // plus the synthetic `config-unreadable` entry (gating every trigger when not
+  // even the last-known-good definitions are available).
+  const broken: WorkspaceLike | null = project.configError ? project : !isHome && root?.configError ? root : null;
+  const names = [...new Set([...Object.keys(BUILTIN_BEHAVIOURS), ...Object.keys(home), ...Object.keys(own)])]
+    .filter((n) => !broken || n !== CONFIG_UNREADABLE_BEHAVIOUR)
+    .sort();
+  const list = names.map((name): EffectiveBehaviour => {
     const b = BUILTIN_BEHAVIOURS[name];
     const h = home[name];
     const o = own[name];
@@ -188,7 +238,7 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
     const overridden = inherited && !!o && DEFINITION_KEYS.some((k) => o[k] !== undefined);
     return {
       name,
-      enabled: o?.enabled === true,
+      enabled: !broken && o?.enabled === true,
       description: pick("description") ?? "",
       triggers: [...(pick("triggers") ?? [])],
       tools: [...(pick("tools") ?? [])],
@@ -198,15 +248,57 @@ export function effectiveBehaviours(project: WorkspaceLike, root: WorkspaceLike 
       overridden,
     };
   });
+  if (!broken) return list;
+  const where = broken.slug === "" ? "Home's" : `${broken.slug}'s`;
+  const unknown = project.behavioursUnknown === true || (broken === root && root?.behavioursUnknown === true);
+  const synthetic: EffectiveBehaviour = {
+    name: CONFIG_UNREADABLE_BEHAVIOUR,
+    enabled: false,
+    description:
+      `${where} project.yaml could not be read (${broken.configError}). Every behaviour is treated as OFF until it is fixed` +
+      (unknown ? ", and because its behaviour definitions are unknown, no trigger may run." : "."),
+    triggers: unknown ? [ALL_TRIGGERS] : [],
+    tools: [],
+    instructions: "",
+    origin: broken.slug === "" ? "home" : "project",
+    inherited: broken !== project,
+    overridden: false,
+  };
+  return [...list, synthetic].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Load the root, then merge. The root read failing means "no Home definitions". */
+/**
+ * The same as {@link effectiveBehaviours}, but for a caller that could not even
+ * obtain the root record (M9.5): it is treated as unreadable, never as "no Home
+ * definitions".
+ */
+export function unreadableRoot(err: unknown): WorkspaceLike {
+  const msg = err instanceof Error ? err.message : String(err);
+  return { slug: "", configError: msg.split("\n")[0]?.slice(0, 200) || "unreadable", behavioursUnknown: true };
+}
+
+/**
+ * The I/O a caller of {@link behavioursFor} may supply (M9.5): resolving a
+ * workspace record for the gate — substituting the last-known-good definitions
+ * when its file is unreadable (`behaviour-lkg.ts`). Absent, records are used as read.
+ */
+export type GateResolver = (ws: WorkspaceLike & { dir?: string }) => Promise<WorkspaceLike>;
+
+/**
+ * Load the root, then merge. M9.5: the root read FAILING (not found because of
+ * the #724 schema skip, an I/O error) fails closed — it is an unreadable root,
+ * never "no Home definitions".
+ */
 export async function behavioursFor(
-  projects: { get(slug: string): Promise<WorkspaceLike> },
-  project: WorkspaceLike,
+  projects: { get(slug: string): Promise<WorkspaceLike & { dir?: string }>; resolveForGate?: GateResolver },
+  project: WorkspaceLike & { dir?: string },
 ): Promise<EffectiveBehaviour[]> {
-  const root = project.slug === "" ? project : await projects.get("").catch(() => null);
-  return effectiveBehaviours(project, root);
+  const resolve: GateResolver = projects.resolveForGate ?? (async (ws) => ws);
+  const own = await resolve(project);
+  if (project.slug === "") return effectiveBehaviours(own, own);
+  const rawRoot = await projects.get("").catch((err: unknown) => unreadableRoot(err));
+  const root = await resolve(rawRoot);
+  return effectiveBehaviours(own, root);
 }
 
 // --- gates -------------------------------------------------------------------------
@@ -232,7 +324,9 @@ export function triggerGate(
   behaviours: EffectiveBehaviour[],
 ): TriggerGate {
   const byName = new Map(behaviours.map((b) => [b.name, b]));
-  const names = new Set(behaviours.filter((b) => b.triggers.includes(triggerName)).map((b) => b.name));
+  const names = new Set(
+    behaviours.filter((b) => b.triggers.includes(triggerName) || b.triggers.includes(ALL_TRIGGERS)).map((b) => b.name),
+  );
   const declared = (trigger?.run as { behaviour?: string } | undefined)?.behaviour;
   if (typeof declared === "string" && declared) names.add(declared);
   const list = [...names].sort();

@@ -10,12 +10,17 @@
 import { buildApp } from "./app.js";
 import { describeScrub, scrubInheritedEnv } from "./env-scrub.js";
 import { applyRuntimeEnv } from "./managers/claude-overlay.js";
+import { describeSequester, sequesterMcpSecrets } from "./managers/mcp-secret-env.js";
 
 export async function start(): Promise<void> {
   // FIRST, before any config is resolved or any child can be spawned: drop every
   // inherited `PADDOCK_*` variable so none of them reaches a keeper, sweeper or
   // trigger subprocess (see env-scrub.ts). Only the count is logged.
   const scrubbed = scrubInheritedEnv();
+  // Managers M9.5: MCP credentials (`MANAGERS_MCP_*`) leave process.env too, so
+  // no keeper/trigger/sweeper child inherits another project's token; the MCP
+  // resolvers read them from the private map (managers/mcp-secret-env.ts).
+  const sequestered = sequesterMcpSecrets();
   // Managers M3: CLAUDE_CODE_DISABLE_AUTO_MEMORY=1, process-wide, so every
   // keeper/trigger/sweeper child inherits it (belt-and-braces with the
   // `autoMemoryEnabled: false` in the generated settings.json).
@@ -25,6 +30,7 @@ export async function start(): Promise<void> {
   // from a shell configured for Paddock, which is worth seeing even at LOG_LEVEL=warn.
   if (scrubbed > 0) app.log.warn({ scrubbedEnvVars: scrubbed }, describeScrub(scrubbed));
   else app.log.info({ scrubbedEnvVars: 0 }, describeScrub(0));
+  app.log.info({ sequesteredMcpVars: sequestered }, describeSequester(sequestered));
 
   const shutdown = async () => {
     await close();

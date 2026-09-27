@@ -160,6 +160,8 @@ export interface FinishRunInput {
   model?: string | null;
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number } | null;
   mcpCalls?: Record<string, Record<string, number>>;
+  /** M9.5: calls that errored (denied or failed), counted apart from `mcpCalls`. */
+  mcpErrors?: Record<string, Record<string, number>>;
   error?: string | null;
 }
 
@@ -883,6 +885,7 @@ export class StateWriter {
               }
             : known.usage,
           mcpCalls: input.mcpCalls ?? known.mcpCalls ?? {},
+          ...(input.mcpErrors && Object.keys(input.mcpErrors).length > 0 ? { mcpErrors: input.mcpErrors } : {}),
           error: input.error ? oneLine(input.error, 500) : null,
         };
         const probe = runWriteSchema.safeParse(normaliseRun(merged));

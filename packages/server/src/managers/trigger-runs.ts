@@ -103,6 +103,7 @@ export async function beginTriggerRun(p: BeginTriggerRunParams): Promise<Trigger
             model: r.model ?? null,
             usage: r.usage ?? null,
             mcpCalls: r.mcpCalls,
+            mcpErrors: r.mcpErrors,
             error: r.success ? null : (r.error ?? "the turn did not succeed"),
           },
           actor(runId),
@@ -114,4 +115,44 @@ export async function beginTriggerRun(p: BeginTriggerRunParams): Promise<Trigger
       await p.flush?.(p.dir).catch((err: unknown) => p.onError?.("committing the run", err));
     },
   };
+}
+
+/** The error a run left `running` by a previous server process is finished with (M9.5). */
+export const INTERRUPTED_BY_RESTART = "interrupted by restart";
+
+/**
+ * Finish every run still `running` that started before `bootAt` as `failed`,
+ * `error: interrupted by restart` (M9.5, audit #8). Called at boot for each
+ * workspace, before any trigger can fire in this process: such a run's turn died
+ * with the old process, so nothing will ever finish it, and until M9.5 it sat
+ * `running` with no alert until the 2 h `run-stuck` threshold. Returns the ids
+ * finished. Never throws (a broken record is skipped).
+ */
+export async function failInterruptedRuns(p: {
+  state: ManagersState;
+  slug: string;
+  dir: string;
+  author: GitAuthor;
+  bootAt: Date;
+}): Promise<string[]> {
+  const layout = p.state.layout(p.dir);
+  const ws: WriteWorkspace = { key: p.slug, layout };
+  const page = await p.state.runs.list(layout, { status: "running", months: 3 }).catch(() => null);
+  const done: string[] = [];
+  for (const r of page?.runs ?? []) {
+    const started = r.started ? Date.parse(r.started) : NaN;
+    if (Number.isFinite(started) && started >= p.bootAt.getTime()) continue;
+    try {
+      await p.state.writer.finishRun(
+        ws,
+        r.id,
+        { status: "failed", error: INTERRUPTED_BY_RESTART },
+        { kind: "agent", name: "manager", author: p.author, runId: r.id },
+      );
+      done.push(r.id);
+    } catch {
+      /* already finished, or hand-broken: leave it */
+    }
+  }
+  return done;
 }

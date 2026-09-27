@@ -36,6 +36,7 @@
  *
  * PURE: it reads the record and the env it is given, never files.
  */
+import { MCP_SECRET_ENV_PREFIX, isSequesteredName } from "./mcp-secret-env.js";
 import {
   ENV_REF_PREFIX,
   SECRET_ISH_KEY_RE,
@@ -379,6 +380,19 @@ export function projectMcpNotices(slug: string, mcp: ProjectMcpResolution): { le
   }
   for (const e of mcp.errors) out.push({ level: "error", message: `${label}: ${e}` });
   for (const w of mcp.warnings) out.push({ level: "warn", message: `${label}: ${w}` });
+  // M9.5: only MANAGERS_MCP_* variables are kept out of children's environment.
+  for (const c of mcp.connections) {
+    for (const r of c.envRefs) {
+      if ((r.where.startsWith("headers.") || r.where.startsWith("env.")) && !isSequesteredName(r.name)) {
+        out.push({
+          level: "warn",
+          message:
+            `${label}: mcp.${c.name}.${r.where} reads ${r.name}, which is not a ${MCP_SECRET_ENV_PREFIX}* variable, ` +
+            `so every keeper's environment can read it. Rename it ${MCP_SECRET_ENV_PREFIX}<CONN>_<PROJECT>.`,
+        });
+      }
+    }
+  }
   return out;
 }
 

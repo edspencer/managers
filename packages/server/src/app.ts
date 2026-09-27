@@ -30,7 +30,10 @@ import { loadHostPlugins } from "./claude-plugins.js";
 import { declaredMcpNotices } from "./mcp-servers.js";
 import { redactMcpInPayload } from "./managers/project-mcp.js";
 import { installHerdctlLogBridge } from "./agent-errors.js";
-import { effectiveBehaviours } from "./managers/behaviours.js";
+import { behavioursFor, effectiveBehaviours } from "./managers/behaviours.js";
+import { configAlerts } from "./managers/alerts.js";
+import { gatedTriggerNames, recordGatedTombstones } from "./managers/trigger-guard.js";
+import { failInterruptedRuns } from "./managers/trigger-runs.js";
 import { adoptBaselineIfAbsent } from "./managers/behaviour-state.js";
 import { ProjectStore, ROOT_KEY } from "./projects.js";
 import { AttachmentStore } from "./attachments.js";
@@ -136,6 +139,8 @@ function hasFileExtension(pathname: string): boolean {
  * there is logged and swallowed (project CRUD still works), matching prod.
  */
 export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
+  // M9.5: runs still `running` that started before this instant belong to a dead process.
+  const bootAt = new Date();
   const cfg = opts.config ?? loadPaddockConfig();
 
   // Shape the engine's own logging before anything can start a job (#684). Two
@@ -231,6 +236,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   );
   // Managers M8: Home's behaviour DEFINITIONS reach every project's agent config.
   herdctl.setRootProvider(() => projects.get(ROOT_KEY));
+  herdctl.setGateResolver((ws) => projects.resolveForGateSync(ws));
   // Managers M9: project `mcp:` connection diagnostics go to the registration
   // log (every line is secret-free: names, keys, variable names, describeServer).
   herdctl.setProjectMcpLog((level, message) => app.log[level](message));
@@ -346,9 +352,33 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   }
   // Managers M8: adopt each workspace's autonomy as the out-of-UI baseline the
   // first time it is seen (a no-op once recorded), so a later hand edit alerts.
+  // M9.5: resolved through the gate, which also records each clean workspace's
+  // last-known-good definitions (so a later unreadable file still gates them).
   for (const p of initialProjects) {
-    const list = effectiveBehaviours(p, rootWorkspace);
+    if (p.configError) {
+      app.log.error(
+        `${p.slug === "" ? "Home" : p.slug}: ${p.configError}. Every behaviour is treated as OFF and the file will not be rewritten until it is fixed.`,
+      );
+    }
+    const list = await behavioursFor(projects, p).catch(() => effectiveBehaviours(p, rootWorkspace));
+    for (const a of configAlerts(p, list)) if (a.kind === "bypass-permissions") app.log.warn(`${p.slug || "Home"}: ${a.message}`);
     await adoptBaselineIfAbsent(p.dir, list, p.triggers).catch(() => undefined);
+    // M9.5: the names gated now can never be written by an agent (trigger-guard.ts).
+    await recordGatedTombstones(p.dir, gatedTriggerNames(list, p.triggers)).catch(() => undefined);
+    // M9.5 (audit #8): a run the previous process left `running` can never finish.
+    const interrupted = await failInterruptedRuns({
+      state: managers,
+      slug: p.slug,
+      dir: p.dir,
+      author: cfg.botGitAuthor,
+      bootAt,
+    });
+    if (interrupted.length > 0) {
+      app.log.warn(
+        `${p.slug || "Home"}: marked ${interrupted.length} run(s) left running by the previous process as failed (interrupted by restart)`,
+      );
+      await autocommit.flush(p.dir).catch(() => null);
+    }
   }
   try {
     await herdctl.init(initialProjects);

@@ -48,6 +48,38 @@ export const OWNED_STATE_PATHS = [
   ".gitattributes",
 ] as const;
 
+/**
+ * Whether a workspace-relative POSIX path is a file one of the stores WRITES
+ * (M9.5, audit #5): autocommit stages only these, so a stray `tasks/open/x.txt`
+ * dropped into an owned folder stays uncommitted like any other stray file.
+ * Mirrors {@link workspaceLayout}'s builders; keep the two in step.
+ */
+export function isOwnedStateFile(rel: string): boolean {
+  const p = rel.split("/");
+  const md = (s: string | undefined, ok: (x: string) => boolean) => !!s && s.endsWith(".md") && ok(s.slice(0, -3));
+  switch (p[0]) {
+    case ".gitattributes":
+      return p.length === 1;
+    case "objectives":
+      if (p.length === 3) return isName(p[1]!) && p[2] === "objective.md";
+      return p.length === 4 && isName(p[1]!) && p[2] === "journal" && md(p[3], isMonth);
+    case "log":
+      return p.length === 2 && md(p[1], isMonth);
+    case "tasks":
+      if (p.length === 3) return p[1] === "open" && md(p[2], isTaskId);
+      return p.length === 4 && p[1] === "done" && isMonth(p[2]!) && md(p[3], isTaskId);
+    case "memory":
+      if (p.length === 2) return p[1] === "MEMORY.md";
+      return p.length === 3 && (p[1] === "facts" || p[1] === "playbooks") && md(p[2], isName);
+    case "reports":
+      return p.length === 3 && isName(p[1]!) && (p[2] === "current.md" || md(p[2], isDate));
+    case "runs":
+      return p.length === 3 && isMonth(p[1]!) && !!p[2]?.endsWith(".yaml") && isRunId(p[2].slice(0, -5));
+    default:
+      return false;
+  }
+}
+
 // --- grammars -------------------------------------------------------------
 
 /** Objective slugs, fact names, playbook names and report types: kebab-case. */

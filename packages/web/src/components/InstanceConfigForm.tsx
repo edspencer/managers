@@ -756,21 +756,12 @@ function ProfileLegend({ name }: { name: string }) {
     <p className="mb-3 text-xs leading-snug text-fg-muted">
       This instance's posture profile is <span className="font-medium text-fg">{name}</span>.
       Settings marked <FieldChip tone="neutral">profile</FieldChip> are the ones it chose; anything
-      you set yourself, here or in the environment, wins over it.{" "}
-      <a
-        className="underline decoration-edge underline-offset-2 hover:text-fg"
-        href={PROFILES_DOC_URL}
-        target="_blank"
-        rel="noreferrer"
-      >
-        What the profiles do
-      </a>
+      you set yourself, here or in the environment, wins over it.
     </p>
   );
 }
 
-/** The docs page for profiles — the full lever-by-lever table (#878). */
-const PROFILES_DOC_URL = "https://paddock.edspencer.net/configuration/profiles/";
+// M9.5: no "What the profiles do" link — it pointed at upstream Paddock's docs site.
 
 function EnvLegend() {
   return (

@@ -66,6 +66,7 @@ import type { TurnOrigin } from "./run-provenance.js";
 import { buildStateOps, type ManagementStateOps } from "./managers/state-ops.js";
 import { loadAlerts } from "./managers/alerts.js";
 import { behavioursFor } from "./managers/behaviours.js";
+import { agentTriggerGuard } from "./managers/trigger-guard.js";
 import { briefingForWorkspace } from "./managers/briefing.js";
 import { boundObjective } from "./managers/trigger-runs.js";
 
@@ -563,7 +564,9 @@ export function buildManagementOps(
           "set_trigger cannot change a trigger's run.behaviour (its autonomy gate); Ed changes that in project.yaml",
         );
       }
-      const dto = await deps.triggers.set(projectSlug, name, record);
+      // M9.5 (audit #3): no agent creates, changes or removes a gated trigger (or
+      // one that was ever gated) — checked under the project.yaml lock.
+      const dto = await deps.triggers.set(projectSlug, name, record, agentTriggerGuard(deps.projects, "set_trigger", name));
       const p = await deps.projects.get(projectSlug).catch(() => null);
       const runtime = p ? await deps.herdctl.listAgentSchedules(p).catch(() => []) : [];
       const info = runtime.find((s) => s.name === name);
@@ -571,7 +574,7 @@ export function buildManagementOps(
     },
     removeTrigger: async (projectSlug, name) => {
       if (!deps.triggers) return false;
-      return deps.triggers.remove(projectSlug, name);
+      return deps.triggers.remove(projectSlug, name, agentTriggerGuard(deps.projects, "remove_trigger", name));
     },
     runTrigger: async (projectSlug, name) => {
       if (!deps.triggers) return null;

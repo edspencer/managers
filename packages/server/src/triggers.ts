@@ -83,8 +83,15 @@ export class TriggerService {
    * restart / `ensureProjectAgent` if it fails — so a transient fleet hiccup never
    * loses the persisted definition.
    */
-  async set(slug: string, name: string, trigger: unknown): Promise<TriggerDto> {
-    const project = await this.projects.setTrigger(slug, name, trigger);
+  async set(
+    slug: string,
+    name: string,
+    trigger: unknown,
+    guard?: (current: Project) => void | Promise<void>,
+  ): Promise<TriggerDto> {
+    // M9.5: `guard` (a policy check) runs against the record read under the
+    // project.yaml lock; a throw refuses the write.
+    const project = await this.projects.setTrigger(slug, name, trigger, guard);
     const rec = project.triggers?.[name];
     if (!rec) throw new Error(`trigger not persisted: ${name}`);
     await this.arm(project, name, rec).catch(() => undefined);
@@ -95,11 +102,18 @@ export class TriggerService {
    * Remove a trigger: delete it from `project.yaml` and unregister/disarm it. Returns
    * whether a trigger actually existed (so a caller can echo `removed: false`).
    */
-  async remove(slug: string, name: string): Promise<boolean> {
-    const before = await this.projects.get(slug); // throws not_found
-    const existed = Boolean(before.triggers?.[name]);
-    const rec = before.triggers?.[name];
-    const project = await this.projects.removeTrigger(slug, name);
+  async remove(
+    slug: string,
+    name: string,
+    guard?: (current: Project) => void | Promise<void>,
+  ): Promise<boolean> {
+    // M9.5: `existed`/`rec` come from the record read under the lock (the guard hook).
+    let rec: PaddockTrigger | undefined;
+    const project = await this.projects.removeTrigger(slug, name, async (current) => {
+      if (guard) await guard(current);
+      rec = current.triggers?.[name];
+    }); // throws not_found (project)
+    const existed = Boolean(rec);
     if (rec) {
       // Tear down the trigger's OWN scoped agent only if it HAD one — every event
       // trigger, or a scoped schedule trigger with a `run.tools` allow-list (T2). An

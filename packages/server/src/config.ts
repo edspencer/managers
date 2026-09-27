@@ -17,6 +17,7 @@
  * out of a running instance by a stale line in an old env file. Pinned by
  * `test/unit/config.test.ts`.
  */
+import { mcpResolveEnv } from "./managers/mcp-secret-env.js";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
@@ -1087,7 +1088,8 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
       // ever an `env:` reference). Diagnostics ride along for app.ts to log.
       const { config, errors, warnings } = resolveManagementApiConfig(
         file.managementApi,
-        process.env,
+        // M9.5: `MANAGERS_MCP_*` tokens are moved out of process.env at boot.
+        mcpResolveEnv(),
       );
       return { managementApi: config, managementApiDiagnostics: { errors, warnings } };
     })(),
@@ -1095,7 +1097,7 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
       // #691 step 6: file-only, and resolved against the real environment because
       // any string in the block may be an `env:VAR_NAME` reference. Diagnostics
       // ride along for app.ts to log — they never carry a resolved value.
-      const { servers, errors, warnings } = resolveDeclaredMcpServers(file.mcpServers, process.env);
+      const { servers, errors, warnings } = resolveDeclaredMcpServers(file.mcpServers, mcpResolveEnv());
       return { mcpServers: servers, mcpServersDiagnostics: { errors, warnings } };
     })(),
     hooksMcpEnabled: loadHooksMcpEnabled(file.hooksMcpEnabled, p.hooksMcpEnabled),

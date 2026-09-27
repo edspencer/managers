@@ -240,6 +240,11 @@ export const runReadSchema = z.looseObject({
     .record(z.string(), z.record(z.string(), count))
     .nullish()
     .transform((v) => v ?? {}),
+  /** M9.5: MCP calls that came back as errors (denied by permissions, or failed); not in `mcpCalls`. */
+  mcpErrors: z
+    .record(z.string(), z.record(z.string(), count))
+    .nullish()
+    .transform((v) => v ?? {}),
   expect: expectRead.nullish().transform((v) => v ?? null),
   expectResult: z.enum(EXPECT_RESULTS).nullish().transform((v) => v ?? null),
   briefing: z
@@ -278,6 +283,8 @@ export const runWriteSchema = z.strictObject({
     }),
   ),
   mcpCalls: z.record(z.string(), z.record(z.string(), count)),
+  /** M9.5: written only when a call errored (so older records round-trip unchanged). */
+  mcpErrors: z.record(z.string(), z.record(z.string(), count)).optional(),
   expect: z
     .strictObject({
       kind: z.enum(EXPECT_KINDS),

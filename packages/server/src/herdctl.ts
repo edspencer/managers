@@ -46,6 +46,7 @@
  * That last nuance is now closed too: core exposes `fleet.invalidateSessions(name)`
  * and paddock calls it after each turn (`ws-turn.ts`) and around fork/promote.
  */
+import { mcpResolveEnv } from "./managers/mcp-secret-env.js";
 import {
   FleetManager,
   clearSession,
@@ -90,7 +91,12 @@ import {
   isCuratorTrigger,
   type PaddockTrigger,
 } from "./trigger-config.js";
-import { effectiveBehaviours, type EffectiveBehaviour } from "./managers/behaviours.js";
+import {
+  effectiveBehaviours,
+  unreadableRoot,
+  type EffectiveBehaviour,
+  type WorkspaceLike,
+} from "./managers/behaviours.js";
 import { projectMcpNotices, resolveProjectMcp, type ProjectMcpResolution } from "./managers/project-mcp.js";
 import {
   buildAgentConfig,
@@ -499,12 +505,22 @@ export class HerdctlService {
    * The fire path re-reads the root itself, so a stale copy here can only ever
    * leave a schedule armed that the fire then refuses — never the reverse.
    */
-  private rootRecord: Pick<Project, "slug" | "behaviours"> | null = null;
-  private rootProvider: (() => Promise<Pick<Project, "slug" | "behaviours">>) | null = null;
+  private rootRecord: (WorkspaceLike & { dir?: string }) | null = null;
+  private rootProvider: (() => Promise<WorkspaceLike & { dir?: string }>) | null = null;
+  /**
+   * Managers M9.5: how a record is resolved for the gate — the last-known-good
+   * definitions substituted for an unreadable file (`ProjectStore.resolveForGateSync`).
+   */
+  private gateResolver: <T extends WorkspaceLike & { dir?: string }>(ws: T) => T = (ws) => ws;
 
   /** Wire how {@link ensureProjectAgent} re-reads Home's behaviour definitions (Managers M8). */
-  setRootProvider(fn: () => Promise<Pick<Project, "slug" | "behaviours">>): void {
+  setRootProvider(fn: () => Promise<WorkspaceLike & { dir?: string }>): void {
     this.rootProvider = fn;
+  }
+
+  /** Wire the gate resolver (Managers M9.5). */
+  setGateResolver(fn: <T extends WorkspaceLike & { dir?: string }>(ws: T) => T): void {
+    this.gateResolver = fn;
   }
 
   /**
@@ -512,7 +528,12 @@ export class HerdctlService {
    * `env:VAR` references against (the server's own), and where their
    * diagnostics go. Both injectable for tests.
    */
-  private mcpEnv: Record<string, string | undefined> = process.env;
+  // M9.5: the merged view (process.env + the sequestered MANAGERS_MCP_* secrets),
+  // read fresh on each resolution; tests override it.
+  private mcpEnvOverride: Record<string, string | undefined> | null = null;
+  private get mcpEnv(): Record<string, string | undefined> {
+    return this.mcpEnvOverride ?? mcpResolveEnv();
+  }
   private mcpLog: ((level: "info" | "warn" | "error", message: string) => void) | null = null;
 
   /** Wire the registration log for project MCP connections (Managers M9). Secret-free lines only. */
@@ -522,7 +543,7 @@ export class HerdctlService {
 
   /** Override the env project connections resolve against (tests). */
   setProjectMcpEnv(env: Record<string, string | undefined>): void {
-    this.mcpEnv = env;
+    this.mcpEnvOverride = env;
   }
 
   /**
@@ -538,7 +559,10 @@ export class HerdctlService {
 
   /** A workspace's effective behaviours against the cached Home definitions (Managers M8). */
   private behavioursOf(project: Project): EffectiveBehaviour[] {
-    return effectiveBehaviours(project, project.slug === "" ? project : this.rootRecord);
+    // M9.5: an unreadable file fails closed on the last-known-good definitions.
+    const own = this.gateResolver(project);
+    if (project.slug === "") return effectiveBehaviours(own, own);
+    return effectiveBehaviours(own, this.rootRecord ? this.gateResolver(this.rootRecord) : null);
   }
 
   /**
@@ -730,7 +754,8 @@ export class HerdctlService {
     if (!this.fleet) return;
     // Managers M8: pick up Home's current behaviour definitions first.
     if (project.slug === "") this.rootRecord = project;
-    else if (this.rootProvider) this.rootRecord = await this.rootProvider().catch(() => this.rootRecord);
+    // M9.5: a root that cannot be read is UNREADABLE (fail closed), never the stale copy.
+    else if (this.rootProvider) this.rootRecord = await this.rootProvider().catch((err: unknown) => unreadableRoot(err));
     await this.ensureChats(project.workingDir, project.dir);
     await this.ensureSweeperHome(project);
     const mcp = this.projectMcpOf(project, true);
