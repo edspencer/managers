@@ -13,10 +13,12 @@
  * in it later keep booting. (Until M9.5 any root without a `<child>/project.yaml`
  * was claimed, so a mistyped `MANAGERS_PROJECTS_DIR` pointing at a real directory
  * of notes or code got a marker, `git init`, a README and `.managers/` written
- * into it — audit #7.) `MANAGERS_ADOPT_DATA_DIR=1` is the deliberate override for
+ * into it — audit #7.) M15: a root holding only an empty repo's `.git` (a fresh
+ * clone of an empty `managers-data`) counts as empty and is claimed. `MANAGERS_ADOPT_DATA_DIR=1` is the deliberate override for
  * adopting an existing tree; it lets boot proceed but does NOT write the marker,
  * so the choice has to be made again (or the marker added by hand) every time.
  */
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -49,13 +51,51 @@ export function projectDirsIn(root: string): string[] {
   return found;
 }
 
-/** Whether `root` is absent or has no entries at all. */
-export function isEmptyOrAbsent(root: string): boolean {
+/**
+ * Whether the git repository at `root` has nothing committed on HEAD: an unborn
+ * branch (a fresh `git init`, or a clone of an EMPTY remote), or a HEAD whose tree
+ * is empty. Anything git cannot answer counts as NOT empty — the guard's side.
+ */
+function gitHeadIsEmpty(root: string): boolean {
+  const git = (args: string[]) =>
+    execFileSync("git", args, {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
   try {
-    return fs.readdirSync(root).length === 0;
+    git(["rev-parse", "--git-dir"]);
+  } catch {
+    return false; // not a repo git recognises (or no git binary)
+  }
+  try {
+    git(["rev-parse", "--verify", "-q", "HEAD"]);
+  } catch {
+    return true; // unborn HEAD: nothing has ever been committed
+  }
+  try {
+    return git(["ls-tree", "--name-only", "HEAD"]).trim() === "";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether `root` is absent or empty. M15: a directory holding ONLY `.git` — a
+ * fresh `git clone` of an empty data repo — is empty too, as long as its HEAD has
+ * nothing committed (a `--no-checkout` clone of a repo WITH content is not).
+ */
+export function isEmptyOrAbsent(root: string): boolean {
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(root);
   } catch (err) {
     return (err as NodeJS.ErrnoException).code === "ENOENT";
   }
+  if (entries.length === 0) return true;
+  if (entries.length === 1 && entries[0] === ".git") return gitHeadIsEmpty(root);
+  return false;
 }
 
 /** Whether `root` carries the ownership marker. */

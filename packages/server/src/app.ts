@@ -66,6 +66,7 @@ import { buildSwaggerOptions, buildSwaggerUiOptions, type SwaggerImage } from ".
 import { ensureDataRepo, dataGitInitEnabled } from "./managers/data-repo.js";
 import { ManagersState } from "./managers/state.js";
 import { Autocommitter } from "./managers/autocommit.js";
+import { DataSync } from "./managers/data-sync.js";
 
 // Resolve the package version at runtime (dist/app.js → ../package.json) so the
 // generated OpenAPI document's info.version tracks the release without a build step.
@@ -105,6 +106,8 @@ export interface BuiltApp {
   managers: ManagersState;
   /** Managers M5: the state autocommitter (tests flush it instead of waiting). */
   autocommit: Autocommitter;
+  /** Managers M15: the data-repo sync (inert unless MANAGERS_DATA_SYNC=1). */
+  dataSync: DataSync;
   /**
    * The WS layer's session hub — every in-flight turn, and the fan-out to the
    * sockets watching it. Exposed for callers that need to observe or annotate a
@@ -199,10 +202,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // .gitattributes, README, `git init`) — before herdctl starts and before the
   // GitService below first asks whether the root is a repo.
   {
-    const repo = await ensureDataRepo(cfg.projectsRoot, { gitInit: dataGitInitEnabled() });
-    if (repo.changed.length > 0 || repo.gitInitialized) {
+    const repo = await ensureDataRepo(cfg.projectsRoot, {
+      gitInit: dataGitInitEnabled(),
+      author: cfg.botGitAuthor,
+    });
+    if (repo.changed.length > 0 || repo.gitInitialized || repo.initialCommit) {
       app.log.info(
-        { changed: repo.changed, gitInitialized: repo.gitInitialized },
+        { changed: repo.changed, gitInitialized: repo.gitInitialized, initialCommit: repo.initialCommit ?? null },
         "data repo skeleton ensured",
       );
     }
@@ -265,6 +271,19 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     log: app.log,
     lock: (dir, fn) => managers.writer.queue.run(dir, fn),
   });
+  // Managers M15: the opt-in data-repo sync (pull --rebase, push), serialised on
+  // the autocommit chain. Off unless MANAGERS_DATA_SYNC=1.
+  const dataSync = new DataSync({
+    root: cfg.projectsRoot,
+    config: cfg.dataSync ?? { enabled: false, intervalMs: 0 },
+    serialize: (fn) => autocommit.exclusive(fn),
+    log: app.log,
+    committer: cfg.botGitAuthor,
+  });
+  managers.dataSync = dataSync;
+  if (dataSync.status.enabled) {
+    app.log.info({ intervalMs: cfg.dataSync?.intervalMs }, "managers data sync on (MANAGERS_DATA_SYNC=1)");
+  }
   managers.writer.onWrite = (dir, label, author, reason) => autocommit.schedule(dir, label, author, reason);
   managers.writer.beforeWrite = (dir, author) => autocommit.beforeWrite(dir, author);
   const githubAuth = new GithubAuth(path.join(cfg.dataDir, "github-auth.json"), cfg.githubClientId);
@@ -496,9 +515,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     void projects
       .get(slug)
       .then((p) => autocommit.flush(p.dir))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      // M15: push the end-commit (debounced; a no-op when sync is off).
+      .finally(() => dataSync.request());
   };
-  const flushManagersCommit = (dir: string) => autocommit.flush(dir);
+  const flushManagersCommit = (dir: string) =>
+    autocommit.flush(dir).finally(() => dataSync.request());
   const chatHandler = makeChatHandler({ herdctl, projects, sweep, attachments, queuedMessage, runProvenance, messageProvenance, archive, scheduleSessions, events, triggers, triggerSessions, managers, onManagersTurnEnd, flushManagersCommit, cfg });
 
   // --- external Management API (#312 M1) ---------------------------------
@@ -610,8 +632,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
     }
   }
 
+  // M15: first sync right away, then every MANAGERS_DATA_SYNC_INTERVAL.
+  dataSync.start();
+
   const close = async () => {
     sweep.stop();
+    await dataSync.stop().catch(() => undefined);
     await autocommit.close().catch(() => undefined);
     await herdctl.stop().catch(() => undefined);
     await app.close().catch(() => undefined);
@@ -620,5 +646,5 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // `hub` rides along like every other built piece: it is the WS layer's turn
   // bookkeeping, and the only place a caller can observe or annotate a turn
   // without a live socket (see SessionHub.noteCancel).
-  return { app, cfg, projects, herdctl, git, githubAuth, sweep, archive, star, readState, unread, parentDetach, runProvenance, queuedMessage, transcriber, events, triggers, managers, autocommit, hub: chatHandler.managementOpsContext.hub, close };
+  return { app, cfg, projects, herdctl, git, githubAuth, sweep, archive, star, readState, unread, parentDetach, runProvenance, queuedMessage, transcriber, events, triggers, managers, autocommit, dataSync, hub: chatHandler.managementOpsContext.hub, close };
 }

@@ -24,6 +24,9 @@
  *                     (M9.5, warning) the keeper runs `bypassPermissions` while
  *                     a connection is narrowed by `tools:` (an allowlist, which
  *                     that mode does not enforce) or an OFF behaviour gates tools
+ *   data-sync-failed  (M15, Home only) the data repo's pull/push failed — a
+ *                     conflicting rebase (error, aborted) or anything else
+ *                     (warning); see `managers/data-sync.ts`
  *
  * M8: a trigger whose behaviour is off counts as DISABLED here (it cannot fire,
  * so it is not stale and its schedule is not stalled).
@@ -42,6 +45,8 @@ import { withinMs } from "./expect.js";
 import { MAX_PAGE_MONTHS } from "./episodes-store.js";
 import { CONFIG_UNREADABLE_BEHAVIOUR, triggerGatePredicate, type EffectiveBehaviour } from "./behaviours.js";
 import { behaviourDriftAlert } from "./behaviour-state.js";
+import { dataSyncAlert } from "./data-sync.js";
+import path from "node:path";
 
 export const ALERT_KINDS = [
   "run-failed",
@@ -52,6 +57,7 @@ export const ALERT_KINDS = [
   "behaviours-changed-outside-ui",
   "config-unreadable",
   "bypass-permissions",
+  "data-sync-failed",
 ] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 export type AlertSeverity = "error" | "warning" | "info";
@@ -98,6 +104,7 @@ const SEVERITY: Record<AlertKind, AlertSeverity> = {
   "behaviours-changed-outside-ui": "info",
   "config-unreadable": "error",
   "bypass-permissions": "warning",
+  "data-sync-failed": "error",
 };
 
 const SEVERITY_RANK: Record<AlertSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -262,7 +269,13 @@ export async function loadAlerts(opts: {
     opts.schedules().catch(() => [] as AlertSchedule[]),
   ]);
   const now = opts.now ?? new Date();
-  const out = computeAlerts({ triggers, runs: page.runs, schedules, now });
+  const computed = computeAlerts({ triggers, runs: page.runs, schedules, now });
+  // M15: the data repo is instance-wide, so its sync failure is Home's alert.
+  const sync =
+    path.resolve(opts.project.dir) === path.resolve(opts.state.projectsRoot)
+      ? dataSyncAlert(opts.state.dataSync?.status)
+      : null;
+  const out = sync ? sortAlerts([...computed, sync]) : computed;
   if (!opts.behaviours) return out;
   const drift = await behaviourDriftAlert(opts.project.dir, opts.behaviours, opts.project.triggers).catch(() => null);
   const extra = [...(drift ? [drift] : []), ...configAlerts(opts.project, opts.behaviours)];

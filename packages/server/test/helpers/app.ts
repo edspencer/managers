@@ -136,6 +136,8 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
     MANAGERS_ENVIRONMENT_PROMPT: process.env.MANAGERS_ENVIRONMENT_PROMPT,
     MANAGERS_FAKE_INVOCATION_LOG: process.env.MANAGERS_FAKE_INVOCATION_LOG,
     MANAGERS_DATA_GIT_INIT: process.env.MANAGERS_DATA_GIT_INIT,
+    MANAGERS_DATA_SYNC: process.env.MANAGERS_DATA_SYNC,
+    MANAGERS_DATA_SYNC_INTERVAL: process.env.MANAGERS_DATA_SYNC_INTERVAL,
     ...Object.fromEntries(Object.keys(opts.env ?? {}).map((k) => [k, process.env[k]])),
   };
 
@@ -193,6 +195,9 @@ export async function startTestApp(opts: StartOptions = {}): Promise<TestApp> {
   // keeps the upstream "a plain directory unless the test asks" default, so a
   // test that wants a repo passes `gitRepo: true` (or sets this via `opts.env`).
   process.env.MANAGERS_DATA_GIT_INIT = "0";
+  // M15: no test syncs to a remote unless it asks to (opts.env).
+  delete process.env.MANAGERS_DATA_SYNC;
+  delete process.env.MANAGERS_DATA_SYNC_INTERVAL;
   process.env.PATH = `${FAKE_BIN}${path.delimiter}${process.env.PATH ?? ""}`;
   process.env.MANAGERS_DATA_DIR = dataDir;
   process.env.MANAGERS_PROJECTS_DIR = projectsRoot;

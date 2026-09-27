@@ -17,6 +17,7 @@
  * out of a running instance by a stale line in an old env file. Pinned by
  * `test/unit/config.test.ts`.
  */
+import { loadDataSyncConfig, type DataSyncConfig } from "./managers/data-sync.js";
 import { mcpResolveEnv } from "./managers/mcp-secret-env.js";
 import path from "node:path";
 import os from "node:os";
@@ -558,6 +559,12 @@ export interface PaddockConfig {
    * `MANAGERS_AUTOCOMMIT_DEBOUNCE_MS` (default 10 000). It never pushes.
    */
   autocommit: { enabled: boolean; debounceMs: number };
+  /**
+   * Managers M15: the opt-in data-repo sync (`MANAGERS_DATA_SYNC=1`,
+   * `MANAGERS_DATA_SYNC_INTERVAL`, default `10m`): pull --rebase --autostash, then
+   * push, on the interval and after each run's end-commit. Absent = off.
+   */
+  dataSync?: DataSyncConfig;
   /**
    * The GitHub OAuth/App client id for the git-backing-store device flow
    * (github-auth.ts). Driven by `MANAGERS_GITHUB_CLIENT_ID`; `undefined` when
@@ -1141,6 +1148,7 @@ export function loadPaddockConfig(opts: LoadConfigOptions = {}): PaddockConfig {
       email: envOr("MANAGERS_BOT_GIT_EMAIL", "managers-bot@localhost"),
     },
     autocommit: loadAutocommitConfig(),
+    dataSync: loadDataSyncConfig(),
   });
 }
 

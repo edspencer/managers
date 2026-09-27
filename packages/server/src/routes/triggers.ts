@@ -305,7 +305,36 @@ export function registerTriggerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           herdctl.listRunsForAgents(agents).catch(() => []),
           herdctl.listAgentSchedules(project).catch(() => []),
         ]);
-        return { runtime: buildTriggerRuntime(dtos, runs, schedules, project.slug) };
+        const runtime = buildTriggerRuntime(dtos, runs, schedules, project.slug);
+        // Managers M15: an UNSCOPED schedule trigger (e.g. `wake`) runs as the keeper,
+        // so herdctl's job records cannot say which trigger a run was, and a "Run now"
+        // leaves no schedule state either — the tab showed "Last run —" after a run.
+        // Managers' own run records carry the trigger name: fall back to the newest.
+        if (ctx.managers && runtime.some((r) => r.lastRun === null)) {
+          const page = await ctx.managers.runs
+            .list(ctx.managers.layout(project.dir), { months: 2 })
+            .catch(() => null);
+          for (const rt of runtime) {
+            if (rt.lastRun !== null || !page) continue;
+            const rec = page.runs
+              .filter((r) => r.trigger === rt.name && r.started)
+              .sort((a, b) => String(b.started).localeCompare(String(a.started)))[0];
+            if (!rec) continue;
+            const secs =
+              rec.finished && rec.started ? Math.max(0, Math.round((Date.parse(rec.finished) - Date.parse(rec.started)) / 1000)) : null;
+            rt.lastRun = {
+              jobId: null,
+              sessionId: rec.sessionId ?? null,
+              status: rec.status === "succeeded" ? "completed" : rec.status === "running" ? "running" : "failed",
+              exitReason: rec.status === "failed" ? "error" : rec.status === "succeeded" ? "success" : null,
+              startedAt: rec.started as string,
+              finishedAt: rec.finished ?? null,
+              durationSeconds: Number.isFinite(secs) ? secs : null,
+              summary: null,
+            };
+          }
+        }
+        return { runtime };
       } catch (err) {
         return sendProjectError(reply, err);
       }

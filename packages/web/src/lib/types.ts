@@ -2162,7 +2162,9 @@ export type AlertKind =
   /** M9.5: this workspace's or Home's project.yaml could not be read; every behaviour is OFF. */
   | "config-unreadable"
   /** M9.5: bypassPermissions on a project with narrowed connections or gated tools. */
-  | "bypass-permissions";
+  | "bypass-permissions"
+  /** M15: the data repo's pull/push failed (Home only). */
+  | "data-sync-failed";
 
 /** One dead-man's-switch alert (M6), `GET …/managers/alerts`. */
 export interface ManagersAlert {

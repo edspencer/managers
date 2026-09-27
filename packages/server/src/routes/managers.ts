@@ -1222,7 +1222,10 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
           else {
             try {
-              const sessionId = await ctx.fireTrigger(req.params.slug, "wake");
+              // M15: say WHY in the briefing (it used to read "Run now (a manual fire)").
+              const sessionId = await ctx.fireTrigger(req.params.slug, "wake", {
+                why: `Ed answered ${id} and asked you to wake now; act on the answer`,
+              });
               wake = sessionId ? { fired: true, sessionId } : { fired: false, reason: "the wake trigger did not start" };
             } catch (err) {
               wake = { fired: false, reason: (err as Error).message };

@@ -4,6 +4,7 @@
  * read-only file/changelog/overview/commands surface (#2/#3/#103/#259). The
  * chat/trigger/git clusters live in their own sibling modules.
  */
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import {
   ProjectError,
@@ -131,6 +132,9 @@ async function liveSessionIds(
     return null;
   }
 }
+
+/** Managers M15: the files a new project is created with, committed at create. */
+const PROJECT_SKELETON_PATHS = ["project.yaml", "CLAUDE.md", ".managers/triggers"] as const;
 
 export function registerProjectRoutes(app: FastifyInstance, ctx: RouteCtx): void {
   const { projects, herdctl, git, readState, unread, archive, readStateUser } = ctx;
@@ -275,6 +279,14 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: RouteCtx): void
         await herdctl.ensureProjectAgent(project);
       } catch (err) {
         req.log.warn({ err }, "keeper-agent registration failed (project still created)");
+      }
+      // Managers M15: commit the new project's skeleton, so a clone of the data
+      // repo (or its synced remote) has the project, not just its state files.
+      if (ctx.autocommit) {
+        await ctx.autocommit
+          .commitPaths(project.dir, `managers: create project ${project.slug}`, [...PROJECT_SKELETON_PATHS], ctx.cfg.gitAuthor)
+          .catch(() => undefined);
+        ctx.managers?.dataSync?.request?.();
       }
       return reply.code(201).send({ project });
     } catch (err) {
@@ -647,6 +659,16 @@ export function registerProjectWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         .catch((err: unknown) => {
           req.log.warn({ err }, "job-record purge failed (project is still deleted)");
         });
+      // Managers M15: commit the removal, so the data repo stops carrying the project.
+      if (ctx.autocommit && project.slug) {
+        const rel = path.relative(ctx.cfg.projectsRoot, project.dir);
+        if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) {
+          await ctx.autocommit
+            .commitRemoval(ctx.cfg.projectsRoot, rel, `managers: delete project ${project.slug}`, ctx.cfg.gitAuthor)
+            .catch(() => undefined);
+          ctx.managers?.dataSync?.request?.();
+        }
+      }
       return reply.code(200).send({ ok: true, slug: project.slug });
     } catch (err) {
       return sendProjectError(reply, err);

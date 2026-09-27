@@ -37,6 +37,7 @@ export function TaskAnswer({ slug, task, wake, onAnswered, className }: TaskAnsw
   const [sending, setSending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const textId = useId();
+  const wakeId = useId();
   const hasOptions = task.options.length > 0;
   const canWake = wake?.available === true;
   const wakeReason = wake === null ? "Checking whether the manager can be woken…" : wake.reason;
@@ -61,15 +62,23 @@ export function TaskAnswer({ slug, task, wake, onAnswered, className }: TaskAnsw
     }
   };
 
+  // M15: the visible text is a <label> for the switch too, so clicking the words
+  // toggles it (before, only the 32px switch did and a click on the text was lost).
   const toggle = (
     <span className="inline-flex items-center gap-2">
       <Toggle
+        id={wakeId}
         checked={wakeNow && canWake}
         onChange={setWakeNow}
         disabled={!canWake || sending !== null}
         label="Wake the manager now"
       />
-      <span className={cx("text-xs", canWake ? "text-fg-muted" : "text-fg-subtle")}>Wake the manager now</span>
+      <label
+        htmlFor={wakeId}
+        className={cx("text-xs", canWake ? "cursor-pointer text-fg-muted" : "text-fg-subtle")}
+      >
+        Wake the manager now
+      </label>
     </span>
   );
 
