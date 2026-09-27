@@ -296,7 +296,7 @@ describe("ProjectView: tabs", () => {
     expect(screen.getAllByText("the overview blurb")).toHaveLength(1);
   });
 
-  it("Home orders its sections Running → Unread → OVERVIEW.md → CHANGELOG.md", async () => {
+  it("Home orders its sections: the manager (M12) → Running → Unread → OVERVIEW.md → CHANGELOG.md", async () => {
     apiFns.getProjectDetail.mockResolvedValue(
       detail(makeProject({ slug: "p", summary: "blurb" }), { changelog: "# Changes" }),
     );
@@ -311,9 +311,10 @@ describe("ProjectView: tabs", () => {
     renderAt("/projects/p/home");
     await screen.findByRole("heading", { name: /^Running/ });
     const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent ?? "");
-    // "What needs me?" before "what is this?" (#599): the two decision feeds
-    // lead, the curated prose trails.
-    expect(headings).toEqual(["Running1", "Unread1", "OVERVIEW.md", "CHANGELOG.md"]);
+    // "What needs me?" before "what is this?" (#599). Managers M12 puts the
+    // manager's status report, objectives and runs first; then the two decision
+    // feeds; the curated prose trails.
+    expect(headings).toEqual(["Status report", "Objectives", "Runs", "Running1", "Unread1", "OVERVIEW.md", "CHANGELOG.md"]);
   });
 
   it("a project's Home has NO projects section — the grid moved off Home entirely", async () => {

@@ -8,6 +8,8 @@
  * test and the rig QA both read them back through the real API.
  */
 
+import { createHash } from "node:crypto";
+
 const pad = (n) => String(n).padStart(2, "0");
 
 /** A clock: `at(daysAgo, hh, mm)` is that many days before `now`, at hh:mm UTC. */
@@ -132,7 +134,10 @@ export function renderFact(clock, f) {
         since: clock.date(clock.at(f.sinceDaysAgo)),
         until: null,
         confidence: f.confidence,
-        evidence: (f.evidence ?? []).map((e) => clock.episodeId(clock.at(e.daysAgo, e.hh ?? 9, e.mm ?? 0), e.suffix)),
+        // A string is a literal id (M12: a deliberately dangling one).
+        evidence: (f.evidence ?? []).map((e) =>
+          typeof e === "string" ? e : clock.episodeId(clock.at(e.daysAgo, e.hh ?? 9, e.mm ?? 0), e.suffix),
+        ),
       }) + `${f.body}\n\n## History\n- ${clock.date(clock.at(f.sinceDaysAgo))} created.\n`,
   };
 }
@@ -144,7 +149,10 @@ export function renderMemoryIndex(preamble, facts) {
   };
 }
 
-/** `runs/<month>/<id>.yaml`. `{ suffix, daysAgo, hh, trigger, status, minutes, expect?, expectResult?, error?, … }`. */
+/**
+ * `runs/<month>/<id>.yaml`. `{ suffix, daysAgo, hh, trigger, status, minutes, expect?, expectResult?, error?, … }`.
+ * M12: `briefing: "<text>"` also writes `.managers/briefings/<id>.md` (what the manager saw) and records it.
+ */
 export function renderRun(clock, r) {
   const started = clock.at(r.daysAgo, r.hh ?? 7, r.mm ?? 0);
   const id = clock.runId(started, r.suffix);
@@ -170,7 +178,14 @@ export function renderRun(clock, r) {
     briefing: null,
     error: r.error ?? null,
   };
-  return { [`runs/${clock.month(started)}/${id}.yaml`]: `${Object.entries(rec).map(([k, v]) => `${k}: ${y(v)}`).join("\n")}\n` };
+  const files = {};
+  if (r.briefing) {
+    const bpath = `.managers/briefings/${id}.md`;
+    files[bpath] = r.briefing;
+    rec.briefing = { path: bpath, sha256: createHash("sha256").update(r.briefing).digest("hex") };
+  }
+  files[`runs/${clock.month(started)}/${id}.yaml`] = `${Object.entries(rec).map(([k, v]) => `${k}: ${y(v)}`).join("\n")}\n`;
+  return files;
 }
 
 /** Merge several `{ path: text }` maps (later wins). */
@@ -185,7 +200,8 @@ export function renderReportsStatus(clock, entries) {
   const sorted = [...entries].sort((a, b) => a.daysAgo - b.daysAgo);
   for (const e of sorted) {
     const d = clock.at(e.daysAgo, 7, 10);
-    files[`reports/status/${clock.date(d)}.md`] = `${frontmatter({ type: "status", updated: clock.iso(d) })}# Status\n\n${e.body}\n`;
+    // M12: `generated` like an M10-composed report, so Home's card can say how old it is.
+    files[`reports/status/${clock.date(d)}.md`] = `${frontmatter({ type: "status", generated: clock.iso(d), updated: clock.iso(d) })}# Status\n\n${e.body}\n`;
   }
   const newest = sorted[0];
   if (newest) {

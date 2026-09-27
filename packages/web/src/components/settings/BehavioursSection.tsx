@@ -146,6 +146,15 @@ export function BehavioursSection({ slug }: { slug: string }) {
     }
   };
 
+  // M12: Memory's "Consolidation: off" links to `settings#behaviours`. Scroll
+  // here once the list has rendered (the tab's content height is known then).
+  const loaded = data !== null;
+  useEffect(() => {
+    if (loaded && typeof window !== "undefined" && window.location.hash === "#behaviours") {
+      document.getElementById("behaviours")?.scrollIntoView?.({ block: "start" });
+    }
+  }, [loaded]);
+
   const list = data?.behaviours ?? [];
   // "Own" = defined in this workspace's project.yaml (for Home, its own definitions too).
   const own = list.filter((b) => b.origin === "project" || (isHome && b.origin === "home"));
@@ -153,6 +162,7 @@ export function BehavioursSection({ slug }: { slug: string }) {
 
   return (
     <Section
+      id="behaviours"
       title="Behaviours"
       description="What this manager may do on its own. Everything is off until you switch it on here. Off means it doesn't happen at all, not even as a proposal."
       flush

@@ -138,3 +138,18 @@ describe("Managers M11: objectives and tasks", () => {
     expect(readLastTab("acme")).toBe("objectives");
   });
 });
+
+describe("Managers M12: memory and reports", () => {
+  it("encodes and round-trips them", () => {
+    expect(toSubPath({ view: "memory" })).toBe("memory");
+    expect(toSubPath({ view: "memory", id: "house-style" })).toBe("memory/house-style");
+    expect(toSubPath({ view: "reports", type: "status" })).toBe("reports/status");
+    expect(toSubPath({ view: "reports", type: "status", date: "2026-09-25" })).toBe("reports/status/2026-09-25");
+    writeLastTab("acme", "reports/status/2026-09-25");
+    expect(readLastTab("acme")).toBe("reports/status/2026-09-25");
+    writeLastTab("acme", "memory/house-style");
+    expect(readLastTab("acme")).toBe("memory/house-style");
+    writeLastTab("acme", "reports");
+    expect(readLastTab("acme")).toBe("memory/house-style");
+  });
+});

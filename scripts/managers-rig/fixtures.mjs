@@ -109,6 +109,22 @@ const ACME_TASKS = [
   { suffix: "hdln", createdDaysAgo: 32, updatedDaysAgo: 13, status: "done", objective: "pricing-rewrite", title: "Ship the new pricing headline", answer: { choice: "Pay for what you ship" } },
   { suffix: "ftr1", createdDaysAgo: 37, updatedDaysAgo: 33, status: "dropped", title: "Redesign the footer", notes: "Dropped: the broken-link fix was enough." },
 ];
+// M12: what the manager saw on the failed morning-check run (its briefing file).
+const ACME_FAILED_BRIEFING = [
+  "# Wake briefing: Acme Site (morning-check)",
+  "",
+  "## Protocol",
+  "Read the briefing, do one useful thing toward the bound objective, record an episode.",
+  "",
+  "## Objective: blog-cadence",
+  "Seven of eight weeks met (week three missed). The final post is in draft, waiting on a title.",
+  "",
+  "## Open tasks",
+  "- awaiting-ed: Pick the title for the final cadence post",
+  "- awaiting-ed: Decide the enterprise tier price",
+  "",
+].join("\n");
+
 const acmeTaskIds = (clock) =>
   Object.fromEntries(ACME_TASKS.filter((t) => t.key).map((t) => [t.key, clock.taskId(clock.at(t.createdDaysAgo, 8, 30), t.suffix)]));
 
@@ -155,6 +171,9 @@ function acmeDomain(clock) {
       type: "project",
       sinceDaysAgo: 35,
       confidence: "high",
+      // M12: one entry in an OLDER journal month (the chip pages the objective back to
+      // it) and one id that resolves nowhere (shown struck through).
+      evidence: [{ daysAgo: 35, hh: 9, suffix: "bb" }, "ep-200101-0000-zz"],
       body: "Decisions about enterprise pricing go to Ed, who confirms with sales.",
     },
   ];
@@ -197,12 +216,14 @@ function acmeDomain(clock) {
     ...facts.map((f) => renderFact(clock, f)),
     renderMemoryIndex("# Acme Site memory\n\nWhat the Acme Site manager has learned.", facts),
     renderRun(clock, { ...wakeRun, trigger: "morning-check", status: "succeeded", minutes: 4, objective: "blog-cadence", expect: { kind: "episode", within: "48h" }, expectResult: "met", episodes: [clock.episodeId(clock.at(1, 7), "ap")] }),
-    renderRun(clock, { daysAgo: 2, hh: 7, suffix: "fl", trigger: "morning-check", status: "failed", minutes: 1, error: "Turn ended early: the model returned an error.", expect: { kind: "episode", within: "48h" }, expectResult: "missing" }),
+    // M12: the failed run keeps its briefing, so the run drawer's "What the manager saw" has text.
+    renderRun(clock, { daysAgo: 2, hh: 7, suffix: "fl", trigger: "morning-check", status: "failed", minutes: 1, error: "Turn ended early: the model returned an error.", expect: { kind: "episode", within: "48h" }, expectResult: "missing", briefing: ACME_FAILED_BRIEFING }),
     renderRun(clock, { daysAgo: 3, hh: 7, suffix: "ms", trigger: "morning-check", status: "succeeded", minutes: 3, expect: { kind: "report", report: "status" }, expectResult: "missing" }),
     renderRun(clock, { ...publishRun, trigger: "publish-check", status: "succeeded", minutes: 2, expect: { kind: "episode", within: "48h" }, expectResult: "met", episodes: [clock.episodeId(clock.at(4, 6, 1), "pc")] }),
     renderRun(clock, { daysAgo: 34, hh: 7, suffix: "ol", trigger: "morning-check", status: "succeeded", minutes: 6, expectResult: "n/a", mcpCalls: { paddock: { list_chats: 1 } } }),
     renderReportsStatus(clock, [
-      { daysAgo: 0, body: "Seven of eight blog weeks met. Pricing is shipped except the enterprise tier.\n\n## Needs you\n- Pick the final post's title.\n- Decide the enterprise tier price." },
+      // M12: the stored Needs you/Alerts are what the server wrote THEN; Home re-renders both live.
+      { daysAgo: 0, body: "## Needs you\n- Pick the final post's title.\n- Decide the enterprise tier price.\n\n## Alerts\n- None.\n\n## In flight\n- Blog cadence: the final post is in draft, waiting on a title.\n- Pricing rewrite: shipped except the enterprise tier.\n\n## Notes\n- Seven of eight blog weeks met." },
       { daysAgo: 1, body: "Seven of eight blog weeks met. The final post is in draft." },
     ]),
   );

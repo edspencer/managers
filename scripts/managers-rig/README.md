@@ -264,5 +264,27 @@ objectives. No fixture has an ENABLED `wake`, so the answer form's "Wake the
 manager now" switch is disabled with its reason; enable `acme-site`'s `wake` in
 the Triggers tab to exercise the enabled path (its cron is 07:00 UTC).
 
+### Home overview, Memory and report history fixture (M12)
+
+Additions only:
+- The failed `morning-check` run (`r-…-fl`) has a briefing: `renderRun`'s
+  `briefing` option writes `.managers/briefings/<run>.md` and records its path and
+  sha256, so the run drawer's "What the manager saw" has text. The other runs
+  have none ("No briefing was recorded").
+- `acme-site`'s stored status reports carry `generated` (like an M10-composed
+  report), and today's has a stored `## Needs you` and `## Alerts: None.` — what
+  the server wrote THEN. Home's card hides both and renders them live, so after
+  answering a task in the Tasks tab it has already left Home's Needs you while
+  the stored report still lists it; the live Alerts show `stale:publish-check`.
+  Report history has two dates.
+- `pricing-owner` cites evidence in an OLDER journal month (August:
+  `pricing-rewrite`'s "Collected five competitor pricing pages", so the chip
+  pages the objective back to it) and one id that resolves nowhere
+  (`ep-200101-0000-zz`, shown struck through). `renderFact`'s `evidence` takes a
+  literal id string for that.
+- `empty-project` stays empty: no report ("No status report yet"), no runs ("No
+  runs yet — enable a trigger"), no project memory (Shared still lists Home's two
+  facts).
+
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

@@ -81,6 +81,7 @@ import { mcpResolveEnv } from "../managers/mcp-secret-env.js";
 import { workspaceLabel } from "../managers/state-writes.js";
 import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
 import { probeConnection } from "../managers/mcp-probe.js";
+import { EvidenceResolver } from "../managers/evidence-links.js";
 import { effectiveTriggersFor, reportTypesFor } from "../managers/effective-triggers.js";
 import { BehaviourOffError } from "../managers/behaviours.js";
 import type { Project } from "../projects.js";
@@ -455,6 +456,15 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
 
   // --- memory ----------------------------------------------------------------------
 
+  /** M12: resolves facts' `evidence` ids to journal/log locations and web links. */
+  function evidenceResolver(slug: string, layout: WorkspaceLayout, isRoot: boolean): EvidenceResolver {
+    return new EvidenceResolver(
+      state.episodes,
+      isRoot ? null : { key: slug, layout },
+      { key: "", layout: state.rootLayout },
+    );
+  }
+
   app.get<{ Params: { slug: string } }>(
     "/managers/memory",
     {
@@ -464,15 +474,23 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         description:
           "`indexes` (`MEMORY.md` split into Ed's `preamble` and the generated `index`, per scope), `facts` and " +
           "`playbooks`, each tagged `scope: project | root`. The root workspace's memory is shared with every " +
-          "project, so a project sees both; the root sees only `root` (and `indexes.project` is null).",
+          "project, so a project sees both; the root sees only `root` (and `indexes.project` is null). Each fact " +
+          "carries `evidenceLinks` (M12): its `evidence` episode ids resolved to `{ episode, found, workspace, " +
+          "objective, file, line, href }`, where `href` is the web app's URL for the journal entry (or the log file).",
         params: paramsSchema(),
         response: ok200("`{ indexes, facts, playbooks, parseErrors? }`."),
       },
     },
     (req, reply) =>
-      withWorkspace(req, reply, async ({ layout, isRoot }) =>
-        tidy(await state.memory.view({ project: isRoot ? null : layout, root: state.rootLayout })),
-      ),
+      withWorkspace(req, reply, async ({ layout, isRoot }) => {
+        const view = await state.memory.view({ project: isRoot ? null : layout, root: state.rootLayout });
+        // M12: each fact's evidence episodes, resolved to where they live.
+        const resolver = evidenceResolver(req.params.slug, layout, isRoot);
+        const facts = await Promise.all(
+          view.facts.map(async (f) => ({ ...f, evidenceLinks: await resolver.resolve(f) })),
+        );
+        return tidy({ ...view, facts });
+      }),
   );
 
   app.get<{ Params: { slug: string; name: string }; Querystring: Q }>(
@@ -482,7 +500,7 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         tags: TAGS,
         summary: "Get one memory fact",
         description:
-          "One `memory/facts/<name>.md`: frontmatter, `body`, `history` and `scope`. Without `scope`, a project " +
+          "One `memory/facts/<name>.md`: frontmatter, `body`, `history`, `scope` and `evidenceLinks` (M12). Without `scope`, a project " +
           "fact wins over a root fact of the same name. 400 for a malformed name or scope, 404 when absent, 422 " +
           "when the file does not parse.",
         params: paramsSchema({ name: { description: "Fact name (kebab-case)." } }),
@@ -508,7 +526,8 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         );
         if (!got) return notFound(reply, `No such fact: ${name}`);
         if (isParseFailure(got)) return unparseable(reply, got.parseError);
-        return { fact: got };
+        const evidenceLinks = await evidenceResolver(req.params.slug, layout, isRoot).resolve(got);
+        return { fact: { ...got, evidenceLinks } };
       }),
   );
 

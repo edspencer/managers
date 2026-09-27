@@ -226,6 +226,26 @@ describe("integration: Managers read routes", () => {
     expect((await get("/api/projects/acme/managers/memory/facts/house-style?scope=project")).status).toBe(404);
   });
 
+  it("memory (M12): facts carry evidenceLinks resolved to the journal entry's page", async () => {
+    const proj = await get("/api/projects/acme/managers/memory");
+    const slow = proj.body.facts.find((f: { name: string }) => f.name === "slow-reviews");
+    expect(slow.evidenceLinks).toEqual([
+      {
+        episode: "ep-260902-1000-bb",
+        found: true,
+        workspace: "acme",
+        objective: "grow",
+        file: "objectives/grow/journal/2026-09.md",
+        line: 1,
+        href: "/projects/acme/objectives/grow#ep-260902-1000-bb",
+      },
+    ]);
+    const house = proj.body.facts.find((f: { name: string }) => f.name === "house-style");
+    expect(house.evidenceLinks).toEqual([]);
+    const one = await get("/api/projects/acme/managers/memory/facts/slow-reviews");
+    expect(one.body.fact.evidenceLinks[0]).toMatchObject({ found: true, href: "/projects/acme/objectives/grow#ep-260902-1000-bb" });
+  });
+
   it("runs and reports", async () => {
     const runs = await get("/api/projects/acme/managers/runs");
     expect(runs.body.runs).toEqual([expect.objectContaining({ id: "r-260902-0955-cc", status: "failed", error: "boom", file: "runs/2026-09/r-260902-0955-cc.yaml" })]);

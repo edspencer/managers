@@ -24,6 +24,9 @@ import { SettingsPane } from "../components/SettingsPane";
 import { TriggersPane } from "../components/TriggersPane";
 import { ObjectivesPane } from "../components/managers/ObjectivesPane";
 import { TasksPane } from "../components/managers/TasksPane";
+import { MemoryPane } from "../components/managers/MemoryPane";
+import { ReportHistory } from "../components/managers/ReportHistory";
+import { ManagersOverview } from "../components/managers/ManagersOverview";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DeleteProjectDialog } from "../components/DeleteProjectDialog";
 import { ForkChatModal } from "../components/ForkChatModal";
@@ -58,6 +61,7 @@ import {
   gridUrl,
   homeUrl,
   objectivesUrl,
+  memoryUrl,
   parseMessageAnchor,
   repoHref,
   tasksUrl,
@@ -158,6 +162,10 @@ export function ProjectView({
   // Managers M11: the objective / task a `…/objectives/:id` or `…/tasks/:id` URL names.
   const routeObjectiveId = view === "objectives" ? params.objectiveId : undefined;
   const routeTaskId = view === "tasks" ? params.taskId : undefined;
+  // Managers M12: the fact a `…/memory/:fact` URL names, and the report history's type/date.
+  const routeFact = view === "memory" ? params.fact : undefined;
+  const routeReportType = view === "reports" ? params.reportType : undefined;
+  const routeReportDate = view === "reports" ? params.reportDate : undefined;
 
   // Stable ChatPane mount key. The pane should reset when the user switches to a
   // DIFFERENT chat (new chat / a saved chat / after deleting the open one), but
@@ -515,6 +523,10 @@ export function ProjectView({
           ? toSubPath({ view: "objectives", id: routeObjectiveId })
           : view === "tasks"
             ? toSubPath({ view: "tasks", id: routeTaskId })
+          : view === "memory"
+            ? toSubPath({ view: "memory", id: routeFact })
+          : view === "reports" && routeReportType
+            ? toSubPath({ view: "reports", type: routeReportType, date: routeReportDate })
         : view === "settings"
           ? toSubPath({ view: "settings" })
           : view === "history"
@@ -702,6 +714,7 @@ export function ProjectView({
   const goHistory = useCallback(() => navigate(`${base}/history`), [navigate, base]);
   const goObjectives = useCallback(() => navigate(objectivesUrl(base)), [navigate, base]);
   const goTasks = useCallback(() => navigate(tasksUrl(base)), [navigate, base]);
+  const goMemory = useCallback(() => navigate(memoryUrl(base)), [navigate, base]);
   const goSettings = useCallback(() => navigate(`${base}/settings`), [navigate, base]);
   const goTriggers = useCallback(() => navigate(`${base}/triggers`), [navigate, base]);
   // Select a specific changed file in the Changes tab, reflecting it in the URL
@@ -1455,7 +1468,9 @@ export function ProjectView({
             data-testid="workspace-tabs"
             className="-mb-px flex items-center gap-1 overflow-x-auto px-4"
           >
-            <TabButton active={view === "home"} onClick={goHome}>
+            {/* The report history (M12) has no tab of its own: it is reached from
+                Home's status card, so Home stays highlighted while it is open. */}
+            <TabButton active={view === "home" || view === "reports"} onClick={goHome}>
               Home
             </TabButton>
             {/* Managers M11: the manager's objectives and tasks, right after Home
@@ -1465,6 +1480,10 @@ export function ProjectView({
             </TabButton>
             <TabButton active={view === "tasks"} onClick={goTasks}>
               Tasks
+            </TabButton>
+            {/* Managers M12: what the manager has learned. */}
+            <TabButton active={view === "memory"} onClick={goMemory}>
+              Memory
             </TabButton>
             <TabButton active={view === "chat"} onClick={goChat}>
               Chat
@@ -1606,6 +1625,19 @@ export function ProjectView({
             <ObjectivesPane key={`o:${slug}`} slug={slug} base={base} objectiveId={routeObjectiveId} />
           )}
           {view === "tasks" && <TasksPane key={`t:${slug}`} slug={slug} base={base} taskId={routeTaskId} />}
+          {/* Managers M12. */}
+          {view === "memory" && (
+            <MemoryPane key={`m:${slug}`} slug={slug} base={base} root={root} factName={routeFact} />
+          )}
+          {view === "reports" && routeReportType && (
+            <ReportHistory
+              key={`r:${slug}:${routeReportType}`}
+              slug={slug}
+              base={base}
+              type={routeReportType}
+              date={routeReportDate}
+            />
+          )}
           {view === "home" && (
             <HomePane
               project={project}
@@ -1618,6 +1650,10 @@ export function ProjectView({
               // Passed explicitly rather than derived from `project.slug === ""`,
               // which is the root's slug and is falsy.
               root={root}
+              // Managers M12: a PROJECT's Home opens on its manager — the status
+              // report with live Needs you and Alerts, objectives, runs. Home's
+              // own collation is M13.
+              managers={root ? undefined : <ManagersOverview key={`mo:${slug}`} slug={slug} base={base} />}
               // Empty = no projects and no root chats. `null` until known.
               instanceEmpty={root ? instanceEmpty : false}
               onInstanceRecheck={onInstanceRecheck}

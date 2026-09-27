@@ -65,6 +65,7 @@ import {
   type ReportTypeSummary,
   type ReportTypeDetail,
   type ReportDoc,
+  type ReportRefreshResult,
   type ManagersParseError,
   type TaskWriteInput,
   type TaskAnswerInput,
@@ -1207,6 +1208,14 @@ export const api = {
       `${mgr(slug)}/reports/${encodeURIComponent(type)}/${encodeURIComponent(date)}`,
     );
     return report;
+  },
+
+  /** M10/M12: fire the derived `report-<type>` trigger now (ignores `enabled`). Poll the run. */
+  async managersRefreshReport(slug: string, type: string): Promise<ReportRefreshResult> {
+    return req<ReportRefreshResult>(`${mgr(slug)}/reports/${encodeURIComponent(type)}/refresh`, {
+      method: "POST",
+      body: "{}",
+    });
   },
 
   // --- Managers domain state writes (M5) --------------------------------------

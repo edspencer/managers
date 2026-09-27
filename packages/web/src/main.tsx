@@ -87,6 +87,11 @@ const router = createBrowserRouter([
       { path: "projects/:slug/objectives/:objectiveId", element: <ProjectView /> },
       { path: "projects/:slug/tasks", element: <ProjectView /> },
       { path: "projects/:slug/tasks/:taskId", element: <ProjectView /> },
+      // Managers M12: Memory (one fact's page) and report history (no tab; from Home's card).
+      { path: "projects/:slug/memory", element: <ProjectView /> },
+      { path: "projects/:slug/memory/:fact", element: <ProjectView /> },
+      { path: "projects/:slug/reports/:reportType", element: <ProjectView /> },
+      { path: "projects/:slug/reports/:reportType/:reportDate", element: <ProjectView /> },
       { path: "projects/:slug/chat", element: <ProjectView /> },
       { path: "projects/:slug/chat/:sessionId", element: <ProjectView /> },
       { path: "projects/:slug/files", element: <ProjectView /> },
@@ -111,6 +116,11 @@ const router = createBrowserRouter([
       { path: "objectives/:objectiveId", element: <ProjectView root /> },
       { path: "tasks", element: <ProjectView root /> },
       { path: "tasks/:taskId", element: <ProjectView root /> },
+      // Managers M12: Home's memory (the shared facts) and report history.
+      { path: "memory", element: <ProjectView root /> },
+      { path: "memory/:fact", element: <ProjectView root /> },
+      { path: "reports/:reportType", element: <ProjectView root /> },
+      { path: "reports/:reportType/:reportDate", element: <ProjectView root /> },
       { path: "chat/:sessionId", element: <ProjectView root /> },
       // Root Files + Changes (#516 Phase 4). These paths have no pre-#516
       // meaning, so unlike `/` and `/chat` there is nothing to fall back TO —

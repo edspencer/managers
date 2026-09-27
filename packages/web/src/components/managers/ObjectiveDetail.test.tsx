@@ -181,7 +181,10 @@ describe("journal helpers", () => {
     expect(episodeMonth("nope")).toBeNull();
   });
 
-  it("renderFactLinks shows fact links as code until Memory exists", () => {
-    expect(renderFactLinks("- [[reviews-stall-drafts]]")).toBe("- `reviews-stall-drafts`");
+  it("renderFactLinks links a fact to its Memory page (M12)", () => {
+    expect(renderFactLinks("- [[reviews-stall-drafts]]", "/projects/acme")).toBe(
+      "- [reviews-stall-drafts](/projects/acme/memory/reviews-stall-drafts)",
+    );
+    expect(renderFactLinks("[[house-style]]", "")).toBe("[house-style](/memory/house-style)");
   });
 });

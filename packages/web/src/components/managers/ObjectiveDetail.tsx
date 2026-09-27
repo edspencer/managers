@@ -13,7 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../../lib/api";
 import { relativeTime } from "../../lib/format";
 import type { ObjectiveDetail, TaskSummary } from "../../lib/types";
-import { objectivesUrl, tasksUrl } from "../../routes/ProjectView/urls";
+import { memoryUrl, objectivesUrl, tasksUrl } from "../../routes/ProjectView/urls";
 import { Markdown } from "../Markdown";
 import { Button, Chip, EmptyState, Section } from "../ui";
 import { ChevronRightIcon, FileIcon, PlusIcon } from "../icons";
@@ -29,11 +29,12 @@ import {
   TASK_STATUS_LABEL,
   TASK_STATUS_TONE,
   errorText,
+  useInternalLinks,
 } from "./shared";
 
-/** `[[fact-name]]` → inline code, until M12 links facts to Memory. */
-export function renderFactLinks(md: string): string {
-  return md.replace(/\[\[([a-z0-9-]+)\]\]/g, "`$1`");
+/** `[[fact-name]]` → a link to that fact on the Memory tab (M12). */
+export function renderFactLinks(md: string, base: string): string {
+  return md.replace(/\[\[([a-z0-9-]+)\]\]/g, (_m, name: string) => `[${name}](${memoryUrl(base, name)})`);
 }
 
 /** A workspace-relative file → its Files-tab URL, one segment at a time. */
@@ -41,8 +42,15 @@ function filesUrl(base: string, file: string): string {
   return `${base}/files/${file.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-function Prose({ text, empty }: { text: string; empty: string }) {
-  return text.trim() ? <Markdown>{renderFactLinks(text)}</Markdown> : <EmptyState title={empty} />;
+function Prose({ text, empty, base }: { text: string; empty: string; base: string }) {
+  const onLinkClick = useInternalLinks();
+  return text.trim() ? (
+    <div onClick={onLinkClick}>
+      <Markdown>{renderFactLinks(text, base)}</Markdown>
+    </div>
+  ) : (
+    <EmptyState title={empty} />
+  );
 }
 
 export function ObjectiveDetailView({
@@ -176,19 +184,19 @@ export function ObjectiveDetailView({
       ) : (
         <>
           <Section title="Where we are">
-            <Prose text={o.whereWeAre} empty="The manager hasn't summarised progress yet." />
+            <Prose base={base} text={o.whereWeAre} empty="The manager hasn't summarised progress yet." />
           </Section>
           <Section title="Strategy">
-            <Prose text={o.strategy} empty="No strategy written yet." />
+            <Prose base={base} text={o.strategy} empty="No strategy written yet." />
           </Section>
           <Section title="Lessons">
-            <Prose text={o.lessons} empty="No lessons recorded yet." />
+            <Prose base={base} text={o.lessons} empty="No lessons recorded yet." />
           </Section>
         </>
       )}
       {o.otherSections.map((s) => (
         <Section key={s.heading} title={s.heading}>
-          <Prose text={s.body} empty="Empty." />
+          <Prose base={base} text={s.body} empty="Empty." />
         </Section>
       ))}
 

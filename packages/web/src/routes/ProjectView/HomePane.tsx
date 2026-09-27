@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { AttentionChat, Project } from "../../lib/types";
 import { Markdown } from "../../components/Markdown";
 import { relativeTime } from "../../lib/format";
@@ -102,8 +102,14 @@ export function HomePane({
   overview,
   onOpenChat,
   onNewChat,
+  managers,
 }: {
   project: Project;
+  /**
+   * Managers M12: the manager's overview (status report, objectives, runs),
+   * rendered first — above the chat feeds — on a PROJECT's Home.
+   */
+  managers?: ReactNode;
   /**
    * Is this the ROOT workspace's Home? Gates the instance-level onboarding
    * content — see the note above about why this component now has to know.
@@ -162,6 +168,8 @@ export function HomePane({
           stays the ceiling for a PROJECT's Home, which has exactly as much
           content as it did before and would only get thinner columns. */}
       <div className={cx("mx-auto px-6 py-6", onboarding ? "max-w-6xl" : "max-w-3xl")}>
+        {managers}
+
         {firstRun === true && (
           <section className="mb-8" data-testid="home-first-run">
             {/* Full width and at the top: on an instance with history to adopt,

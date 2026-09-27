@@ -6,9 +6,10 @@
  * waiting on Ed is `warn` (it wants attention), in-progress is `info`, finished
  * is `success`, blocked is `danger`, and inert states are `neutral`.
  */
-import type { ReactNode } from "react";
+import { useCallback, type MouseEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../lib/api";
-import type { ObjectiveStatus, TaskAnswerResult, TaskStatus } from "../../lib/types";
+import type { ManagersAlert, ObjectiveStatus, RunStatus, TaskAnswerResult, TaskStatus } from "../../lib/types";
 import { Button, Callout, type ChipTone } from "../ui";
 import { AlertIcon } from "../icons";
 
@@ -136,4 +137,77 @@ export function answeredMessage(result: TaskAnswerResult, answer: string, wakeRe
     return `${head} The manager was not woken: ${result.wake.reason ?? "the wake trigger did not start"}.`;
   }
   return `${head} The manager will see it on its next run.`;
+}
+
+// --- M12 -------------------------------------------------------------------------
+
+export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
+  running: "Running",
+  succeeded: "Succeeded",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+export const RUN_STATUS_TONE: Record<RunStatus, ChipTone> = {
+  running: "info",
+  succeeded: "success",
+  failed: "danger",
+  cancelled: "neutral",
+};
+
+export const ALERT_SEVERITY_TONE: Record<ManagersAlert["severity"], ChipTone> = {
+  error: "danger",
+  warning: "warn",
+  info: "info",
+};
+
+/** Seconds → "42s", "4m", "1h 5m". Null/NaN → "". */
+export function durationLabel(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.round(seconds / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+}
+
+/** A run's duration in seconds from its record, or null while it runs. */
+export function runSeconds(run: { started: string | null; finished: string | null }): number | null {
+  if (!run.started || !run.finished) return null;
+  const s = Date.parse(run.started);
+  const f = Date.parse(run.finished);
+  return Number.isFinite(s) && Number.isFinite(f) ? Math.max(0, Math.round((f - s) / 1000)) : null;
+}
+
+/** A small inline spinner in the current text colour. Stops under reduced motion (base CSS). */
+export function Spinner({ label }: { label?: string }) {
+  return (
+    <span
+      role={label ? "status" : undefined}
+      aria-label={label}
+      className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+    />
+  );
+}
+
+/**
+ * Click handler for a container of rendered Markdown: an app-internal link
+ * (`/projects/…`, `/tasks#…`) navigates in-app instead of opening a new tab
+ * (the Markdown renderer gives every link `target="_blank"`, which suits chat
+ * but not a report's links to its own tasks). Modified clicks keep the
+ * browser's behaviour.
+ */
+export function useInternalLinks(): (e: MouseEvent<HTMLElement>) => void {
+  const navigate = useNavigate();
+  return useCallback(
+    (e: MouseEvent<HTMLElement>) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as HTMLElement).closest?.("a");
+      const href = a?.getAttribute("href");
+      if (!href || !href.startsWith("/") || href.startsWith("//")) return;
+      e.preventDefault();
+      navigate(href);
+    },
+    [navigate],
+  );
 }

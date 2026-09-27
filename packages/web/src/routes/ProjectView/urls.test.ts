@@ -5,6 +5,8 @@ import {
   chatUrl,
   episodeUrl,
   objectivesUrl,
+  memoryUrl,
+  reportsUrl,
   tasksUrl,
   decodeFilesSubpath,
   deriveView,
@@ -190,5 +192,27 @@ describe("Managers M11: the Objectives and Tasks tabs", () => {
     );
     expect(chatUrl("acme-site", "abc")).toBe("/projects/acme-site/chat/abc");
     expect(chatUrl(ROOT_KEY, "abc")).toBe("/chat/abc");
+  });
+});
+
+describe("Managers M12: Memory and report history", () => {
+  it.each([
+    ["/projects/acme/memory", "/projects/acme", "memory"],
+    ["/projects/acme/memory/house-style", "/projects/acme", "memory"],
+    ["/projects/acme/reports/status", "/projects/acme", "reports"],
+    ["/projects/acme/reports/status/2026-09-25", "/projects/acme", "reports"],
+    ["/memory", "", "memory"],
+    ["/reports/status", "", "reports"],
+    ["/projects/acme/memoryhole", "/projects/acme", "chat"],
+  ])("%s (base %j) → %s", (pathname, base, tab) => {
+    expect(deriveView(pathname, base)).toBe(tab);
+  });
+
+  it("builds memory and report URLs for both mounts", () => {
+    expect(memoryUrl("/projects/acme")).toBe("/projects/acme/memory");
+    expect(memoryUrl("", "house-style")).toBe("/memory/house-style");
+    expect(memoryUrl("/projects/acme", "house-style", "root")).toBe("/projects/acme/memory/house-style?scope=root");
+    expect(reportsUrl("/projects/acme", "status")).toBe("/projects/acme/reports/status");
+    expect(reportsUrl("", "status", "2026-09-25")).toBe("/reports/status/2026-09-25");
   });
 });

@@ -4,7 +4,7 @@
 // that navigating to a project via the main nav/sidebar (the bare
 // `/projects/:slug`) restores where they left off. Stored in localStorage under
 // a per-slug key. The stored value is the sub-path WITHOUT a leading slash, one
-// of: "home" | "objectives[/<id>]" | "tasks[/<id>]" | "chat" | "chat/<sessionId>" | "files" | "files/<encodedName>" |
+// of: "home" | "objectives[/<id>]" | "tasks[/<id>]" | "memory[/<fact>]" | "reports/<type>[/<date>]" | "chat" | "chat/<sessionId>" | "files" | "files/<encodedName>" |
 // "changes" | "changes/<encodedFile>" | "settings".
 //
 // Scenario this satisfies: on project A viewing a pinned html file -> go to
@@ -18,6 +18,9 @@ export type SubPath =
   // Managers M11: the Objectives and Tasks tabs, optionally one item.
   | { view: "objectives"; id?: string }
   | { view: "tasks"; id?: string }
+  // Managers M12: Memory (optionally one fact) and report history.
+  | { view: "memory"; id?: string }
+  | { view: "reports"; type: string; date?: string }
   | { view: "chat"; sessionId?: string }
   // `path` is the project-relative files subpath (a directory or a file),
   // undefined at the root. Nested, e.g. "design/foo.md" (issue #259).
@@ -69,6 +72,8 @@ function isValidShape(v: string): boolean {
     v === "triggers" ||
     /^objectives(\/[^/]+)?$/.test(v) ||
     /^tasks(\/[^/]+)?$/.test(v) ||
+    /^memory(\/[^/]+)?$/.test(v) ||
+    /^reports\/[^/]+(\/[^/]+)?$/.test(v) ||
     /^chat(\/[^/].*)?$/.test(v) ||
     /^files(\/[^/].*)?$/.test(v) ||
     /^changes(\/[^/].*)?$/.test(v)
@@ -87,6 +92,11 @@ export function toSubPath(sub: SubPath): string {
   if (sub.view === "triggers") return "triggers";
   if (sub.view === "objectives") return sub.id ? `objectives/${encodeURIComponent(sub.id)}` : "objectives";
   if (sub.view === "tasks") return sub.id ? `tasks/${encodeURIComponent(sub.id)}` : "tasks";
+  if (sub.view === "memory") return sub.id ? `memory/${encodeURIComponent(sub.id)}` : "memory";
+  if (sub.view === "reports") {
+    const t = `reports/${encodeURIComponent(sub.type)}`;
+    return sub.date ? `${t}/${encodeURIComponent(sub.date)}` : t;
+  }
   if (sub.view === "chat") {
     return sub.sessionId ? `chat/${encodeURIComponent(sub.sessionId)}` : "chat";
   }

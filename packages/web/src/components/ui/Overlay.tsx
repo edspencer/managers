@@ -23,6 +23,12 @@ export interface DialogProps {
   /** Footer content, typically the action buttons. */
   footer?: ReactNode;
   size?: "sm" | "md" | "lg";
+  /**
+   * `center` (default) is the modal panel. `side` is a drawer: full height,
+   * docked to the right edge (full width on a phone) — for detail you read
+   * beside the list you opened it from. Same focus trap, Escape and backdrop.
+   */
+  placement?: "center" | "side";
   /** `alertdialog` for a destructive confirmation. */
   role?: "dialog" | "alertdialog";
   /** Backdrop clicks close by default; pass false while a request is in flight. */
@@ -43,6 +49,7 @@ export function Dialog({
   description,
   footer,
   size = "md",
+  placement = "center",
   role = "dialog",
   dismissOnBackdrop = true,
   onSubmit,
@@ -101,7 +108,10 @@ export function Dialog({
   const Panel = onSubmit ? "form" : "div";
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm"
+      className={cx(
+        "fixed inset-0 z-50 flex bg-overlay backdrop-blur-sm",
+        placement === "side" ? "justify-end" : "items-center justify-center p-4",
+      )}
       onClick={() => dismissOnBackdrop && onClose()}
     >
       <Panel
@@ -114,8 +124,10 @@ export function Dialog({
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
         onSubmit={onSubmit}
         className={cx(
-          "flex max-h-[85vh] w-full flex-col animate-scale-in rounded-2xl border border-edge",
-          "bg-surface-raised p-6 shadow-2xl outline-none",
+          "flex w-full flex-col border-edge bg-surface-raised shadow-2xl outline-none",
+          placement === "side"
+            ? "h-full animate-fade-in border-l p-5 sm:rounded-l-2xl sm:p-6"
+            : "max-h-[85vh] animate-scale-in rounded-2xl border p-6",
           SIZES[size],
           className,
         )}

@@ -8,6 +8,10 @@ export type ProjectViewTab =
   | "home"
   | "objectives"
   | "tasks"
+  | "memory"
+  // M12: report history. No tab of its own — it is reached from Home's status
+  // card, so the tab strip keeps Home highlighted while it is open.
+  | "reports"
   | "chat"
   | "files"
   | "changes"
@@ -116,6 +120,9 @@ export function deriveView(pathname: string, base: string): ProjectViewTab {
   // future sibling route can never be swallowed by a prefix.
   if (/^\/objectives(\/|$)/.test(tail)) return "objectives";
   if (/^\/tasks(\/|$)/.test(tail)) return "tasks";
+  // Managers M12.
+  if (/^\/memory(\/|$)/.test(tail)) return "memory";
+  if (/^\/reports(\/|$)/.test(tail)) return "reports";
   if (tail.startsWith("/chat")) return "chat";
   return base === "" ? "home" : "chat";
 }
@@ -135,6 +142,20 @@ export function tasksUrl(base: string, id?: string): string {
 /** A journal entry on its objective's page: the page plus a `#ep-…` fragment. */
 export function episodeUrl(base: string, objectiveId: string, episodeId: string): string {
   return `${objectivesUrl(base, objectiveId)}#${episodeId}`;
+}
+
+// --- Managers M12: memory and report history ---------------------------------
+
+/** `<base>/memory`, or one fact's page (`scope` disambiguates a name both scopes use). */
+export function memoryUrl(base: string, fact?: string, scope?: "root" | "project"): string {
+  if (!fact) return `${base}/memory`;
+  return `${base}/memory/${encodeURIComponent(fact)}${scope ? `?scope=${scope}` : ""}`;
+}
+
+/** `<base>/reports/<type>`, or one dated report. */
+export function reportsUrl(base: string, type: string, date?: string): string {
+  const t = `${base}/reports/${encodeURIComponent(type)}`;
+  return date ? `${t}/${encodeURIComponent(date)}` : t;
 }
 
 /** A chat in a workspace (`""` = the root). */

@@ -2076,6 +2076,22 @@ export interface FactSummary {
   evidence: string[];
   scope: MemoryScope;
   file: string;
+  /** M12: each `evidence` id resolved server-side to where the episode lives. */
+  evidenceLinks?: EvidenceLink[];
+}
+
+/** One evidence episode of a fact, resolved (M12). */
+export interface EvidenceLink {
+  episode: string;
+  found: boolean;
+  /** The workspace key holding it (`""` = Home); null when not found. */
+  workspace: string | null;
+  /** The objective whose journal holds it; null for the project log. */
+  objective: string | null;
+  file: string | null;
+  line: number | null;
+  /** The app URL of the entry (objective page + `#ep-…`, or the log file); null when not found. */
+  href: string | null;
 }
 
 export interface FactDetail extends FactSummary {
@@ -2181,13 +2197,34 @@ export interface ReportDoc {
   title: string | null;
   body: string;
   updated: string;
+  /** M10: frontmatter `generated` (a server-composed report), else null. */
+  generated?: string | null;
   parseError: ManagersParseError | null;
 }
 
 export interface ReportTypeSummary {
   type: string;
+  /** M10: false for a `reports/<type>/` directory with no definition. */
+  defined?: boolean;
+  /** M10: whether the schedule is armed here (this workspace's own flag). */
+  enabled?: boolean;
+  description?: string;
+  schedule?: { cron?: string; interval?: string } | null;
+  origin?: "builtin" | "home" | "project" | null;
+  inherited?: boolean;
+  /** M10: the derived trigger's name, `report-<type>`. */
+  trigger?: string | null;
   current: Omit<ReportDoc, "body"> | null;
   dates: string[];
+}
+
+/** `POST …/managers/reports/:type/refresh` (M10). */
+export interface ReportRefreshResult {
+  ok: boolean;
+  type: string;
+  trigger: string;
+  runId: string | null;
+  sessionId: string;
 }
 
 export interface ReportTypeDetail {
