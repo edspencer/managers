@@ -3,7 +3,7 @@
   "info": {
     "title": "Managers HTTP API",
     "description": "HTTP API for Managers — the Claude Code workspace platform (persistent chats, projects, unified triggers).\n\nThis document is **generated from the server's route schemas** via `@fastify/swagger`, so it\ntracks the code: a new or changed route with a schema shows up here automatically.\n\n**Live chat is WebSocket, not REST.** Sending a message, streaming the response, tool-call\nevents, cancel, slash-commands and the live queue all flow over `GET /ws`. This spec covers the\nHTTP surface: reads, project/chat/trigger/git management, instance config, and attachment\nupload/serve. The two-step attachment flow is: `POST .../chats/:sessionId/upload` (HTTP, here)\nthen reference the returned file ids in the `chat:send` WebSocket frame.\n\n## Authentication\n\nManagers has no built-in login — authentication is provider-agnostic and handled at the edge (reverse proxy / IdP). **When these docs are served by the Managers instance itself, behind your proxy, a `Try it out` request is a same-origin call that inherits your existing SSO session — it authenticates automatically, nothing to paste here.** Use the **Authorize** button only for the explicit-token path (a different origin, a programmatic client, or testing without the proxy).\n\nThis instance runs **jwt** mode: a signed token in the `Authorization` header, verified against the JWKS.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "components": {
     "securitySchemes": {
@@ -4241,7 +4241,7 @@
         "tags": [
           "Managers"
         ],
-        "description": "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` (open|done) and `month`. Found in `open/` or any done month. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
+        "description": "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` (open|done) and `month`. Found in `open/` or any done month. Each `dispatched` entry carries `href`: the dispatched chat's web URL, derived from its connection's url (`<base>/mcp` → `<base>/projects/<project>/chat/<chat>`), or null when the connection is unknown or has no plain http(s) url. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
         "parameters": [
           {
             "schema": {
@@ -7925,7 +7925,7 @@
         "tags": [
           "Managers"
         ],
-        "description": "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` (open|done) and `month`. Found in `open/` or any done month. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
+        "description": "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` (open|done) and `month`. Found in `open/` or any done month. Each `dispatched` entry carries `href`: the dispatched chat's web URL, derived from its connection's url (`<base>/mcp` → `<base>/projects/<project>/chat/<chat>`), or null when the connection is unknown or has no plain http(s) url. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
         "parameters": [
           {
             "schema": {
