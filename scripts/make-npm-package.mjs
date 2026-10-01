@@ -177,7 +177,7 @@ fs.copyFileSync(
 );
 
 const manifest = {
-  name: "@edspencer/managers"
+  name: "@edspencer/managers",
   version,
   description:
     "Scheduled per-project manager agents that track long-running objectives. A fork of Paddock, built on herdctl.",
