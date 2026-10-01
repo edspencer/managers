@@ -26,7 +26,10 @@ import type { Project } from "../../src/projects.js";
 const FAKE_BIN = fileURLToPath(new URL("../../../../test/bin", import.meta.url));
 
 /** Build the app with exactly `env` on top of an isolated base; restore everything after. */
-async function bootWith(env: Record<string, string | undefined>): Promise<{ error: Error | null; security?: unknown }> {
+async function bootWith(
+  env: Record<string, string | undefined>,
+  opts: { loopbackNoAuth?: boolean } = {},
+): Promise<{ error: Error | null; security?: unknown }> {
   const tmp = await makeTmpDir("m145-boot-");
   const base: Record<string, string | undefined> = {
     HOME: path.join(tmp, "home"),
@@ -44,6 +47,7 @@ async function bootWith(env: Record<string, string | undefined>): Promise<{ erro
     MANAGERS_AUTH_JWT_AUDIENCE: undefined,
     MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE: undefined,
     MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH: undefined,
+    MANAGERS_DANGEROUSLY_ALLOW_OPEN: undefined,
     MANAGERS_ALLOW_BATCH_DRIVE: undefined,
     MANAGERS_DRIVE_MODE: undefined,
     ...env,
@@ -56,7 +60,7 @@ async function bootWith(env: Record<string, string | undefined>): Promise<{ erro
   await fs.mkdir(base.HOME!, { recursive: true });
   await fs.mkdir(base.MANAGERS_PROJECTS_DIR!, { recursive: true });
   try {
-    const built = await buildApp({ serveStatic: false });
+    const built = await buildApp({ serveStatic: false, ...opts });
     try {
       await built.app.ready();
       const res = await built.app.inject({ method: "GET", url: "/api/security" });
@@ -76,6 +80,25 @@ async function bootWith(env: Record<string, string | undefined>): Promise<{ erro
 }
 
 describe("integration: M14.5 boot posture (#1, #2)", () => {
+  // The `managers` CLI's laptop default (start({ loopbackNoAuth })): no-auth is
+  // allowed on a loopback bind ONLY, and the banner still says so.
+  it("CLI loopback default: boots with auth=none on 127.0.0.1 and still lists the no-auth warning", async () => {
+    const r = await bootWith({ MANAGERS_AUTH_MODE: "none" }, { loopbackNoAuth: true });
+    expect(r.error).toBeNull();
+    const sec = r.security as { warnings: Array<{ code: string; detail: string }> };
+    expect(sec.warnings.map((w) => w.code)).toContain("no-auth");
+    expect(sec.warnings.find((w) => w.code === "no-auth")?.detail).toMatch(/loopback/);
+  });
+
+  it("CLI loopback default: still refuses auth=none on a routable bind", async () => {
+    // ALLOW_OPEN set so the bind-safety guard passes and the POSTURE is what refuses.
+    const r = await bootWith(
+      { MANAGERS_AUTH_MODE: "none", HOST: "0.0.0.0", MANAGERS_DANGEROUSLY_ALLOW_OPEN: "1" },
+      { loopbackNoAuth: true },
+    );
+    expect(r.error?.message).toMatch(/refusing to start: MANAGERS_AUTH_MODE=none/);
+  });
+
   it("#1: refuses auth=none without MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH", async () => {
     const r = await bootWith({ MANAGERS_AUTH_MODE: "none" });
     expect(r.error?.message).toMatch(/refusing to start: MANAGERS_AUTH_MODE=none/);

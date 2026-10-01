@@ -10,6 +10,15 @@
  *     consolidation, or send a chat turn that counts as a human turn. That cannot
  *     be closed in `none` mode (the agent IS a local process as the same user), so
  *     it is an opt-in danger: `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1`.
+ *
+ *     The one implicit opt-in is the `managers` CLI's laptop default
+ *     (`loopbackNoAuth`, passed to `start()` by cli/managers.ts — never an env
+ *     var, so no child inherits it): `npx @edspencer/managers` on a laptop has no
+ *     identity provider to point at, and refusing would make the first run a
+ *     dead end. It applies ONLY when the RESOLVED bind host is loopback (so a
+ *     `host:` in the config file is honoured, not guessed at), and it carries the
+ *     same warning and banner as the explicit opt-in. The local-agent risk above
+ *     is unchanged by it; what the loopback condition rules out is the network.
  *  2. `MANAGERS_AUTH_MODE=jwt` with no `iss`/`aud` check. A token minted by the
  *     same IdP for ANOTHER application verifies against the shared JWKS key and
  *     replays here. Both `MANAGERS_AUTH_JWT_ISSUER` and `MANAGERS_AUTH_JWT_AUDIENCE`
@@ -26,12 +35,17 @@
  * web banner.
  */
 import type { AuthMode, PaddockConfig } from "./config.js";
+import { isLoopbackHost } from "./bind-safety.js";
 import { type DriveMode, isKnownDriveMode } from "./models.js";
 
 export interface BootPostureInput {
   authMode: AuthMode;
   /** `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH` (truthy). */
   allowNoAuth: boolean;
+  /** The resolved bind host (`cfg.host`). */
+  host: string;
+  /** The CLI's laptop default: allow `none` on a loopback {@link host} only. */
+  loopbackNoAuth: boolean;
   jwtIssuer?: string;
   jwtAudience?: string;
   /** `MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE` (truthy). */
@@ -72,6 +86,15 @@ const NO_AUTH_DETAIL =
   "answer tasks, start consolidations and send chat turns that count as yours. " +
   "Use MANAGERS_AUTH_MODE=jwt behind your identity provider (see AUTH.md).";
 
+const NO_AUTH_LOOPBACK_DETAIL =
+  "MANAGERS_AUTH_MODE=none on a loopback bind, the managers command's local " +
+  "default. Nothing off this machine can reach it, but every process on this " +
+  "host running as this user, which includes every manager agent's Bash, can call " +
+  "this server's REST and WebSocket API as you: turn behaviours on, answer tasks, " +
+  "start consolidations and send chat turns that count as yours. Set " +
+  "MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=0 to refuse instead, or use " +
+  "MANAGERS_AUTH_MODE=jwt (see AUTH.md).";
+
 const JWT_ANY_AUDIENCE_DETAIL =
   "MANAGERS_AUTH_MODE=jwt with MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE set and no " +
   "issuer/audience check: a token the same identity provider issued for another " +
@@ -88,7 +111,8 @@ export function evaluateBootPosture(input: BootPostureInput): BootPostureDecisio
   const warnings: PostureWarning[] = [];
 
   if (input.authMode === "none") {
-    if (!input.allowNoAuth) {
+    const loopbackDefault = input.loopbackNoAuth && isLoopbackHost(input.host);
+    if (!input.allowNoAuth && !loopbackDefault) {
       return {
         action: "refuse",
         message:
@@ -99,7 +123,11 @@ export function evaluateBootPosture(input: BootPostureInput): BootPostureDecisio
           "only for a local test rig, set MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1.",
       };
     }
-    warnings.push({ code: "no-auth", title: NO_AUTH_BANNER, detail: NO_AUTH_DETAIL });
+    warnings.push({
+      code: "no-auth",
+      title: NO_AUTH_BANNER,
+      detail: input.allowNoAuth ? NO_AUTH_DETAIL : NO_AUTH_LOOPBACK_DETAIL,
+    });
   }
 
   if (input.authMode === "trusted-header") {
@@ -190,11 +218,16 @@ export function resolveProjectDriveMode(
   return gateDriveMode(mode, cfg.allowBatchDrive);
 }
 
-/** The posture inputs, read off a resolved config. */
-export function bootPostureInput(cfg: PaddockConfig): BootPostureInput {
+/** The posture inputs, read off a resolved config (plus the CLI's start option). */
+export function bootPostureInput(
+  cfg: PaddockConfig,
+  opts: { loopbackNoAuth?: boolean } = {},
+): BootPostureInput {
   return {
     authMode: cfg.auth.mode,
     allowNoAuth: cfg.dangerouslyAllowNoAuth,
+    host: cfg.host,
+    loopbackNoAuth: opts.loopbackNoAuth === true,
     jwtIssuer: cfg.auth.jwtIssuer,
     jwtAudience: cfg.auth.jwtAudience,
     jwtAllowAnyAudience: cfg.auth.jwtAllowAnyAudience === true,

@@ -13,6 +13,7 @@
 import type { FastifyRequest } from "fastify";
 import type { DiscoveredSession } from "@herdctl/core";
 import type { ProjectStore } from "./projects.js";
+import type { SecurityPosture } from "./boot-posture.js";
 import { AttachmentStore, collectAttachmentIds } from "./attachments.js";
 import type { HerdctlService } from "./herdctl.js";
 import { keeperAgentName } from "./herdctl.js";
@@ -145,6 +146,14 @@ export interface RouteDeps {
    */
   autocommit?: Autocommitter;
   cfg: PaddockConfig;
+  /**
+   * The posture `buildApp` actually booted with, served by `GET /api/security`.
+   * Passed in rather than recomputed from `cfg`, because the `managers` CLI's
+   * loopback no-auth default is a start option `cfg` does not carry: recomputing
+   * would see a refusal and serve no warnings, hiding the no-auth banner.
+   * Optional for test harnesses that register routes directly.
+   */
+  securityPosture?: SecurityPosture;
 }
 
 /**

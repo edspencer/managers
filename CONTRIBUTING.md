@@ -1,8 +1,7 @@
 # Contributing to Managers
 
 > Inherited from Paddock and still accurate for this code; where it says
-> "Paddock", read "Managers". Managers has no changesets and no release
-> pipeline yet, so skip the changeset section.
+> "Paddock", read "Managers". The release flow is in [`RELEASING.md`](RELEASING.md).
 
 Thanks for hacking on Managers. This is a short operational guide — how to get the
 stack running, the conventions we follow, and the environment gotchas that will
@@ -127,7 +126,7 @@ These bite everyone at least once:
 
 ## Changesets (release notes)
 
-Paddock uses [changesets](https://github.com/changesets/changesets) for versioning
+Managers uses [changesets](https://github.com/changesets/changesets) for versioning
 and changelogs. **When your PR makes a user-facing change, add a changeset in the
 same PR:**
 
@@ -138,4 +137,5 @@ git add .changeset && git commit -m "chore: add changeset"
 
 No changeset is needed for pure-internal changes (tests, CI, refactors with no
 observable effect, or **docs-only** changes to root/`docs/` files that don't ship
-in a package). (Paddock's release flow is in its own repo's `RELEASING.md`.)
+in a package). Name `@managers/server` and/or `@managers/web` in the changeset,
+never the published `@edspencer/managers` — see [`RELEASING.md`](RELEASING.md).

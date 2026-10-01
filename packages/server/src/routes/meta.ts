@@ -165,6 +165,7 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
       },
     },
     async () => {
+      if (ctx.securityPosture) return ctx.securityPosture;
       const d = evaluateBootPosture(bootPostureInput(cfg));
       // buildApp refused to boot on "refuse", so this is always "allow".
       return d.action === "allow" ? d.posture : { warnings: [] };

@@ -1,4 +1,8 @@
-# @paddock/web
+# @managers/web
+
+## 0.1.0
+
+Managers forked from Paddock at v0.74.1 and was built as milestones M1–M15 (lightweight tags `m1`…`m14.5` on `main`); 0.1.0 was never published. Every entry below this one is Paddock's own history, as `@paddock/web` in [edspencer/paddock](https://github.com/edspencer/paddock), kept for reference.
 
 ## 0.74.1
 

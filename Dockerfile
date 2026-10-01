@@ -1,6 +1,7 @@
-# Managers application image (a fork of Paddock; identity renamed in M1, not yet built or published).
+# Managers application image (a fork of Paddock, published as
+# ghcr.io/edspencer/managers by .github/workflows/release.yml).
 #
-# Paddock is an APP (server + built web SPA), not a library — this image is the
+# Managers is an APP (server + built web SPA), not a library — this image is the
 # unit of deployment. It bundles the Fastify server, the built React SPA, and the
 # `claude` CLI.
 #
@@ -34,6 +35,14 @@
 #   - a volume mounted at /data  Persistent project store + Claude session transcripts.
 #                                (HOME=/data so ~/.claude/projects survives restarts → resume works.)
 #   - GITHUB_TOKEN (optional)    Enables git push to the backing repo (configured by entrypoint).
+#   - an auth decision           The image binds 0.0.0.0, and Managers refuses to
+#                                start with MANAGERS_AUTH_MODE=none (the default)
+#                                unless told otherwise. Either configure jwt
+#                                (MANAGERS_AUTH_MODE=jwt + _JWKS_URL + _JWT_ISSUER +
+#                                _JWT_AUDIENCE; see AUTH.md), or, for a private
+#                                port publish only, set BOTH
+#                                MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1 and
+#                                MANAGERS_DANGEROUSLY_ALLOW_OPEN=1.
 #
 # Multi-arch (linux/amd64, linux/arm64) is built in CI on native per-arch
 # runners (see release.yml); each leg pushes by digest and the manifests are
@@ -62,6 +71,12 @@ RUN npm run build
 # :latest). Everything a stock Managers instance needs and nothing more.
 FROM node:22-slim AS base
 WORKDIR /app
+
+# Links the GHCR package to its repository (and so its README, and the repo's
+# access settings) however it was pushed.
+LABEL org.opencontainers.image.source="https://github.com/edspencer/managers" \
+      org.opencontainers.image.description="Managers: scheduled per-project manager agents that track long-running objectives." \
+      org.opencontainers.image.licenses="MIT"
 
 ENV NODE_ENV=production \
     PORT=7234 \
@@ -93,7 +108,8 @@ COPY packages/server/package.json packages/server/
 COPY packages/web/package.json packages/web/
 RUN npm ci --omit=dev
 
-# The image redistributes Paddock, so it carries Paddock's licence text (#674).
+# The image redistributes Managers (and Paddock, which it forks), so it carries
+# the licence text (#674).
 COPY LICENSE ./
 
 # Built artifacts. The server resolves the SPA at ../../web/dist relative to
@@ -113,7 +129,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 # tini as pid 1, so orphaned processes get reaped (#788 class B).
 #
-# Without it the Paddock server itself is pid 1, and a server is not an init: it
+# Without it the Managers server itself is pid 1, and a server is not an init: it
 # never calls wait(), so every orphan that exits correctly stays in the process
 # table as a zombie forever. That is not hypothetical — it is what every
 # browser-spawning tool in the devbox image does. Chromium watches its pipe and

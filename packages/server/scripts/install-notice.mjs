@@ -3,11 +3,11 @@
  * Printed as a `preinstall` script of the PUBLISHED package, before npm starts
  * fetching the dependency tree.
  *
- * Why this exists: Paddock depends on the Claude Agent SDK, whose per-platform
- * binary is ~250 MB. That download dominates a first `npx @edspencer/paddock`
+ * Why this exists: Managers depends on the Claude Agent SDK, whose per-platform
+ * binary is ~250 MB. That download dominates a first `npx @edspencer/managers`
  * and is long enough that, unannounced, it reads as a hang. It also cannot be
  * trimmed — the binary arrives via a platform optionalDependency, and
- * installing with `--omit=optional` produces a Paddock whose chats all fail.
+ * installing with `--omit=optional` produces a Managers whose chats all fail.
  *
  * NOT wired into packages/server/package.json in the repo: a `preinstall` there
  * would fire on every workspace `npm install` a contributor runs. It belongs to
@@ -21,7 +21,7 @@ if (!process.env.MANAGERS_QUIET_INSTALL) {
   process.stdout.write(
     [
       "",
-      "  Paddock bundles the Claude Code runtime — about 250 MB on first install.",
+      "  Managers bundles the Claude Code runtime — about 250 MB on first install.",
       "  Later runs reuse the cache and start immediately.",
       "",
     ].join("\n") + "\n",

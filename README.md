@@ -11,9 +11,9 @@
   <a href="AI-DECLARATION.md"><img src="https://img.shields.io/badge/AI--DECLARATION-copilot-fee2e2?labelColor=fee2e2" alt="AI-DECLARATION: copilot"></a>
 </p>
 
-> **Status: v1, early.** Everything below is built and tested, but Managers has
-> not run in production yet. It is not published to npm or as a container image;
-> you run it from a checkout. Expect breaking changes.
+> **Status: v1, early.** Expect breaking changes. Releases (from 0.2.0) ship as an
+> npm package and a multi-arch container image; see [Install](#install) and
+> [`RELEASING.md`](RELEASING.md).
 
 ## What it is
 
@@ -86,7 +86,32 @@ reports:
     schedule: { cron: "0 7 * * 1-5" }
 ```
 
-## Quick start
+## Install
+
+**On a laptop** (Node 22+):
+
+```bash
+npx @edspencer/managers            # or: npm i -g @edspencer/managers && managers
+# open http://127.0.0.1:7234
+```
+
+The `managers` command binds `127.0.0.1` with authentication off, which it
+allows on a loopback bind only, and the UI shows a banner saying what that
+means (see [Security](#security)).
+
+**On a server, VM or LXC** (linux/amd64 or arm64):
+
+```bash
+docker run -d --name managers -p 127.0.0.1:7234:7234 -v /srv/managers-data:/data \
+  -e CLAUDE_CODE_OAUTH_TOKEN=... \
+  -e MANAGERS_AUTH_MODE=jwt -e MANAGERS_AUTH_JWKS_URL=... \
+  -e MANAGERS_AUTH_JWT_ISSUER=... -e MANAGERS_AUTH_JWT_AUDIENCE=... \
+  ghcr.io/edspencer/managers:latest      # :devbox adds the coding-agent toolbox
+```
+
+Each GitHub Release also carries a self-contained tarball.
+
+## Quick start from a checkout
 
 You need **Node 22+**. Build once:
 
@@ -159,7 +184,9 @@ Managers runs agents with Bash on your machine, using your Claude login. Read
   from removing tools.
 - **Auth modes**: `none` (the default), `trusted-header` or `jwt`. With `none`,
   any agent on the host can call the API as you, so **boot refuses `none`**
-  unless `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1`. `jwt` needs both
+  unless `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1`. The one exception is the
+  `managers` command on a loopback bind (the `npx` laptop case), which allows it
+  and shows the banner; `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=0` makes it refuse. `jwt` needs both
   `MANAGERS_AUTH_JWT_ISSUER` and `MANAGERS_AUTH_JWT_AUDIENCE` (or
   `MANAGERS_AUTH_JWT_ALLOW_ANY_AUDIENCE=1`). `trusted-header` is allowed but
   warned about. Use `jwt` behind an SSO proxy for a real install.
