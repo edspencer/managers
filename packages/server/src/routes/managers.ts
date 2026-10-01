@@ -86,6 +86,7 @@ import { WriteQueue } from "../managers/write-queue.js";
 import { mcpResolveEnv } from "../managers/mcp-secret-env.js";
 import { workspaceLabel } from "../managers/state-writes.js";
 import { resolveProjectMcp, type ProjectConnection, type ProjectMcpResolution } from "../managers/project-mcp.js";
+import { withDispatchLinks } from "../managers/dispatch-links.js";
 import { probeConnection } from "../managers/mcp-probe.js";
 import { EvidenceResolver } from "../managers/evidence-links.js";
 import { collectNeedsYou, type NeedsYouWorkspace } from "../managers/needs-you.js";
@@ -551,8 +552,10 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         summary: "Get one task",
         description:
           "The task's frontmatter plus `notes` (the body above `## Log`), `log` (its log lines), `location` " +
-          "(open|done) and `month`. Found in `open/` or any done month. 400 for a malformed id (t-YYMMDD-xxxx), " +
-          "404 when absent, 422 when the file does not parse.",
+          "(open|done) and `month`. Found in `open/` or any done month. Each `dispatched` entry carries `href`: " +
+          "the dispatched chat's web URL, derived from its connection's url (`<base>/mcp` → " +
+          "`<base>/projects/<project>/chat/<chat>`), or null when the connection is unknown or has no plain " +
+          "http(s) url. 400 for a malformed id (t-YYMMDD-xxxx), 404 when absent, 422 when the file does not parse.",
         params: paramsSchema({ id: { description: "Task id, t-YYMMDD-xxxx." } }),
         response: ok200("`{ task }`."),
       },
@@ -564,7 +567,9 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
         const got = await state.tasks.get(layout, id);
         if (!got) return notFound(reply, `No such task: ${id}`);
         if (isParseFailure(got)) return unparseable(reply, got.parseError);
-        return { task: got };
+        if (got.dispatched.length === 0) return { task: got };
+        const project = await projects.get(req.params.slug);
+        return { task: { ...got, dispatched: withDispatchLinks(got.dispatched, connectionsOf(project).connections) } };
       }),
   );
 

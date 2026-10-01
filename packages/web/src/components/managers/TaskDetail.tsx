@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../../lib/api";
 import { relativeTime } from "../../lib/format";
-import type { TaskDetail, TaskStatus, WakeAvailability } from "../../lib/types";
+import type { TaskDetail, TaskDispatch, TaskStatus, WakeAvailability } from "../../lib/types";
 import { tasksUrl } from "../../routes/ProjectView/urls";
 import { Markdown } from "../Markdown";
 import { Button, Card, EmptyState, Section } from "../ui";
@@ -160,11 +160,7 @@ export function TaskDetailView({
         <Section title="Dispatched" flush>
           <ul className="divide-y divide-edge-subtle">
             {task.dispatched.map((d, i) => (
-              <li key={i} className="px-4 py-2.5 text-sm text-fg-muted">
-                {d.connection ?? "?"} → {d.project ?? "?"}
-                {d.chat && <span className="ml-2 font-mono text-2xs text-fg-subtle">{d.chat}</span>}
-                {d.at && <span className="ml-2 text-2xs text-fg-subtle">{relativeTime(d.at)}</span>}
-              </li>
+              <DispatchRow key={i} d={d} />
             ))}
           </ul>
         </Section>
@@ -194,3 +190,38 @@ export function TaskDetailView({
   );
 }
 
+
+/**
+ * One `dispatched` entry: the chat it created, linked (in a new tab — it lives
+ * in another app) when the server could derive its URL from the connection.
+ */
+function DispatchRow({ d }: { d: TaskDispatch }) {
+  const chat = d.chat ? (
+    <span className="font-mono text-2xs" title={d.chat}>
+      {d.chat.length > 12 ? `${d.chat.slice(0, 8)}…` : d.chat}
+    </span>
+  ) : null;
+  const label = (
+    <>
+      Chat in {d.project ?? "?"} {chat}
+    </>
+  );
+  return (
+    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2.5 text-sm">
+      {d.href ? (
+        <a
+          href={d.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-baseline gap-1 rounded-sm font-medium text-accent hover:underline focus-visible:focus-ring"
+        >
+          {label}
+        </a>
+      ) : (
+        <span className="text-fg-muted">{label}</span>
+      )}
+      <span className="text-2xs text-fg-subtle">via {d.connection ?? "?"}</span>
+      {d.at && <span className="text-2xs text-fg-subtle">{relativeTime(d.at)}</span>}
+    </li>
+  );
+}

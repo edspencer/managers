@@ -251,7 +251,10 @@ export const UPSERT_TASK_DESC =
   "pass change). Statuses: open, doing, blocked, awaiting-ed, done, dropped. Use `awaiting-ed` " +
   "with an `ask` (and optional `options`) when you need Ed to decide — it is how you ask him " +
   "something. done/dropped move the file under tasks/done/<month>/. Every call appends a line " +
-  "to the task's log (`log`, or a generated summary). Returns the task id, its status and file. " +
+  "to the task's log (`log`, or a generated summary). When you send the task's work somewhere " +
+  "(e.g. a Paddock `create_chat`), record it with `dispatched: {connection, project, chat}` — it is " +
+  "appended to the task's list and Ed's task page links the chat; do not put chat ids in `notes`. " +
+  "Returns the task id, its status and file. " +
   UNTRUSTED_TEXT_RULE;
 
 export const UPDATE_OBJECTIVE_DESC =

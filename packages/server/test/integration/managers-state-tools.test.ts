@@ -177,6 +177,48 @@ describe("integration: Managers state tools, write REST and autocommit (M5)", ()
     expect(lines.some((l) => l.type === "result")).toBe(true);
   });
 
+  it("upsert_task `dispatched` appends {connection, project, chat}; the task route links each chat", async () => {
+    const lines = await runPrompt(
+      "qa-dispatch",
+      '[[MCP managers.upsert_task {"title":"Check Claude versions","dispatched":{"connection":"paddock","project":"herdctl","chat":"3f2a9c1e-0000-4000-8000-000000000001"}}]]',
+    );
+    const [created] = toolCalls(lines);
+    expect(created!.isError).toBe(false);
+    const out = JSON.parse(created!.content) as { id: string; file: string; dispatched: { added: number; total: number } };
+    expect(out.dispatched).toEqual({ added: 1, total: 1 });
+
+    // A JSON-string list (as a transport may send it) appends; a malformed entry is a tool error.
+    const more = await runPrompt(
+      "qa-dispatch-2",
+      `[[MCP managers.upsert_task {"id":"${out.id}","dispatched":"[{\\"connection\\":\\"unknown\\",\\"project\\":\\"herdctl\\",\\"chat\\":\\"sess-2\\"}]"}]] ` +
+        `[[MCP managers.upsert_task {"id":"${out.id}","dispatched":{"connection":"paddock","chat":"no project"}}]]`,
+    );
+    const [appended, refused] = toolCalls(more);
+    expect(appended!.isError).toBe(false);
+    expect((JSON.parse(appended!.content) as { dispatched: unknown }).dispatched).toEqual({ added: 1, total: 2 });
+    expect(refused!.isError).toBe(true);
+    expect(refused!.content).toMatch(/dispatched\[0\]\.project/);
+
+    const file = await fs.readFile(path.join(acme.dir, out.file), "utf8");
+    expect(file).toMatch(/^dispatched:\n {2}- connection: paddock\n {4}project: herdctl\n {4}chat: 3f2a9c1e-0000-4000-8000-000000000001\n/m);
+
+    // The connection's url `<base>/mcp` gives `<base>/projects/<project>/chat/<chat>`; an unknown one, no link.
+    const yamlFile = path.join(acme.dir, "project.yaml");
+    const before = await fs.readFile(yamlFile, "utf8");
+    await fs.writeFile(yamlFile, `${before.trimEnd()}\nmcp:\n  paddock:\n    url: https://paddock.example.test/mcp\n`, "utf8");
+    try {
+      const res = await t.app.inject({ method: "GET", url: `/api/projects/${acme.slug}/managers/tasks/${out.id}` });
+      expect(res.statusCode).toBe(200);
+      const { task } = res.json() as { task: { dispatched: { connection: string; href: string | null }[] } };
+      expect(task.dispatched.map((d) => [d.connection, d.href])).toEqual([
+        ["paddock", "https://paddock.example.test/projects/herdctl/chat/3f2a9c1e-0000-4000-8000-000000000001"],
+        ["unknown", null],
+      ]);
+    } finally {
+      await fs.writeFile(yamlFile, before, "utf8");
+    }
+  });
+
   it("a trigger may not write another project's state", async () => {
     await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "Other One" } });
     const lines = await runPrompt(

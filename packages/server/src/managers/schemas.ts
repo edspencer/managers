@@ -114,6 +114,31 @@ export const taskReadSchema = z.looseObject({
 });
 export type TaskFrontmatter = z.output<typeof taskReadSchema>;
 
+/**
+ * A `project.yaml` `mcp:` connection name (`mcp-servers.ts` NAME_RE): letters,
+ * digits, `_` and `-` — so `paddock_manage` is one, unlike a kebab-case `name`.
+ */
+export const CONNECTION_NAME_RE = /^[A-Za-z0-9_-]+$/;
+const connectionName = z.string().max(80).regex(CONNECTION_NAME_RE, "must be an MCP connection name (letters, digits, _ and -)");
+
+/** A chat id another system handed back: a session id, no spaces or slashes. */
+export const DISPATCH_CHAT_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+/**
+ * One NEW `dispatched` entry, as `upsert_task` takes it: where the task's work was
+ * sent — the connection it went through, that system's project, and the chat id
+ * it returned. `at` defaults to now. Tighter than the write schema's entry (which
+ * must keep accepting what is already on disk) so an agent cannot record a chat
+ * id that is really a sentence.
+ */
+export const dispatchInputSchema = z.strictObject({
+  connection: connectionName,
+  project: z.string().trim().min(1).max(120).regex(/^[A-Za-z0-9._-]+$/, "must be a project slug"),
+  chat: z.string().trim().min(1).max(200).regex(DISPATCH_CHAT_RE, "must be a chat id (no spaces or slashes)"),
+  at: isoTs.optional(),
+});
+export type DispatchInput = z.input<typeof dispatchInputSchema>;
+
 export const taskWriteSchema = z
   .strictObject({
     id: z.string().regex(TASK_ID_RE),
@@ -134,7 +159,7 @@ export const taskWriteSchema = z
     github: z.array(z.string().regex(GITHUB_REF_RE, "must be repo#N or owner/repo#N")),
     dispatched: z.array(
       z.strictObject({
-        connection: name,
+        connection: connectionName,
         project: z.string().min(1),
         chat: z.string().min(1),
         at: isoTs,
