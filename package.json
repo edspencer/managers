@@ -1,6 +1,6 @@
 {
   "name": "managers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Managers: scheduled per-project manager agents that track long-running objectives. A fork of Paddock, built on herdctl.",
   "license": "MIT",
