@@ -100,7 +100,7 @@ describe("applyRuntimeEnv", () => {
   it("start.ts applies it before building the app", async () => {
     const src = await fs.readFile(new URL("../../../src/start.ts", import.meta.url), "utf8");
     const apply = src.indexOf("applyRuntimeEnv()");
-    const build = src.indexOf("await buildApp()");
+    const build = src.indexOf("await buildApp(");
     expect(apply).toBeGreaterThan(-1);
     expect(apply).toBeLessThan(build);
   });
