@@ -35,6 +35,7 @@ import {
   CONFIDENCE_LEVELS,
 } from "./managers/schemas.js";
 import type { MemoryOpInput } from "./managers/state-writes.js";
+import type { DispatchInput } from "./managers/schemas.js";
 import { isTaskStatus } from "./managers/tasks-store.js";
 import { isParseFailure } from "./managers/store-util.js";
 import type { TaskStatus, TaskSource, ObjectiveStatus } from "./managers/schemas.js";
@@ -74,6 +75,24 @@ function optStrOrNull(v: unknown): string | null | undefined {
 }
 function optList(v: unknown): string[] | undefined {
   return v === undefined || v === null ? undefined : coerceToolList(v);
+}
+/**
+ * `upsert_task`'s `dispatched`: one `{connection, project, chat, at?}` object, a
+ * list of them, or either as a JSON string (a transport may stringify objects).
+ * Shape is checked by the writer; `null` means "not given".
+ */
+function optDispatches(v: unknown): { value?: DispatchInput[]; error?: string } {
+  if (v === undefined || v === null) return {};
+  let x = v;
+  if (typeof x === "string") {
+    if (!x.trim()) return {};
+    try {
+      x = JSON.parse(x);
+    } catch {
+      return { error: 'dispatched must be an object like {"connection":"paddock","project":"widget-lib","chat":"<chat id>"}, or a JSON string of one' };
+    }
+  }
+  return { value: (Array.isArray(x) ? x : [x]) as DispatchInput[] };
 }
 function num(v: unknown): number | undefined {
   if (typeof v === "number") return v;
@@ -340,6 +359,22 @@ export function stateTools(state: ManagementStateOps): ServerTools {
           notes: { type: "string", description: "Replaces the task's notes (the body above its log)." },
           source: { type: "string", enum: [...TASK_SOURCES], description: "On create: manager (default) or harvested." },
           log: { type: "string", description: "One line for the task's log. A summary is written when omitted." },
+          dispatched: {
+            type: "object",
+            description:
+              "Record that this task's work was sent somewhere — APPENDED to the task's `dispatched` list (earlier " +
+              "entries are kept; the same connection+project+chat is not added twice). `connection` is the MCP " +
+              "connection you used (e.g. `paddock`), `project` that system's project slug, `chat` the chat id it " +
+              "returned (e.g. `create_chat`'s sessionId); `at` defaults to now. Ed's task page links the chat. " +
+              "A list of such objects records several at once.",
+            properties: {
+              connection: { type: "string", description: "The MCP connection name, e.g. paddock." },
+              project: { type: "string", description: "The project slug on that system." },
+              chat: { type: "string", description: "The chat (session) id the dispatch created." },
+              at: { type: "string", description: "When, as a UTC timestamp (2026-09-30T07:15:00Z). Defaults to now." },
+            },
+            required: ["connection", "project", "chat"],
+          },
           ...projectProp,
         },
       },
@@ -353,6 +388,8 @@ export function stateTools(state: ManagementStateOps): ServerTools {
         if (source !== undefined && !(TASK_SOURCES as readonly string[]).includes(source)) {
           return fail(`Error: source must be one of ${TASK_SOURCES.join(", ")}`);
         }
+        const dispatched = optDispatches(args.dispatched);
+        if (dispatched.error) return fail(`Error: ${dispatched.error}`);
         const r = await state.upsertTask(project, {
           id: optStr(args.id)?.trim() || undefined,
           title: optStr(args.title),
@@ -366,6 +403,7 @@ export function stateTools(state: ManagementStateOps): ServerTools {
           notes: optStr(args.notes),
           source: source as TaskSource | undefined,
           log: optStr(args.log),
+          dispatched: dispatched.value,
         });
         return ok({ project, ...r });
       }),

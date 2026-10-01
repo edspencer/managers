@@ -171,6 +171,67 @@ describe("upsert_task", () => {
     expect(await exists(d.file)).toBe(false);
   });
 
+  it("`dispatched` APPENDS validated entries (at defaults to now, duplicates skipped) and round-trips through the read", async () => {
+    const c = await state.writer.upsertTask(
+      ws,
+      { title: "Check versions", dispatched: [{ connection: "paddock", project: "herdctl", chat: "sess-aaaa-1111" }] },
+      agent,
+    );
+    expect(c.dispatched).toEqual({ added: 1, total: 1 });
+    const first = await state.tasks.get(ws.layout, c.id);
+    expect((first as { dispatched: unknown[] }).dispatched).toEqual([
+      { connection: "paddock", project: "herdctl", chat: "sess-aaaa-1111", at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/) },
+    ]);
+
+    // A second dispatch is appended, a repeat of the first is not; a connection name may hold `_`.
+    const u = await state.writer.upsertTask(
+      ws,
+      {
+        id: c.id,
+        dispatched: [
+          { connection: "paddock", project: "herdctl", chat: "sess-aaaa-1111" },
+          { connection: "paddock_manage", project: "herdctl", chat: "sess-bbbb-2222", at: "2026-09-30T07:15:00Z" },
+        ],
+      },
+      agent,
+    );
+    expect(u.dispatched).toEqual({ added: 1, total: 2 });
+    const detail = (await state.tasks.get(ws.layout, c.id)) as { dispatched: { chat: string; at: string }[]; log: string[] };
+    expect(detail.dispatched.map((d) => d.chat)).toEqual(["sess-aaaa-1111", "sess-bbbb-2222"]);
+    expect(detail.dispatched[1].at).toBe("2026-09-30T07:15:00Z");
+    expect(detail.log[0]).toMatch(/manager: created, open, dispatched to paddock\/herdctl chat sess-aaaa-1111$/);
+    expect(detail.log[1]).toMatch(/manager: dispatched to paddock_manage\/herdctl chat sess-bbbb-2222$/);
+
+    // An unrelated update keeps the list.
+    await state.writer.upsertTask(ws, { id: c.id, status: "doing" }, agent);
+    expect(((await state.tasks.get(ws.layout, c.id)) as { dispatched: unknown[] }).dispatched).toHaveLength(2);
+
+    // The file is strictly valid.
+    const doc = parseFrontmatter(await read(c.file));
+    const known = Object.fromEntries(Object.entries(doc.data).filter(([k]) => (TASK_KEYS as readonly string[]).includes(k)));
+    expect(taskWriteSchema.safeParse(known).success).toBe(true);
+  });
+
+  it("a malformed `dispatched` entry is refused before anything is written", async () => {
+    const bad: [unknown, RegExp][] = [
+      [{ project: "herdctl", chat: "s1" }, /dispatched\[0\]\.connection/],
+      [{ connection: "paddock", project: "herdctl", chat: "see chat abc in notes" }, /dispatched\[0\]\.chat: must be a chat id/],
+      [{ connection: "paddock", project: "herdctl", chat: "s1", at: "yesterday" }, /dispatched\[0\]\.at/],
+      [{ connection: "paddock", project: "herdctl", chat: "s1", url: "https://x" }, /dispatched\[0\]/],
+      [{ connection: "pad dock", project: "herdctl", chat: "s1" }, /dispatched\[0\]\.connection/],
+    ];
+    for (const [entry, msg] of bad) {
+      const err = await state.writer
+        .upsertTask(ws, { title: "x", dispatched: [entry as never] }, agent)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(StateWriteError);
+      expect((err as StateWriteError).code).toBe("invalid");
+      expect((err as Error).message).toMatch(msg);
+    }
+    await expect(state.writer.upsertTask(ws, { title: "x", dispatched: [] }, agent)).rejects.toThrow(/dispatched is empty/);
+    expect(await listRel("tasks")).toEqual([]);
+  });
+
   it("awaiting-ed requires an ask — refused with a validation message, and no file created", async () => {
     await expect(state.writer.upsertTask(ws, { title: "x", status: "awaiting-ed" }, agent)).rejects.toThrow(
       /awaiting-ed requires an ask/,

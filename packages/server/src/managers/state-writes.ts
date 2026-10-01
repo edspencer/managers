@@ -37,10 +37,12 @@ import {
   TASK_SOURCES,
   TASK_STATUSES,
   describeZodError,
+  dispatchInputSchema,
   episodeWriteSchema,
   objectiveWriteSchema,
   runWriteSchema,
   taskWriteSchema,
+  type DispatchInput,
   type EpisodeWrite,
   type ObjectiveStatus,
   type RunWrite,
@@ -119,6 +121,12 @@ export interface UpsertTaskInput {
   source?: TaskSource;
   /** One line for the task's `## Log`; a summary is generated when absent. */
   log?: string;
+  /**
+   * Entries to APPEND to the task's `dispatched` list (never replaces it): where
+   * its work was sent. An entry already there (same connection, project and chat)
+   * is skipped. `at` defaults to now.
+   */
+  dispatched?: DispatchInput[];
 }
 
 export interface AnswerTaskInput {
@@ -203,6 +211,8 @@ export interface TaskResult extends WriteResult {
   created: boolean;
   /** Set when the file moved between `open/` and `done/<month>/`. */
   movedFrom?: string;
+  /** With `dispatched` input: how many entries were new, and the list's length after. */
+  dispatched?: { added: number; total: number };
 }
 export interface ObjectiveResult extends WriteResult {
   status: ObjectiveStatus;
@@ -335,6 +345,30 @@ function splitKnown(
 function listOr(v: unknown): unknown {
   if (v === undefined || v === null) return [];
   return Array.isArray(v) ? v : [v];
+}
+
+type DispatchedEntry = { connection: string; project: string; chat: string; at: string };
+
+/** Validate `upsert_task`'s `dispatched` input (each entry strictly); `undefined` when absent. */
+function parseDispatches(v: DispatchInput[] | undefined): DispatchInput[] | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) throw invalid("dispatched must be a list of {connection, project, chat, at?}");
+  if (v.length === 0) throw invalid("dispatched is empty: pass at least one {connection, project, chat}");
+  if (v.length > 20) throw invalid("dispatched takes at most 20 entries per call");
+  return v.map((d, i) => {
+    const r = dispatchInputSchema.safeParse(d);
+    if (!r.success) {
+      const issue = r.error.issues[0];
+      const where = issue?.path.length ? `.${issue.path.join(".")}` : "";
+      throw invalid(`dispatched[${i}]${where}: ${issue?.message ?? "invalid"} (expected {connection, project, chat, at?})`);
+    }
+    return r.data;
+  });
+}
+
+/** The log line for appended dispatches: `dispatched to paddock/widget-lib chat 3f2a…`. */
+function dispatchSummary(added: DispatchedEntry[]): string {
+  return oneLine(`dispatched to ${added.map((d) => `${d.connection}/${d.project} chat ${d.chat}`).join("; ")}`, LOG_LINE_MAX);
 }
 
 /** YAML may hand back `answer.choice: null`; the strict schema wants the key absent. */
@@ -506,6 +540,7 @@ export class StateWriter {
       assertNoH2(input.notes, "notes");
     }
     if (input.objective) await this.assertObjective(ws, input.objective);
+    const dispatches = parseDispatches(input.dispatched);
 
     return this.locked(ws, actor, async () => {
       const now = this.now();
@@ -558,6 +593,22 @@ export class StateWriter {
       set("due", input.due);
       set("shovel_ready", input.shovel_ready);
       if (!prior) set("source", input.source ?? (actor.kind === "ed" ? "ed" : "manager"));
+      const added: DispatchedEntry[] = [];
+      if (dispatches) {
+        const have = base.dispatched as unknown[];
+        const key = (d: unknown) => {
+          const r = (d ?? {}) as Record<string, unknown>;
+          return JSON.stringify([r.connection, r.project, r.chat]);
+        };
+        const seen = new Set(have.map(key));
+        for (const d of dispatches) {
+          const entry = { connection: d.connection, project: d.project, chat: d.chat, at: d.at ?? stamp };
+          if (seen.has(key(entry))) continue;
+          seen.add(key(entry));
+          added.push(entry);
+        }
+        if (added.length) set("dispatched", [...have, ...added]);
+      }
       // A fresh question supersedes the previous answer.
       if (prior && base.status === "awaiting-ed" && input.ask) base.answer = null;
 
@@ -570,13 +621,17 @@ export class StateWriter {
       const notes = input.notes !== undefined ? input.notes.trim() : oldNotes;
       const who = actor.kind === "ed" ? actor.name || "ed" : "manager";
       const where = actor.runId ? ` (run ${actor.runId})` : "";
+      const dispatchTail = added.length ? `, ${dispatchSummary(added)}` : "";
+      const others = changed.filter((k) => k !== "updated" && k !== "dispatched");
       const summary = input.log
         ? oneLine(input.log, LOG_LINE_MAX)
         : !prior
-          ? `created, ${task.status}`
+          ? `created, ${task.status}${dispatchTail}`
           : oldStatus !== task.status
-            ? `${oldStatus} → ${task.status}`
-            : `updated ${changed.filter((k) => k !== "updated").join(", ") || "notes"}`;
+            ? `${oldStatus} → ${task.status}${dispatchTail}`
+            : added.length && others.length === 0 && input.notes === undefined
+              ? dispatchSummary(added)
+              : `updated ${others.join(", ") || "notes"}${dispatchTail}`;
       log.push(`${isoMinute(now).replace(":00Z", "Z")} ${who}${where}: ${summary}`);
       const body = `${notes ? `${notes}\n\n` : ""}## Log\n${log.map((l) => `- ${l}`).join("\n")}\n`;
 
@@ -598,6 +653,7 @@ export class StateWriter {
         status: task.status,
         created: !prior,
         ...(movedFrom ? { movedFrom } : {}),
+        ...(dispatches ? { dispatched: { added: added.length, total: task.dispatched.length } } : {}),
       };
     });
   }

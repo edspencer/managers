@@ -2016,6 +2016,16 @@ export interface TaskAnswer {
   text: string | null;
 }
 
+/** Where a task's work was sent: a chat on another system, reached over an MCP connection. */
+export interface TaskDispatch {
+  connection: string | null;
+  project: string | null;
+  chat: string | null;
+  at: string | null;
+  /** The chat's web URL (task detail only); null when it cannot be derived. */
+  href?: string | null;
+}
+
 export interface TaskSummary {
   id: string;
   title: string;
@@ -2026,7 +2036,7 @@ export interface TaskSummary {
   options: string[];
   answer: TaskAnswer | null;
   github: string[];
-  dispatched: { connection: string | null; project: string | null; chat: string | null; at: string | null }[];
+  dispatched: TaskDispatch[];
   shovel_ready: boolean;
   due: string | null;
   created: string | null;
