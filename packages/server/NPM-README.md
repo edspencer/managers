@@ -1,103 +1,56 @@
-# Paddock
+# Managers
 
-**Project-first launchpad for Claude Code** — server-hosted, persistent, resumable
-sessions organized by project, in a web UI.
+**Scheduled, per-project manager agents that keep track of your long-running
+objectives.** Each project gets a manager: a Claude Code agent that wakes on a
+schedule, reads where things stand, works on the project's objectives, and writes
+down what it did and what it needs from you. Its state is plain Markdown and YAML
+in a git-tracked data directory. A fork of
+[Paddock](https://github.com/edspencer/paddock), built on
+[herdctl](https://github.com/edspencer/herdctl).
 
 ```sh
-npx @edspencer/paddock
+npx @edspencer/managers
 ```
 
 Then open <http://127.0.0.1:7234>.
 
-Or point it at work you've already done — see [Open your own project](#open-your-own-project).
+> **First run downloads ~250 MB.** Managers drives Claude Code, and the Claude
+> Agent SDK ships a per-platform binary of that size. It cannot be skipped:
+> installing with `--omit=optional` produces a Managers whose chats all fail.
+> Later runs reuse the npm cache. For repeated use, `npm i -g @edspencer/managers`
+> and then `managers` is friendlier than bare `npx`.
 
-> **First run downloads ~250 MB.** Paddock drives Claude Code, and the Claude
-> Agent SDK ships a per-platform binary of that size. It cannot be skipped —
-> installing with `--omit=optional` produces a Paddock whose chats all fail.
-> Later runs reuse the npm cache and start immediately. For repeated use,
-> `npm i -g @edspencer/paddock` is friendlier than bare `npx`.
+**Real turns spend real Claude credit.** Every behaviour (scheduled wakes,
+reports, memory consolidation) is off until you switch it on in the UI.
 
 ## Credentials
 
-Paddock runs Claude Code on your behalf, so it needs Claude credentials:
+Managers runs Claude Code on your behalf, so it needs Claude credentials. **If you
+already use Claude Code on this machine, there is nothing to do:** it uses the
+login you already have (the macOS Keychain entry on a Mac, or
+`~/.claude/.credentials.json` elsewhere), read, never copied. Otherwise:
 
 ```sh
 claude setup-token                  # Claude Max/Pro
 export ANTHROPIC_API_KEY=sk-ant-…   # or API billing
 ```
 
-**If you already use Claude Code on this machine, there is nothing to do.** Paddock
-keeps a Claude home of its own under the data dir, but not a login of its own: it uses
-the one you already have — the macOS Keychain entry on a Mac, your
-`~/.claude/.credentials.json` elsewhere (symlinked in, never copied). Reading a login
-writes nothing, and nothing else is shared with it.
+Managers keeps its own Claude home under the data dir, so its transcripts never
+mix with yours.
 
-To give Paddock its own instead, set `claude: { credentials: own }` in
-`<data-dir>/managers.config.yaml`; a login is then a token in the environment as above,
-or a one-off `CLAUDE_CONFIG_DIR=<data-dir>/claude-home claude login`. Either way,
-Paddock says at startup if it can find no credentials at all.
+## Security
 
-## What else Paddock does and does not take from your `~/.claude`
+The `managers` command binds **127.0.0.1** and runs with **authentication off**,
+so nothing off this machine can reach it. Processes **on** this machine can, and
+that includes the agents Managers runs: with no auth, an agent's Bash can call
+the API as you. The UI shows a permanent banner saying so.
 
-Apart from that login: **nothing, by default.** Your `CLAUDE.md`, `agents/`,
-`commands/` and `plugins/` are not loaded, the hooks your `settings.json` binds to tool
-use do not run, your transcripts are not touched, and your `~/.claude.json` MCP servers
-are not attached. Each is one key in `<data-dir>/managers.config.yaml`:
-
-```yaml
-claude:
-  transcripts: host    # own | host, default own — whose session transcripts
-  credentials: host    # own | host, default host — the one shared by default
-  instructions: host   # own | host, default own — CLAUDE.md, agents, commands, plugins
-  hooks: host          # own | host, default own — shell commands settings.json binds
-  mcpServers: host     # own | host, default own — the servers in your ~/.claude.json
-```
-
-`instructions: own` is worth knowing about if you have curated a `~/.claude/CLAUDE.md`:
-your Paddock agents will not see it until you set `host`. Each project's own `CLAUDE.md`
-always applies. `hooks` is off by default because inheriting someone's shell commands is
-not a thing to discover after the fact; the rest of your `settings.json` — permissions,
-model, statusline — applies either way.
-
-To give this instance an MCP server your machine does not have — the case `host`
-cannot serve — declare it in a **sibling** `mcpServers:` block of the same file, using
-`env:VAR_NAME` anywhere a string goes so the token stays out of the git-tracked file
-(keep `driveMode` on its default `session` for a server holding a credential — `batch`
-passes the definition to `claude` as a command-line argument, where any local user can
-read it):
-
-```yaml
-mcpServers:
-  notion:
-    command: npx
-    args: ["-y", "@notionhq/notion-mcp-server"]
-    env:
-      NOTION_TOKEN: env:NOTION_TOKEN
-```
-
-## Open your own projects
-
-A brand-new instance is empty, so it opens on **Discover**. That reads your Claude
-Code history, works out which directories on this machine you have actually been
-using `claude` in, and offers them as projects — with conversation counts, last-used
-dates and git remotes, so you can tell them apart.
-
-Tick the ones you want and press Import. Each becomes a project pointing at that
-directory, with its conversations copied in as chats you can resume — so instead of
-an empty instance you are looking at your own work. Expand a row first if you would
-rather pick individual conversations than take the lot. Discover stays in the sidebar
-afterwards; it is not only a first-run screen.
-
-**Nothing is written into the directories you import.** No `.managers/`, no `.chats/`,
-no `.gitignore` edit, no `CLAUDE.md`. The project record and the copied transcripts
-both live in the data dir, and the project simply points at the path.
-
-**Your `~/.claude` is not touched either.** Transcripts are *copied*, with their
-timestamps preserved — the originals are never moved or deleted, and your terminal
-`claude` keeps working exactly as before. To share **one** set of transcripts between
-Paddock and your terminal rather than keeping a copy, set
-`claude: { transcripts: host }` in `<data-dir>/managers.config.yaml`. (Your *login* is
-already shared, which is why there is nothing to log into — see Credentials above.)
+- To close that, use `MANAGERS_AUTH_MODE=jwt` behind your identity provider (see
+  [AUTH.md](https://github.com/edspencer/managers/blob/main/AUTH.md)).
+- To make the command refuse to start without auth, set
+  `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=0`.
+- It **refuses to start** if you bind a routable interface (`--host 0.0.0.0`)
+  with auth off. Configure `MANAGERS_AUTH_MODE` first.
 
 ## Options
 
@@ -111,16 +64,15 @@ already shared, which is why there is nothing to log into — see Credentials ab
   -h, --help              Show help
 ```
 
-Your projects, chats and settings persist between runs in `~/.managers`, or wherever
-`--data-dir` points. It is one directory: move it to move your instance, delete it to
-start over. Where you run `paddock` from has no effect on which instance you get.
+`managers service install` keeps it running in the background from login
+(launchd on macOS, a systemd user unit on Linux; it refuses to install from the
+`npx` cache, so `npm i -g` first). `managers config show --resolved` prints every
+effective setting and where it came from.
 
-## Security
-
-Paddock binds **loopback only** with authentication disabled, which is the right
-default for a laptop. It **refuses to start** if you bind a routable interface
-while auth is off — to expose it on a network, configure `MANAGERS_AUTH_MODE`
-first. See [AUTH.md](https://github.com/edspencer/paddock/blob/main/AUTH.md).
+Your projects, objectives, tasks, memory, chats and settings persist in
+`~/.managers`, or wherever `--data-dir` points. It is one directory, and the
+projects inside it are a git repository the managers commit to. Move it to move
+your instance; delete it to start over.
 
 ## Requirements
 
@@ -128,26 +80,22 @@ Node.js 22 or newer.
 
 ## Other ways to run it
 
-A multi-arch Docker image is published alongside this package, and is the better
-fit for a server deployment:
+A multi-arch (amd64 + arm64) Docker image is published alongside this package,
+and is the better fit for a server, a VM or an LXC:
 
 ```sh
-docker run -d -p 127.0.0.1:7234:7234 -v /srv/paddock-data:/data \
+docker run -d --name managers -p 127.0.0.1:7234:7234 -v managers-data:/data \
   -e CLAUDE_CODE_OAUTH_TOKEN=… \
+  -e MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1 \
   -e MANAGERS_DANGEROUSLY_ALLOW_OPEN=1 \
-  ghcr.io/edspencer/paddock:latest
+  ghcr.io/edspencer/managers:latest
 ```
 
-`MANAGERS_DANGEROUSLY_ALLOW_OPEN=1` is required: the image binds `0.0.0.0` and the
-default auth mode is `none`, and Paddock refuses to bind a routable interface
-unauthenticated unless told to. Publishing on `127.0.0.1:` is what makes that
-safe — Paddock runs code and spends Claude tokens, so put an auth mode or a
-reverse proxy in front of it before exposing the port to a network.
+The image binds `0.0.0.0` inside the container, so with auth off it needs both
+opt-ins, and publishing on `127.0.0.1:` is what keeps that private. For anything
+reachable from a network, use `MANAGERS_AUTH_MODE=jwt` instead (see AUTH.md).
 
 ## Links
 
-- [Documentation](https://github.com/edspencer/paddock#readme)
-- [Issues](https://github.com/edspencer/paddock/issues)
-- Built on [herdctl](https://github.com/edspencer/herdctl)
-
-MIT © Ed Spencer
+- [Repository and documentation](https://github.com/edspencer/managers#readme)
+- [Issues](https://github.com/edspencer/managers/issues)

@@ -1,0 +1,453 @@
+name: Release
+
+# App-mode release pipeline, ported from Paddock's (edspencer/paddock). Managers
+# is an app; its workspace packages stay private and are never published under
+# their own names. See RELEASING.md.
+#   1. On push to main, changesets maintains a "chore: version packages" PR that
+#      bumps the app version (@managers/server + @managers/web are `fixed`, so
+#      they move together) and updates the CHANGELOGs. Opening that PR needs the
+#      repo setting "Allow GitHub Actions to create and approve pull requests".
+#   2. When that PR is merged, no changesets remain, the app version has changed,
+#      and no v<version> tag exists yet → after CI is confirmed green on that
+#      commit, the pipeline publishes:
+#        - the multi-arch Docker images  ghcr.io/edspencer/managers:<version>
+#          (+ :latest) and :<version>-devbox (+ :devbox)
+#        - a self-contained release tarball attached to a GitHub Release v<version>
+#        - the npm package @edspencer/managers, with provenance (OIDC)
+#
+# Both jobs run in the SAME workflow run (the push that merges the version PR),
+# so we never rely on GITHUB_TOKEN pushing a tag to trigger a second workflow
+# (which GitHub blocks).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Version PR / detect release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      should_release: ${{ steps.detect.outputs.should_release }}
+      version: ${{ steps.detect.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Opens/updates the "Version Packages" PR while changesets are present.
+      # No `publish:` — the packages are private; we never npm-publish.
+      - name: Changesets version PR
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: npm run changeset:version
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # After a version PR merges there are no changesets left. If the current
+      # app version has no v<version> tag yet, this is a fresh release.
+      - name: Detect release
+        id: detect
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          VERSION="$(node -p "require('./packages/server/package.json').version")"
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "v${VERSION} already released — nothing to do"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new release: v${VERSION}"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # A release must be impossible to publish unless CI actually passed on the
+  # very commit being released.
+  #
+  # Why this is needed. The changesets "version packages" PR is opened by
+  # `github-actions[bot]`, and GitHub parks workflow runs from bot-authored PRs
+  # at `action_required` pending manual approval. Nothing surfaces that, so the
+  # PR can merge looking green while typecheck / unit / E2E never ran at all.
+  # This is not hypothetical: every run on `changeset-release/main` in
+  # edspencer/paddock and edspencer/herdctl was parked that way, and Paddock
+  # v0.54.2 shipped like it.
+  #
+  # CI on `main` is NOT gated — a human pushes the merge, so it runs normally.
+  # The trustworthy signal already existed; it simply had no consumer. This job
+  # is that consumer, and it sits ahead of `build-image` so a red CI blocks the
+  # GHCR pushes too, not just the tarball and the GitHub Release.
+  #
+  # If CI is red for a reason you judge unrelated (a flake), fix or re-run CI
+  # until it is green, then re-run this workflow via Actions → Release → Run
+  # workflow. Overriding is deliberately a conscious act, not the default path.
+  verify-ci:
+    name: Require CI green on this commit
+    needs: release
+    if: needs.release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for CI on this commit, and require success
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 1800 ))   # 30 minutes; E2E alone runs ~3-4 min
+          while :; do
+            # `// empty` so an as-yet-uncreated run prints nothing rather than
+            # failing jq on null — the Release and CI runs start concurrently.
+            line="$(gh api \
+              "repos/${REPO}/actions/workflows/ci.yml/runs?head_sha=${SHA}&event=push&per_page=1" \
+              --jq '.workflow_runs[0] // empty | "\(.status)\t\(.conclusion // "-")\t\(.html_url)"' \
+              2>/dev/null || true)"
+
+            if [ -n "${line}" ]; then
+              status="$(printf '%s' "${line}" | cut -f1)"
+              conclusion="$(printf '%s' "${line}" | cut -f2)"
+              url="$(printf '%s' "${line}" | cut -f3)"
+
+              if [ "${status}" = "completed" ]; then
+                if [ "${conclusion}" = "success" ]; then
+                  echo "CI passed on ${SHA} — ${url}"
+                  exit 0
+                fi
+                echo "::error::CI concluded '${conclusion}' on ${SHA}. Refusing to publish a release from a commit whose CI did not pass. See ${url}"
+                exit 1
+              fi
+              echo "CI is ${status} on ${SHA} — waiting. ${url}"
+            else
+              echo "No CI run found for ${SHA} yet — waiting."
+            fi
+
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "::error::Timed out after 30m waiting for CI to complete on ${SHA}. Refusing to publish."
+              exit 1
+            fi
+            sleep 20
+          done
+
+  # Build each (target × arch) on a NATIVE runner (amd64 on x86, arm64 on
+  # GitHub's free arm runners) instead of emulating arm64 under QEMU on one x86
+  # runner — emulation made this step take ~9-10 min; native runners take
+  # ~1-2 min each, in parallel. Each leg pushes by digest; `artifacts` merges
+  # one manifest per target (base + devbox). The cross-product of `target` and
+  # `platform` is 4 legs; the `include` entries attach arch+runner to every
+  # combination that shares their `platform`.
+  build-image:
+    name: Build image (${{ matrix.target }} · ${{ matrix.platform }})
+    needs: [release, verify-ci]
+    if: needs.release.outputs.should_release == 'true'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [base, devbox]
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/edspencer/managers,push-by-digest=true,name-canonical=true,push=true
+          # Separate cache scope per target: base and devbox share the build +
+          # base layers, but devbox stacks the heavy browser layer on top.
+          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.target }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  artifacts:
+    name: Publish image + tarball + release
+    needs: [release, build-image]
+    if: needs.release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release + tag
+      packages: write # push the merged manifest to GHCR
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+      IMAGE: ghcr.io/edspencer/managers
+    steps:
+      # Full history: the final step commits the regenerated OpenAPI spec back to
+      # main, and `git rebase origin/main` cannot graft onto a depth-1 shallow
+      # clone if main moved while the images were building.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build (server + web)
+        run: npm run build
+
+      # ---- release tarball ----
+      - name: Build tarball
+        run: bash scripts/make-tarball.sh
+
+      # ---- assemble one multi-arch manifest per target from per-arch digests ----
+      # Keep each artifact in its own subdir (no merge-multiple) so the base and
+      # devbox digests stay separable: digests-<target>-<arch>/<digest>.
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # base   → :<version> + :latest
+      # devbox → :<version>-devbox + :devbox
+      - name: Tag multi-arch images
+        run: |
+          set -euo pipefail
+          # download-artifact@v4 lands each per-arch digest in its own
+          # digests-<target>-<arch>/ subdir, one file whose NAME is the digest.
+          # Iterate the files directly (basename = digest); do NOT `ls` the
+          # dirs -- `ls` prints a "dir:" header per directory when given more
+          # than one, which corrupts the reference list (invalid reference).
+          collect_digests() {
+            for f in /tmp/digests/"$1"-*/*; do
+              printf "%s@sha256:%s " "${IMAGE}" "$(basename "$f")"
+            done
+          }
+          base_digests="$(collect_digests digests-base)"
+          devbox_digests="$(collect_digests digests-devbox)"
+
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            -t "${IMAGE}:latest" \
+            ${base_digests}
+
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}-devbox" \
+            -t "${IMAGE}:devbox" \
+            ${devbox_digests}
+
+      - name: Inspect images
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}-devbox"
+
+      # ---- stable-named ("latest") copies ----
+      # GitHub's `releases/latest/download/<asset>` redirect only resolves when
+      # <asset> has the SAME filename in every release, so the version-named
+      # managers-<version>.tgz can't be reached that way. Attach an identical
+      # copy under a fixed name (managers-latest.tgz) so
+      # releases/latest/download/managers-latest.tgz always points at the newest
+      # build, while keeping the pinned managers-<version>.tgz too.
+      - name: Stage stable-named tarball
+        run: |
+          set -euo pipefail
+          cp "managers-${VERSION}.tgz" "managers-latest.tgz"
+          # Regenerate the checksum against the stable filename so
+          # `sha256sum -c managers-latest.tgz.sha256` verifies as-is.
+          ( command -v sha256sum >/dev/null \
+              && sha256sum "managers-latest.tgz" \
+              || shasum -a 256 "managers-latest.tgz" ) > "managers-latest.tgz.sha256"
+
+      # ---- GitHub Release (creates the v<version> tag at this SHA) ----
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            "managers-${VERSION}.tgz" \
+            "managers-${VERSION}.tgz.sha256" \
+            "managers-latest.tgz" \
+            "managers-latest.tgz.sha256"
+
+      # ---- refresh the committed OpenAPI reference ----
+      # openapi-site/open-api.json is DERIVED from the route schemas and its
+      # `info.version` is stamped from packages/server/package.json, so it goes
+      # stale the instant changesets cuts a version, and there is no earlier
+      # point in the pipeline where the new number exists. Regenerate + commit
+      # here. Deliberately NOT a drift check: the version stamp guarantees a
+      # difference at every release. `npm run build` above already produced
+      # packages/server/dist, which the dump script boots in-process against a
+      # throwaway temp dir (no port bound, no real data). Runs after the Release
+      # so a failure here can never cost the tag or the artifacts.
+      - name: Regenerate OpenAPI spec
+        run: node scripts/dump-openapi.mjs
+
+      # Pushes made with GITHUB_TOKEN do not trigger workflows, so this cannot
+      # loop back into Release. The v<version> tag was already created above, at
+      # the release commit, so it is unaffected.
+      - name: Commit the refreshed spec
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- openapi-site/open-api.json; then
+            echo "spec already current for v${VERSION} — nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add openapi-site/open-api.json
+          git commit -m "chore: refresh OpenAPI spec for v${VERSION}"
+          # The concurrency group serialises Release runs, but main can still
+          # have moved while the images built. Rebase rather than fail a release
+          # that has already published everything.
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
+
+  # ---- npm package ---------------------------------------------------------
+  # Publishes @edspencer/managers — the `npx @edspencer/managers` entry point.
+  #
+  # Gated on `verify-ci` and `build-image`, NOT on `release` alone (Paddock #825). npm is
+  # the one irreversible leg of this pipeline — a published version cannot be
+  # unpublished after 72h and can never be republished — so it must be the LAST
+  # thing to become inevitable, not the first.
+  #
+  # In Paddock it once declared `needs: [release]` on the reasoning that it needs
+  # neither the per-arch digests nor a GitHub Release. That is true mechanically
+  # and wrong on consequences, in two ways that both actually happened there
+  # (edspencer/paddock run 31397354103, v0.68.1):
+  #
+  #   - It ran CONCURRENTLY with `verify-ci`, not after it. npm published at
+  #     14:19:36; `verify-ci` did not conclude until 14:23:30. A red CI would
+  #     have blocked the image, the tarball, the tag and the Release — and not
+  #     the npm publish, which is the artifact users actually install. That
+  #     inverts the whole point of `verify-ci`.
+  #   - It was not gated on `build-image`, so when the devbox/amd64 leg was
+  #     cancelled it took `artifacts` down with it — the ONLY job that creates
+  #     the git tag and the GitHub Release — 24 minutes AFTER npm had already
+  #     shipped 0.68.1. The result is a published version that cannot be checked
+  #     out or bisected to.
+  #
+  # Deliberately NOT `needs: [artifacts]`, which would look stricter but adds a
+  # failure mode: `artifacts` continues PAST the release-creating step to
+  # regenerate and push the OpenAPI spec, and a failure in that trailing step
+  # must not strand an otherwise-good npm publish. Gating on `build-image` buys
+  # the guarantee that matters — CI green on this commit, all four image legs
+  # built — without making a docs-spec push load-bearing for the registry.
+  #
+  # Auth is OIDC trusted publishing — no NPM_TOKEN secret exists or is wanted.
+  # That requires `id-token: write` below, npm >= 11.5.1 (Node 22 ships npm 10),
+  # and a trusted publisher configured for this package + workflow at
+  # npmjs.com/package/@edspencer/managers/access.
+  #
+  # Provenance is requested explicitly via publishConfig.provenance in the
+  # synthesized manifest rather than relying on trusted publishing's implicit
+  # behaviour — see scripts/make-npm-package.mjs.
+  #
+  # NOTE: the very first publish of a new package CANNOT use OIDC — npm has no
+  # settings page for a package that does not exist yet (npm/cli#8544). A
+  # code-free placeholder is published by hand first — RELEASING.md has the
+  # recipe — and every real release comes through here.
+  publish-npm:
+    name: Publish npm package
+    needs: [release, verify-ci, build-image]
+    if: needs.release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC — trusted publishing + provenance
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          # Without this, npm never writes a registry line into .npmrc and the
+          # publish fails to authenticate even with a valid OIDC token.
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - run: npm ci
+
+      - name: Build (server + web)
+        run: npm run build
+
+      - name: Stage the npm package
+        run: node scripts/make-npm-package.mjs
+
+      - name: Publish
+        run: npm publish
+        working-directory: dist-npm
+
+      - name: Verify provenance landed
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            if npm view "@edspencer/managers@${VERSION}" dist.attestations.provenance --json | grep -q slsa; then
+              echo "provenance attested for ${VERSION}"; exit 0
+            fi
+            echo "attestation not visible yet (attempt $i) — waiting"; sleep 15
+          done
+          echo "::error::published ${VERSION} but no provenance attestation appeared" >&2
+          exit 1

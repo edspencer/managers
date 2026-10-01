@@ -17,4 +17,8 @@ docs/screenshots
 .env
 .env.*
 !.env.example
-paddock.bak*
+managers.bak*
+dist-npm
+dist-tarball
+*.tgz
+*.tgz.sha256

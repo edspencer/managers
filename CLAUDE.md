@@ -336,9 +336,11 @@ code, with the renames above applied; where it says "Paddock", read "Managers".
 
 ## Monorepo layout
 
-Two `private` packages, versioned together (`0.1.0`; Managers is not published
-anywhere yet). Paddock's npm packaging (`scripts/make-npm-package.mjs`, `npm run
-pack:npm`) and `Dockerfile` are inherited and unexercised:
+Two `private` packages, versioned together by changesets (`fixed`). Releases
+(from 0.2.0) publish a multi-arch image `ghcr.io/edspencer/managers` (base +
+devbox), the npm package `@edspencer/managers` (synthesized by
+`scripts/make-npm-package.mjs`; bin `managers`) and a tarball — see
+[`RELEASING.md`](RELEASING.md):
 
 - **`packages/server`** (`@managers/server`) — **Fastify 4 + `@fastify/websocket`**
   backend. Wraps herdctl's `FleetManager`, the Project layer, sidecar stores, the
@@ -484,9 +486,21 @@ Runbooks inherited from Paddock: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`DEV.md`
 - **Commits.** Conventional Commits (`type(scope): summary`); v1 was built as
   lightweight tags `m1`…`m14.5` on `main`. Never force-push. The upstream Paddock
   is not merged from: ideas are ported across by hand when wanted.
-- **No changesets, no releases.** `.changeset/`, `release.yml` and the docs site were removed;
-  versions are `0.1.0`. `@herdctl/core` and `@herdctl/chat` are pinned to exact
-  versions (the fork depends on herdctl internals; bump deliberately).
+- **Changesets drive releases** (Paddock's pipeline, ported; [`RELEASING.md`](RELEASING.md)).
+  A user-facing PR adds one via `npm run changeset`, naming `@managers/server`
+  and/or `@managers/web` — NEVER `@edspencer/managers` (not a workspace member:
+  it passes PR CI and then breaks every Release run). Merging the bot's "chore:
+  version packages" PR publishes, after `verify-ci` sees CI green on that commit.
+  npm auth is OIDC trusted publishing; there is no `NPM_TOKEN`, and this box has
+  no npm credentials. The docs site was removed. `@herdctl/core` and
+  `@herdctl/chat` are pinned to exact versions (the fork depends on herdctl
+  internals; bump deliberately).
+- **The `managers` CLI's laptop default:** `start({ loopbackNoAuth })` lets
+  auth `none` boot without `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH` ONLY on a
+  resolved loopback bind (boot-posture.ts), with the same banner; `=0` refuses.
+  It is a start option, never an env var. Docker and `node dist/index.js` keep
+  the strict refusal. `GET /api/security` serves the posture `buildApp` booted
+  with (`RouteDeps.securityPosture`), never a recomputation.
 - After large edits run `npm run check:nul` — edits have been known to insert NUL
   bytes that typecheck and tests do not notice.
 - UI work follows [`docs/DESIGN.md`](docs/DESIGN.md) and the primitives in

@@ -2,7 +2,7 @@
 /**
  * `managers` — the npx / global-install entrypoint (#637, #638).
  *
- * The user-facing front door for `npx @edspencer/paddock`: someone who has never
+ * The user-facing front door for `npx @edspencer/managers`: someone who has never
  * seen this repo runs one command and gets a working instance on localhost.
  * Everything here is preflight, defaults and presentation — the server itself is
  * untouched, and `start()` is the same lifecycle `node dist/index.js` uses.
@@ -349,9 +349,18 @@ async function main(): Promise<void> {
 
   // Imported dynamically, AFTER the env above is set: a static import would
   // pull in app.ts -> config.ts and resolve config against the wrong data dir.
+  // The laptop default for auth (boot-posture.ts): with `MANAGERS_AUTH_MODE=none`
+  // the server would otherwise refuse to start, and a first `npx` run has no
+  // identity provider to point at. So the CLI allows no-auth, but only on a
+  // RESOLVED loopback bind (the server checks the host it actually binds, config
+  // file included), only when nobody set MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH
+  // either way (`=0` refuses), and with the same warning + banner as the explicit
+  // opt-in. A start option rather than an env var, so no child inherits it.
+  const loopbackNoAuth = process.env.MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH === undefined;
+
   const { start } = await import("../start.js");
   try {
-    await start();
+    await start({ loopbackNoAuth });
   } catch (err) {
     fail(explainListenError(err, host, port));
   }

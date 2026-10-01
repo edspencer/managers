@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Stage the publishable `@edspencer/paddock` npm package (#637).
+ * Stage the publishable `@edspencer/managers` npm package (ported from Paddock's
+ * `@edspencer/paddock`, edspencer/paddock#637).
  *
- * Paddock's workspace packages are `private` and internally named
+ * Managers' workspace packages are `private` and internally named
  * (`@managers/server`, `@managers/web`). Rather than flip `private` — which makes
  * every future `npm publish` in the repo a loaded gun pointed at an
  * internal-named package — this script SYNTHESIZES a single public package from
@@ -13,11 +14,11 @@
  * The staged tree mirrors the repo's, because the server locates the SPA at
  * `../../web/dist` RELATIVE TO ITS OWN MODULE (config.ts `resolveDefaultWebDist`):
  *
- *     package.json                  <- synthesized, @edspencer/paddock
+ *     package.json                  <- synthesized, @edspencer/managers
  *     README.md                     <- npm landing page
  *     LICENSE                       <- copied from the repo root
  *     packages/server/package.json  <- kept: the CLI reads its version from here
- *     packages/server/dist/**       <- compiled server + the `paddock` bin
+ *     packages/server/dist/**       <- compiled server + the `managers` bin
  *     packages/web/dist/**          <- built SPA
  *
  * Dependencies are declared at the ROOT, so npm installs them to
@@ -34,7 +35,7 @@
  * 2. **Dependencies are PINNED to the versions in package-lock.json.** A
  *    lockfile does not travel with a published package: consumers re-resolve
  *    against the declared ranges, so a caret would hand `npx` users a
- *    `@herdctl/core` minor that paddock's CI never saw. Docker does not have
+ *    `@herdctl/core` minor that Managers' CI never saw. Docker does not have
  *    this exposure because it builds with `npm ci` against the committed lock.
  *    Pinning makes the published closure the tested closure.
  *
@@ -176,7 +177,7 @@ fs.copyFileSync(
 );
 
 const manifest = {
-  name: "@edspencer/managers", // unpublished; inherited from Paddock's release tooling
+  name: "@edspencer/managers",
   version,
   description:
     "Scheduled per-project manager agents that track long-running objectives. A fork of Paddock, built on herdctl.",
@@ -189,7 +190,7 @@ const manifest = {
   author: "Ed Spencer",
   type: "module",
   engines: { node: ">=22" },
-  bin: { paddock: "packages/server/dist/cli/managers.js" },
+  bin: { managers: "packages/server/dist/cli/managers.js" },
   scripts: { preinstall: "node install-notice.mjs" },
   dependencies: pinnedVersions(lock, serverPkg.dependencies, "packages/server"),
   optionalDependencies: pinnedVersions(lock, serverPkg.optionalDependencies ?? {}, "packages/server"),

@@ -44,7 +44,7 @@ import { makeTranscriber, type Transcriber } from "./transcribe.js";
 import { registerRoutes } from "./routes.js";
 import { registerAuth } from "./auth.js";
 import { evaluateBindSafety } from "./bind-safety.js";
-import { evaluateBootPosture, bootPostureInput } from "./boot-posture.js";
+import { evaluateBootPosture, bootPostureInput, type SecurityPosture } from "./boot-posture.js";
 import { installHerdctlBridgeLoopbackBind } from "./herdctl-bridge-bind.js";
 import { renderIndexHtml } from "./brand.js";
 import { makeChatHandler } from "./ws.js";
@@ -124,6 +124,8 @@ export interface BuildAppOptions {
   config?: PaddockConfig;
   /** Skip serving the built web SPA even if a dist exists (API-only). */
   serveStatic?: boolean;
+  /** The `managers` CLI's laptop default: no-auth allowed on a loopback bind only (boot-posture.ts). */
+  loopbackNoAuth?: boolean;
 }
 
 /**
@@ -178,13 +180,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   }
 
   // --- M14.5 security posture -------------------------------------------
+  let securityPosture: SecurityPosture | undefined;
   // Refuse auth=none, jwt without iss/aud, and batch drive mode unless each has
   // its explicit opt-in (boot-posture.ts). Each opted-in danger is logged loudly
   // here and served at GET /api/security for the web banner.
   {
-    const decision = evaluateBootPosture(bootPostureInput(cfg));
+    const decision = evaluateBootPosture(bootPostureInput(cfg, { loopbackNoAuth: opts.loopbackNoAuth === true }));
     if (decision.action === "refuse") throw new Error(decision.message);
     for (const w of decision.posture.warnings) app.log.warn(`SECURITY: ${w.detail}`);
+    securityPosture = decision.posture;
   }
 
   // --- auth (provider-agnostic) -----------------------------------------
@@ -547,7 +551,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   // Managers M9: a project DTO never echoes an inline `mcp:` value (headers,
   // env, args, a url's query) — `env:VAR` names pass, everything else is redacted.
   app.addHook("preSerialization", async (_req, _reply, payload) => redactMcpInPayload(payload));
-  await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, managers, autocommit, cfg });
+  await registerRoutes(app, { projects, herdctl, git, githubAuth, transcriber, archive, star, readState, unread, parentDetach, runProvenance, messageProvenance, attachments, fireTrigger: chatHandler.fireTrigger, managementOpsContext: chatHandler.managementOpsContext, events, triggers, managers, autocommit, cfg, securityPosture });
 
   await app.register(async (scoped) => {
     // `hide: true` keeps the WS upgrade out of the OpenAPI doc — it's not a REST

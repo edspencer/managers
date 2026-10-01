@@ -12,7 +12,17 @@ import { describeScrub, scrubInheritedEnv } from "./env-scrub.js";
 import { applyRuntimeEnv } from "./managers/claude-overlay.js";
 import { describeSequester, sequesterMcpSecrets } from "./managers/mcp-secret-env.js";
 
-export async function start(): Promise<void> {
+export interface StartOptions {
+  /**
+   * Allow `MANAGERS_AUTH_MODE=none` without `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH`
+   * when, and only when, the resolved bind host is loopback. Set by the
+   * `managers` CLI (laptop first run); see boot-posture.ts. Never an env var, so
+   * no child process can inherit it.
+   */
+  loopbackNoAuth?: boolean;
+}
+
+export async function start(opts: StartOptions = {}): Promise<void> {
   // FIRST, before any config is resolved or any child can be spawned: drop every
   // inherited `PADDOCK_*` variable so none of them reaches a keeper, sweeper or
   // trigger subprocess (see env-scrub.ts). Only the count is logged.
@@ -25,7 +35,7 @@ export async function start(): Promise<void> {
   // keeper/trigger/sweeper child inherits it (belt-and-braces with the
   // `autoMemoryEnabled: false` in the generated settings.json).
   applyRuntimeEnv();
-  const { app, cfg, close } = await buildApp();
+  const { app, cfg, close } = await buildApp({ loopbackNoAuth: opts.loopbackNoAuth === true });
   // warn, not info, when anything was removed: it means this process was started
   // from a shell configured for Paddock, which is worth seeing even at LOG_LEVEL=warn.
   if (scrubbed > 0) app.log.warn({ scrubbedEnvVars: scrubbed }, describeScrub(scrubbed));

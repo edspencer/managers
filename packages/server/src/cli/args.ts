@@ -433,9 +433,13 @@ Your data
   stored anywhere else.
 
 Notes
-  Binds loopback with authentication disabled, which is safe for a laptop. To
-  expose it on a network, set MANAGERS_AUTH_MODE first — Managers refuses to bind
-  a routable interface wide open. See AUTH.md.
+  Binds loopback with authentication disabled, so nothing off this machine can
+  reach it. Processes on this machine can, and that includes the agents Managers
+  runs: with no auth they can act as you over its API, and the UI shows a banner
+  saying so. MANAGERS_AUTH_MODE=jwt closes that; MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=0
+  makes this command refuse to start without auth instead. To expose it on a
+  network, set MANAGERS_AUTH_MODE first — Managers refuses to bind a routable
+  interface with no auth. See AUTH.md.
 
 Docs: https://github.com/edspencer/managers`;
 
@@ -491,10 +495,11 @@ Installed from npx?
     npm link -w packages/server && managers service install   (from a built checkout)
 
 A note on access
-  Managers binds loopback, and refuses to start with authentication off unless
-  MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1 is set: with no auth, the agents it runs
-  on this host can act as you over its API. Use MANAGERS_AUTH_MODE=jwt for
-  anything but a throwaway rig (see AUTH.md). A service is up for as long as
+  Managers binds loopback, and the managers command runs it with authentication
+  off ONLY on a loopback bind (set MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=0 to refuse
+  instead). Nothing off this machine can reach it, but with no auth the agents it
+  runs on this host can act as you over its API: the UI shows a banner saying so.
+  Use MANAGERS_AUTH_MODE=jwt to close that (see AUTH.md). A service is up for as long as
   you are logged in rather than as long as a terminal tab.
 
 Docs: https://github.com/edspencer/managers`;

@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Build a self-contained Paddock release tarball from an already-built tree.
+# Build a self-contained Managers release tarball from an already-built tree.
 #
 # Assumes `npm run build` has run (packages/{server,web}/dist exist). Produces
-# paddock-<version>.tgz containing exactly what a host needs to run the app:
+# managers-<version>.tgz containing exactly what a host needs to run the app:
 #   package.json + package-lock.json (for `npm ci --omit=dev`)
 #   packages/server/{package.json,dist}
 #   packages/web/{package.json,dist}
 #   LICENSE
 #   INSTALL.md (run instructions)
 #
-# Consumer:  tar xzf paddock-<v>.tgz && cd paddock && npm ci --omit=dev \
-#            && MANAGERS_DATA_DIR=/var/lib/paddock node packages/server/dist/index.js
+# Consumer:  tar xzf managers-<v>.tgz && cd managers-<v> && npm ci --omit=dev \
+#            && MANAGERS_DATA_DIR=/var/lib/managers node packages/server/dist/index.js
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 VERSION="$(node -p "require('./packages/server/package.json').version")"
-OUT="paddock-${VERSION}"
+OUT="managers-${VERSION}"
 STAGE="dist-tarball/${OUT}"
 
 test -d packages/server/dist || { echo "packages/server/dist missing — run 'npm run build' first" >&2; exit 1; }
@@ -31,38 +31,39 @@ cp packages/web/package.json "${STAGE}/packages/web/"
 cp -R packages/web/dist "${STAGE}/packages/web/dist"
 
 cat > "${STAGE}/INSTALL.md" <<EOF
-# Paddock ${VERSION} — tarball install
+# Managers ${VERSION} — tarball install
 
 \`\`\`sh
 npm ci --omit=dev
-MANAGERS_DATA_DIR=/var/lib/paddock \\
+MANAGERS_DATA_DIR=/var/lib/managers \\
 CLAUDE_CODE_OAUTH_TOKEN=... \\
-PORT=7233 HOST=0.0.0.0 \\
+MANAGERS_AUTH_MODE=jwt \\
+MANAGERS_AUTH_JWKS_URL=https://<idp>/.well-known/jwks.json \\
+MANAGERS_AUTH_JWT_ISSUER=https://<idp>/ \\
+MANAGERS_AUTH_JWT_AUDIENCE=managers \\
+PORT=7234 HOST=0.0.0.0 \\
 node packages/server/dist/index.js
 \`\`\`
 
 Requires Node.js >= 22. Chats resolve the Claude Agent SDK's own bundled binary, so
 they work as-is; the \`claude\` CLI on PATH
 (\`npm i -g @anthropic-ai/claude-code\`) is needed only for the post-turn sweeper
-and for triggers.
+and for \`driveMode: batch\`.
+
+Managers refuses to start with authentication off unless
+\`MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH=1\` is set: with no auth, the agents it runs
+on this host can act as you over its API. It also refuses a non-loopback bind
+with no auth unless \`MANAGERS_DANGEROUSLY_ALLOW_OPEN=1\`. See AUTH.md in
+https://github.com/edspencer/managers.
 
 ## Easier alternatives
 
 \`\`\`sh
-# No install, no clone:
-npx @edspencer/paddock
+# No install, no clone (binds 127.0.0.1:7234):
+npx @edspencer/managers
 \`\`\`
 
-A new instance opens on Discover, which finds the directories on the machine with
-existing Claude Code history and imports the ones you tick as projects. Nothing is
-written into those directories, and your own transcripts are copied rather than
-moved.
-
-Deliberately unpinned: releases 0.57.0-0.59.0 shipped a CLI that silently did nothing,
-so a pinned command generated from one of those tags would be a dud. \`@latest\` is
-always a working one.
-
-For an always-on server, the Docker image (ghcr.io/edspencer/paddock:${VERSION}) is
+For an always-on server, the Docker image (ghcr.io/edspencer/managers:${VERSION}) is
 batteries-included. This tarball is the right choice when you want the app on the box
 with no Docker and no registry access.
 EOF
