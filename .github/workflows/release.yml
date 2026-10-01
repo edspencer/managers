@@ -443,8 +443,9 @@ jobs:
       # A successful `npm publish` can still say "Your package is being processed
       # and may take a few minutes to become available": v0.2.0 published (and
       # logged its provenance to Sigstore) yet stayed 404 for longer than the
-      # 2.5 minutes this step used to wait, so a good release went red. Wait up
-      # to 15 minutes, reading the version document straight from the registry
+      # 2.5 minutes this step used to wait, so a good release went red (its
+      # metadata took ~9 min and its tarball ~14). Wait up to 30 minutes, reading
+      # the version document straight from the registry
       # with caching off rather than through `npm view`. A failure here does NOT
       # mean the publish failed — check the Publish step's log first, and never
       # re-run this job (npm refuses to republish an existing version).
@@ -452,12 +453,16 @@ jobs:
         run: |
           set -euo pipefail
           url="https://registry.npmjs.org/@edspencer%2fmanagers/${VERSION}"
-          for i in $(seq 1 60); do
+          # The tarball replicates separately from the metadata: v0.2.0's version
+          # document was served while its .tgz still 404'd, so `npm i` failed.
+          tgz="https://registry.npmjs.org/@edspencer/managers/-/managers-${VERSION}.tgz"
+          for i in $(seq 1 120); do
             body="$(curl -fsS -H 'Cache-Control: no-cache' "$url" 2>/dev/null || true)"
-            if [ -n "$body" ] && printf '%s' "$body" | grep -q '"provenance"' && printf '%s' "$body" | grep -q 'slsa'; then
-              echo "provenance attested for ${VERSION} (attempt $i)"; exit 0
+            if [ -n "$body" ] && printf '%s' "$body" | grep -q '"provenance"' && printf '%s' "$body" | grep -q 'slsa' \
+              && curl -fsS -o /dev/null -I "$tgz" 2>/dev/null; then
+              echo "provenance attested and tarball downloadable for ${VERSION} (attempt $i)"; exit 0
             fi
-            echo "${VERSION} or its attestation not visible yet (attempt $i/60) — waiting"; sleep 15
+            echo "${VERSION} or its attestation not visible yet (attempt $i/120) — waiting"; sleep 15
           done
-          echo "::error::published ${VERSION} but no provenance attestation appeared within 15 minutes. Check the Publish step: if it printed '+ @edspencer/managers@${VERSION}', the release is out and this is registry lag." >&2
+          echo "::error::published ${VERSION} but no provenance attestation appeared within 30 minutes. Check the Publish step: if it printed '+ @edspencer/managers@${VERSION}', the release is out and this is registry lag." >&2
           exit 1
