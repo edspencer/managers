@@ -1,5 +1,13 @@
 # @managers/web
 
+## 0.2.0
+
+### Minor Changes
+
+- [#5](https://github.com/edspencer/managers/pull/5) [`0e28b51`](https://github.com/edspencer/managers/commit/0e28b518cd28d0032f50ce36d84b4891e72ecd00) Thanks [@edspencer](https://github.com/edspencer)! - First published release of Managers: scheduled, per-project manager agents that track long-running objectives (milestones M1–M15, forked from Paddock 0.74.1). Ships as a multi-arch Docker image (`ghcr.io/edspencer/managers`), an npm package (`npx @edspencer/managers`, with provenance) and a release tarball.
+
+  The `managers` command now starts with authentication off when, and only when, it binds a loopback address and nothing set `MANAGERS_AUTH_MODE` or `MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH`. The no-auth security banner still shows. Any other bind, the Docker image and `node packages/server/dist/index.js` still refuse to start without auth unless the opt-in is set.
+
 ## 0.1.0
 
 Managers forked from Paddock at v0.74.1 and was built as milestones M1–M15 (lightweight tags `m1`…`m14.5` on `main`); 0.1.0 was never published. Every entry below this one is Paddock's own history, as `@paddock/web` in [edspencer/paddock](https://github.com/edspencer/paddock), kept for reference.
