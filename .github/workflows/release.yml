@@ -440,14 +440,24 @@ jobs:
         run: npm publish
         working-directory: dist-npm
 
+      # A successful `npm publish` can still say "Your package is being processed
+      # and may take a few minutes to become available": v0.2.0 published (and
+      # logged its provenance to Sigstore) yet stayed 404 for longer than the
+      # 2.5 minutes this step used to wait, so a good release went red. Wait up
+      # to 15 minutes, reading the version document straight from the registry
+      # with caching off rather than through `npm view`. A failure here does NOT
+      # mean the publish failed — check the Publish step's log first, and never
+      # re-run this job (npm refuses to republish an existing version).
       - name: Verify provenance landed
         run: |
           set -euo pipefail
-          for i in $(seq 1 10); do
-            if npm view "@edspencer/managers@${VERSION}" dist.attestations.provenance --json | grep -q slsa; then
-              echo "provenance attested for ${VERSION}"; exit 0
+          url="https://registry.npmjs.org/@edspencer%2fmanagers/${VERSION}"
+          for i in $(seq 1 60); do
+            body="$(curl -fsS -H 'Cache-Control: no-cache' "$url" 2>/dev/null || true)"
+            if [ -n "$body" ] && printf '%s' "$body" | grep -q '"provenance"' && printf '%s' "$body" | grep -q 'slsa'; then
+              echo "provenance attested for ${VERSION} (attempt $i)"; exit 0
             fi
-            echo "attestation not visible yet (attempt $i) — waiting"; sleep 15
+            echo "${VERSION} or its attestation not visible yet (attempt $i/60) — waiting"; sleep 15
           done
-          echo "::error::published ${VERSION} but no provenance attestation appeared" >&2
+          echo "::error::published ${VERSION} but no provenance attestation appeared within 15 minutes. Check the Publish step: if it printed '+ @edspencer/managers@${VERSION}', the release is out and this is registry lag." >&2
           exit 1
