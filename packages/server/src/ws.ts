@@ -112,6 +112,7 @@ import type { ChatHandlerDeps } from "./ws-context.js";
 export { forkKickoffPrompt } from "./ws-self-mcp.js";
 import { buildSelfMcpServerDef } from "./ws-self-mcp.js";
 import { makeTurnEngine, isSidechainMessage } from "./ws-turn.js";
+import { buildChatDelta, seenAtEnd, seenAtStart, wrapDelta } from "./managers/chat-delta.js";
 // RECOVERY_NUDGE now lives in ws-turn.ts; re-export so its test resolves via ws.js.
 export { RECOVERY_NUDGE } from "./ws-turn.js";
 import {
@@ -817,6 +818,12 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
       // Managers M14: Ed's message drives THIS turn, and only this one. Cleared the
       // moment the turn's foreground drive settles (success, failure or Stop).
       let humanTurnLive = true;
+      // When this turn started, recorded with its end for the chat's NEXT turn's
+      // "Changed since your last turn" delta (chat-delta.ts).
+      const turnStarted = new Date();
+      const turnStartedAt = turnStarted.toISOString();
+      let workspaceDir: string | undefined;
+      let seenAtTurnStart: string[] = [];
       let jobId: string | null = null;
       let resolvedSession: string | null = sessionId ?? null;
       // One-shot guard: a brand-new chat is attributed to its agent the instant
@@ -931,6 +938,7 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
           const project = await deps.projects.get(slug);
           agentName = keeperAgentName(slug);
           sendFileWorkingDir = project.dir;
+          workspaceDir = project.dir;
 
           // Project chat: a valid override wins, else the project's model. Then
           // ensure the (shared) keeper is registered at that model before the
@@ -982,6 +990,26 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
           // attachment-wrapped) `prompt`, not the bare `message`.
           if (isNewChat && preloadContext) {
             prompt = await composePreloadedPrompt(slug, prompt);
+          }
+
+          // A LATER turn of an open chat: what changed in the store since this
+          // chat's previous turn (an answer Ed gave on Home, a task another run
+          // moved). Left out when nothing changed or the chat has no recorded
+          // turn yet; never fatal to the turn. Wraps outside any attachments.
+          if (deps.managers) {
+            seenAtTurnStart = await seenAtStart(deps.managers, project.dir, turnStarted).catch(() => []);
+          }
+          if (!isNewChat && deps.managers) {
+            const previous = await deps.managers.chatTurns.get(project.dir, sessionId).catch(() => null);
+            const delta = previous
+              ? await buildChatDelta(deps.managers, {
+                  dir: project.dir,
+                  sessionId,
+                  previous,
+                  now: new Date(),
+                }).catch(() => null)
+              : null;
+            if (delta) prompt = wrapDelta(delta, prompt);
           }
         }
 
@@ -1124,6 +1152,20 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
         });
         // M14: the turn Ed's message drove is over; nothing after this is his.
         humanTurnLive = false;
+        // Remember this turn for the chat's next delta, before turn.end() can
+        // drain a queued follow-up into it.
+        const recordedSession = result.sessionId ?? resolvedSession;
+        if (deps.managers && workspaceDir && recordedSession) {
+          const ended = new Date();
+          const seenAtTurnEnd = await seenAtEnd(deps.managers, workspaceDir, ended).catch(() => []);
+          await deps.managers.chatTurns
+            .record(workspaceDir, recordedSession, {
+              start: turnStartedAt,
+              end: ended.toISOString(),
+              seen: [...seenAtTurnStart, ...seenAtTurnEnd],
+            })
+            .catch(() => undefined);
+        }
 
         // #404: session-mode turns that produced a real reply routinely end with a
         // trailing `error_*` / `success:false` result frame (the #380/#394 banner

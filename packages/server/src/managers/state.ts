@@ -14,6 +14,7 @@ import { RunsStore } from "./runs-store.js";
 import { ReportsStore } from "./reports-store.js";
 import { StateWriter } from "./state-writes.js";
 import { ConsolidationTracker } from "./consolidation.js";
+import { ChatTurnStore } from "./chat-turns.js";
 import type { DataSyncStatus } from "./data-sync.js";
 import { sharedMemoryLayout, workspaceLayout, type WorkspaceLayout } from "./layout.js";
 
@@ -31,6 +32,8 @@ export class ManagersState {
    * unlocks `memory_op`) and the per-workspace early-fire claim.
    */
   readonly consolidations = new ConsolidationTracker();
+  /** When each chat's previous human turn ran, for its next turn's delta (`chat-delta.ts`). */
+  readonly chatTurns = new ChatTurnStore();
 
   /**
    * M15: the data-repo sync, when one is wired (app.ts). Home's alerts read its

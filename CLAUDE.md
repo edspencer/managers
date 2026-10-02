@@ -323,6 +323,16 @@ What changed from Paddock, and what did not:
   failure is a warning), cleared by the next good sync. Auth is the process's own git
   credentials; prompts are off and git output is redacted (`redactGitText`). The test
   helper deletes `MANAGERS_DATA_SYNC*`.
+- **Per-turn chat delta (`managers/chat-delta.ts`, `managers/chat-turns.ts`).** A chat's first
+  turn is briefed; every LATER human `chat:send` (ws.ts `onChatSend`) is sent
+  `<managers-delta>…</managers-delta>\n\n<message>` when the store changed since that
+  chat's previous turn, recorded per workspace in `.managers/state/chat-turns.json`
+  (`{start, end, episodes}`, 500 chats, gitignored): answers since the previous START,
+  task/objective `updated` since its END (so the chat's own edits are not echoed),
+  episodes since the start's minute minus the chat's own (`chat`) and the ids already
+  there then. Ids and statuses only (Ed's answer clipped); 10 per section + "+N more",
+  4 000 chars. Nothing changed → no wrapper. The web strips it from a reloaded user
+  bubble (`lib/chatDelta.ts`). Only human turns record or receive one.
 - **Kept as internal names:** TS identifiers (`PaddockConfig`, `loadPaddockConfig`,
   `PaddockTrigger`, …), file names (`self-mcp*.ts`, `PaddockManageBlock.tsx`),
   herdctl agent names (`keeper-<slug>`, …), the localStorage `paddock:*` keys and
