@@ -8,6 +8,7 @@ import type {
   TurnNotice,
 } from "../../lib/types";
 import { parseAttachments } from "../../lib/attachments";
+import { stripChatDelta } from "../../lib/chatDelta";
 import {
   isCompactContinuation,
   isLocalCommandCaveat,
@@ -189,8 +190,10 @@ export function historyToTurn(m: HistoryMessage, id: string): Turn {
   // A user turn may carry uploaded attachments in a `<paddock-attachments>`
   // wrapper (#328). Strip the block from the visible text and re-render the files
   // as thumbnails/chips (bytes served from the store). Nested inside any preload
-  // wrapper, which is intentionally left intact (existing behavior).
-  const { attachments, text } = parseAttachments(m.content);
+  // wrapper, which is intentionally left intact (existing behavior). A later
+  // turn's "Changed since your last turn" block (Managers) wraps the whole
+  // message and is for the manager, so it is dropped first.
+  const { attachments, text } = parseAttachments(stripChatDelta(m.content));
   // A machine-injected user turn (#290) carries a `sender`; a human message does
   // not. Thread it through so the bubble renders "↩ sent by …" / "⏰ scheduled by …".
   return {
