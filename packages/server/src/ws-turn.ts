@@ -39,7 +39,9 @@ import {
   errorNotice,
   messageProducedReply,
   suppressNoticeAfterReply,
-  turnEffectivelySucceeded,
+  judgeTurn,
+  messageHasAssistantContent,
+  runtimeNoticeFromTranscript,
   type TurnNotice,
 } from "./turn-notice.js";
 import type {
@@ -495,6 +497,8 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
   // `success: true` with a terminal error result (the banner is the only sign),
   // so the run record treats a surfaced dead-end as a failure too.
   let deadEnd: TurnNotice | null = null;
+  // #11: any non-synthetic assistant content this turn (a tool-only turn counts).
+  let sawAssistantContent = false;
   const emitNotice = (notice: TurnNotice): void => {
     if (noticeEmitted) return;
     if (suppressNoticeAfterReply(notice, producedReply)) return;
@@ -712,6 +716,8 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
       // the flag must survive later text-less messages, not just the last one.
       if (messageProducedReply(m as Parameters<typeof messageProducedReply>[0]))
         producedReply = true;
+      if (messageHasAssistantContent(m as Parameters<typeof messageHasAssistantContent>[0]))
+        sawAssistantContent = true;
       const notice = noticeFromMessage(m as Parameters<typeof noticeFromMessage>[0]);
       if (notice) emitNotice(notice);
       // #429: recover any Task/Agent launch from this message's tool_use input so
@@ -729,12 +735,34 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
       // reply routinely ends with a trailing `error_*` / `success:false` result
       // frame, so gating the post-turn sweep / recovery arm on raw `result.success`
       // silently skips them. Trust the same `producedReply` signal the banner does.
-      const effectiveSuccess = turnEffectivelySucceeded(result.success, producedReply);
+      // #11: but a turn the Claude runtime refused (a synthetic API error such as
+      // an expired login) or that produced nothing at all is a failure even when
+      // the drive says ok — judgeTurn is the one place that decides.
+      const u = resolveTurnUsage(seen);
+      // #11, batch: the CLI exits 1 right after writing its synthetic error, and
+      // herdctl's watcher can lose that race, so the drive fails with only a
+      // generic "exit code 1". The transcript still has the runtime's message.
+      if (!result.success && !deadEnd && !sawAssistantContent) {
+        const found = await runtimeNoticeFromTranscript(
+          deps.cfg.claudeHome,
+          workingDir,
+          result.sessionId ?? resolvedSession,
+        );
+        if (found) emitNotice(found);
+      }
+      const verdict = judgeTurn({
+        rawSuccess: result.success,
+        rawError: result.error?.message,
+        producedReply,
+        sawAssistantContent,
+        outputTokens: u?.outputTokens,
+        deadEnd,
+      });
+      const effectiveSuccess = verdict.sideEffects;
       const finalSession =
         (effectiveSuccess ? (result.sessionId ?? resolvedSession) : resolvedSession) ?? null;
       if (finalSession) turn.setSession(finalSession);
       const completeModel = seen.model ?? fallbackModel;
-      const u = resolveTurnUsage(seen);
       const completeUsage: ChatCompleteUsage | undefined = u
         ? {
             inputTokens: u.inputTokens,
@@ -750,6 +778,8 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
       // triggered `noticeFromMessage`. Surface it here as an inline error notice
       // so the failure is visible — before chat:complete flips streaming off.
       if (!result.success) emitNotice(errorNotice(result.error?.message));
+      // #11: an empty turn the drive called a success gets a notice too.
+      if (verdict.notice) emitNotice(verdict.notice);
       turn.emit({
         type: "chat:complete",
         payload: {
@@ -763,16 +793,13 @@ async function startAgentTurn(opts: StartAgentTurnOpts): Promise<string> {
       });
       // Managers M6: finish the run record BEFORE the hub turn ends, so the
       // turn-end autocommit flush carries it.
-      const runFailure: TurnNotice | null = deadEnd;
-      const runSucceeded = effectiveSuccess && runFailure === null;
       await complete({
-        success: runSucceeded,
+        success: verdict.success,
         sessionId: finalSession,
         model: completeModel,
         ...(completeUsage ? { usage: completeUsage } : {}),
-        ...(runSucceeded
-          ? {}
-          : { error: result.error?.message ?? runFailure?.message ?? "the turn did not succeed" }),
+        ...(verdict.success ? {} : { error: verdict.error ?? "the turn did not succeed" }),
+        ...(verdict.errorKind ? { errorKind: verdict.errorKind } : {}),
       });
       turn.end();
       try {

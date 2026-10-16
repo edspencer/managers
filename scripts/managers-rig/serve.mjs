@@ -35,6 +35,11 @@
  *                         inherited PADDOCK_* vars — never names or values), and
  *                         `mcpSecretEnvCount` (M9.5: inherited MANAGERS_MCP_* vars,
  *                         which the server's boot sequester makes 0).
+ *   MANAGERS_FAKE_AUTHFAIL_FILE=<rig>/authfail
+ *                         #11: while this file exists, EVERY fake-claude turn fails
+ *                         the way an expired Claude login does (see [[AUTHFAIL]] in
+ *                         test/bin/claude); its content, if any, is the message.
+ *                         `touch` it for a fleet-wide outage, `rm` it to recover.
  *   HOST=127.0.0.1        forced, whatever the caller exported — unless
  *                         `--public` is passed (0.0.0.0 + MANAGERS_DANGEROUSLY_ALLOW_OPEN),
  *                         for a LAN-viewable demo of the synthetic fixtures only.
@@ -77,7 +82,7 @@ export function isScrubbed(key) {
  * it, checking the server's environ is vacuous: this function already stripped
  * everything. Never pass real values through it.
  */
-export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl, publicBind = false }) {
+export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, authFailFile, leakEnv, paddockMcpUrl, publicBind = false }) {
   const env = {};
   for (const [k, v] of Object.entries(process.env)) if (!isScrubbed(k)) env[k] = v;
 
@@ -106,6 +111,7 @@ export function rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv
   env.MANAGERS_MCP_PADDOCK_WRONG_TOKEN = "Bearer wrong-secret";
   if (fakeScript) env.MANAGERS_FAKE_SCRIPT = fakeScript;
   if (invocationLog) env.MANAGERS_FAKE_INVOCATION_LOG = invocationLog;
+  if (authFailFile) env.MANAGERS_FAKE_AUTHFAIL_FILE = authFailFile;
   if (leakEnv) Object.assign(env, leakEnv);
   return env;
 }
@@ -182,7 +188,7 @@ export async function startFakePaddock(serverPort) {
  * to `logFile` and, when `echo` is set, to our own stdout/stderr too (so a process manager's logs
  * shows it).
  */
-export async function startServer({ dataDir, port, home, fakeScript, invocationLog, leakEnv, logFile, echo = false, paddockMcpUrl, publicBind = false }) {
+export async function startServer({ dataDir, port, home, fakeScript, invocationLog, authFailFile, leakEnv, logFile, echo = false, paddockMcpUrl, publicBind = false }) {
   const entry = path.join(REPO_ROOT, "packages", "server", "dist", "index.js");
   if (!fs.existsSync(entry)) {
     throw new Error(`Server build missing at ${entry}\nRun:  scripts/clean-env.sh npm run build`);
@@ -191,7 +197,7 @@ export async function startServer({ dataDir, port, home, fakeScript, invocationL
 
   const log = logFile ? fs.createWriteStream(logFile, { flags: "w" }) : null;
   const child = spawn(process.execPath, [entry], {
-    env: rigEnv({ dataDir, port, home, fakeScript, invocationLog, leakEnv, paddockMcpUrl, publicBind }),
+    env: rigEnv({ dataDir, port, home, fakeScript, invocationLog, authFailFile, leakEnv, paddockMcpUrl, publicBind }),
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });
@@ -269,6 +275,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       home,
       fakeScript: fs.existsSync(fakeScript) ? fakeScript : undefined,
       invocationLog: path.join(rigDir, "invocations.jsonl"),
+      authFailFile: path.join(rigDir, "authfail"),
       logFile: path.join(rigDir, "server.log"),
       echo: true,
       publicBind: process.argv.includes("--public"),

@@ -76,6 +76,24 @@
  *                     #329 "reached turn limit" notice.
  *   • [[APIERROR]]  → write an `error_during_execution` result — the #329 generic
  *                     error notice + Retry affordance.
+ *   • [[AUTHFAIL]]  → the runtime refuses the turn the way an EXPIRED LOGIN does
+ *                     (#11), byte-for-byte what Claude Code 2.1.283 emits: ONE
+ *                     synthetic assistant line (model "<synthetic>", zero usage,
+ *                     the text "Not logged in · Please run /login", stream fields
+ *                     `error:"authentication_failed"` / `is_api_error_message`,
+ *                     transcript fields `isApiErrorMessage` / `apiErrorStatus:401`),
+ *                     then a `subtype:"success"` result with `is_error:true`,
+ *                     `api_error_status:401`, `terminal_reason:"api_error"`, and
+ *                     exit 1. herdctl reads the subtype, so the drive reports
+ *                     SUCCESS: the shape the SDK (session) runtime hands Managers.
+ *                     `[[AUTHFAIL:cli]]` writes NO result line (the real CLI never
+ *                     persists one), so herdctl's CLI runtime sees only the exit
+ *                     code: the batch shape. `[[AUTHFAIL:<text>]]` overrides the
+ *                     message. MANAGERS_FAKE_AUTHFAIL_FILE: while that file exists,
+ *                     EVERY turn auth-fails, its content (if any) the message — the
+ *                     rig's switch for a fleet-wide outage.
+ *   • [[EMPTYTURN]] → no assistant line at all and a SUCCESS result with zero
+ *                     usage: a turn that "succeeded" producing nothing (#11).
  *   • [[APIRECOVER]]→ stream a NORMAL reply, then a SUCCESS result stamped
  *                     `is_error:true` (a turn that recovered from a transient
  *                     mid-turn API error). Must NOT surface a banner (#329
@@ -764,6 +782,89 @@ async function main() {
     cwd,
     sessionId,
   });
+
+  // [[AUTHFAIL]] / [[EMPTYTURN]] (test-only, #11): see the header. Before every
+  // other directive: a refused turn makes no tool calls and writes no reply.
+  const authFile = process.env.MANAGERS_FAKE_AUTHFAIL_FILE;
+  const authFromFile = !!authFile && fs.existsSync(authFile);
+  const authDirective = /\[\[AUTHFAIL(?::([^\]]*))?\]\]/.exec(prompt || "");
+  if (authFromFile || authDirective) {
+    const arg = authDirective?.[1] ?? "";
+    const cliShape = arg === "cli";
+    let text = arg && !cliShape ? arg : "Not logged in · Please run /login";
+    if (authFromFile) {
+      try {
+        text = fs.readFileSync(authFile, "utf8").trim() || text;
+      } catch {
+        /* keep the default */
+      }
+    }
+    const zero = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    sleep(40);
+    // The real line carries BOTH spellings: the stream's snake_case fields and the
+    // transcript's camelCase ones (the fake's transcript IS its stream).
+    append({
+      parentUuid: null,
+      isSidechain: false,
+      type: "assistant",
+      message: {
+        id: crypto.randomUUID(),
+        model: "<synthetic>",
+        role: "assistant",
+        stop_reason: "stop_sequence",
+        stop_sequence: "",
+        type: "message",
+        usage: zero,
+        content: [{ type: "text", text }],
+      },
+      error: "authentication_failed",
+      is_api_error_message: true,
+      isApiErrorMessage: true,
+      apiErrorStatus: 401,
+      requestId: "req_fake",
+      uuid: crypto.randomUUID(),
+      timestamp: nowIso(),
+      cwd,
+      sessionId,
+      session_id: sessionId,
+    });
+    if (!cliShape) {
+      sleep(30);
+      append({
+        type: "result",
+        subtype: "success",
+        is_error: true,
+        api_error_status: 401,
+        terminal_reason: "api_error",
+        stop_reason: "stop_sequence",
+        num_turns: 1,
+        duration_ms: 90,
+        duration_api_ms: 0,
+        total_cost_usd: 0,
+        session_id: sessionId,
+        result: text,
+        usage: zero,
+        modelUsage: {},
+        permission_denials: [],
+      });
+    }
+    process.stdout.write(text + "\n");
+    // herdctl's CLI watcher must see the line before the process is gone.
+    sleep(60);
+    process.exit(1);
+  }
+  if ((prompt || "").includes("[[EMPTYTURN]]")) {
+    sleep(40);
+    append({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      session_id: sessionId,
+      result: "",
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+    });
+    process.exit(0);
+  }
 
   // [[MCP <server>.<tool> <json-args>]] (Managers M2): really call each tool, in
   // prompt order, and record a tool_use + tool_result pair per call BEFORE the

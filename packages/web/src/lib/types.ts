@@ -995,6 +995,11 @@ export interface TurnNotice {
   detail?: string;
   /** Whether a Continue/Retry affordance is safe to offer (false for a limit). */
   retryable: boolean;
+  /**
+   * #11: set when the Claude RUNTIME refused the turn (a synthetic API error such
+   * as an expired login): the SDK's error code, e.g. `authentication_failed`.
+   */
+  apiError?: string;
 }
 
 export interface HistoryMessage {
@@ -2147,6 +2152,11 @@ export interface RunRecord {
   expectResult: "met" | "missing" | "n/a" | null;
   briefing: { path: string | null; sha256: string | null } | null;
   error: string | null;
+  /**
+   * #11: why a failed run failed, when the server could tell: `runtime` (the Claude
+   * runtime refused the turn, e.g. an expired login) or `no-output` (nothing at all).
+   */
+  errorKind?: "runtime" | "no-output" | null;
   file: string;
 }
 
@@ -2174,7 +2184,9 @@ export type AlertKind =
   /** M9.5: bypassPermissions on a project with narrowed connections or gated tools. */
   | "bypass-permissions"
   /** M15: the data repo's pull/push failed (Home only). */
-  | "data-sync-failed";
+  | "data-sync-failed"
+  /** #11: runs across the instance keep failing because the Claude runtime refuses them (Home's Needs you only). */
+  | "runtime-unavailable";
 
 /** One dead-man's-switch alert (M6), `GET …/managers/alerts`. */
 export interface ManagersAlert {
@@ -2449,8 +2461,16 @@ export interface NeedsYouError {
 
 export type NeedsYouEntry = NeedsYouGroup | NeedsYouError;
 
+/** #11: an alert about the whole instance, shown once above the workspaces. */
+export interface NeedsYouInstanceAlert extends ManagersAlert {
+  /** Per-workspace alerts this one explains, left out of their groups. */
+  folded: number;
+}
+
 export interface NeedsYouResponse {
   generatedAt: string;
+  /** #11: instance-level alerts (`runtime-unavailable`); absent from older servers. */
+  instanceAlerts?: NeedsYouInstanceAlert[];
   projects: NeedsYouEntry[];
   totals: { checked: number; needsYou: number; alerts: number; errors: number; withItems: number };
 }

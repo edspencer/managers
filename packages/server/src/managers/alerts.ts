@@ -27,6 +27,11 @@
  *   data-sync-failed  (M15, Home only) the data repo's pull/push failed — a
  *                     conflicting rebase (error, aborted) or anything else
  *                     (warning); see `managers/data-sync.ts`
+ *   runtime-unavailable
+ *                     (#11, error, instance-level) runs across the instance keep
+ *                     failing because the Claude runtime refuses them (an expired
+ *                     login…). Never computed here: Home's Needs you derives it
+ *                     from every workspace's runs (`managers/runtime-health.ts`)
  *
  * M8: a trigger whose behaviour is off counts as DISABLED here (it cannot fire,
  * so it is not stale and its schedule is not stalled).
@@ -58,6 +63,7 @@ export const ALERT_KINDS = [
   "config-unreadable",
   "bypass-permissions",
   "data-sync-failed",
+  "runtime-unavailable",
 ] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 export type AlertSeverity = "error" | "warning" | "info";
@@ -105,6 +111,7 @@ const SEVERITY: Record<AlertKind, AlertSeverity> = {
   "config-unreadable": "error",
   "bypass-permissions": "warning",
   "data-sync-failed": "error",
+  "runtime-unavailable": "error",
 };
 
 const SEVERITY_RANK: Record<AlertSeverity, number> = { error: 0, warning: 1, info: 2 };

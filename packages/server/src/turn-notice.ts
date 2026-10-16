@@ -26,6 +26,8 @@
  */
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
+import path from "node:path";
+import { encodedTranscriptDir } from "./transcripts.js";
 
 /** Sentinel model the CLI stamps on its synthetic placeholder turns. Mirrors
  *  `@herdctl/chat`'s `SYNTHETIC_MODEL` (kept local to avoid a value import churn). */
@@ -49,6 +51,14 @@ export interface TurnNotice {
   detail?: string;
   /** Whether a Continue/Retry affordance is safe to offer for this notice. */
   retryable: boolean;
+  /**
+   * #11: set when the notice is the Claude RUNTIME's own error rather than the
+   * agent's — a synthetic API-error message (expired login, bad key, billing,
+   * overload). The SDK's error code (`authentication_failed`, …) or `"unknown"`.
+   * The run record classes such a failure as `runtime`, which feeds Home's
+   * instance-level `runtime-unavailable` alert.
+   */
+  apiError?: string;
 }
 
 /** Loosely-typed shape of the fields we read off an SDK message / JSONL entry. */
@@ -57,7 +67,90 @@ interface RawMessage {
   subtype?: string;
   is_error?: boolean;
   success?: boolean;
+  /** SDK stream: the API error behind a synthetic assistant message (`authentication_failed`, …). */
+  error?: unknown;
+  /** SDK stream: marks a synthetic assistant message that reports an API error. */
+  is_api_error_message?: boolean;
+  /** Transcript JSONL: the same two flags plus the HTTP status, camelCased. */
+  isApiErrorMessage?: boolean;
+  apiErrorStatus?: unknown;
+  api_error_status?: unknown;
   message?: { role?: string; model?: string; content?: unknown; stop_reason?: string };
+}
+
+/** The longest runtime error text a notice, a run record or an alert carries. */
+export const RUNTIME_ERROR_MAX = 300;
+
+/**
+ * A runtime error's text, made safe to store and show: one line, anything that
+ * looks like a credential replaced by `[redacted]`, clipped to
+ * {@link RUNTIME_ERROR_MAX}. The CLI's own messages ("Not logged in · Please run
+ * /login") carry no secret, but an `API Error: 400 {…}` echoes a response body,
+ * so this never trusts the text.
+ */
+export function sanitizeRuntimeText(text: string): string {
+  const one = text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b(sk-ant-[a-z0-9]+-)[A-Za-z0-9_-]+/gi, "$1[redacted]")
+    .replace(/\bsk-[A-Za-z0-9_-]{12,}/g, "sk-[redacted]")
+    .replace(/\b(bearer)\s+[^\s"',}]{8,}/gi, "$1 [redacted]")
+    .replace(/\b(token|api[-_ ]?key|x-api-key|authorization)(["']?\s*[:=]\s*["']?)[^\s"',}]{8,}/gi, "$1$2[redacted]")
+    .replace(/\b[A-Za-z0-9_+/=-]{40,}\b/g, "[redacted]");
+  return one.length > RUNTIME_ERROR_MAX ? `${one.slice(0, RUNTIME_ERROR_MAX - 1)}…` : one;
+}
+
+/**
+ * Older CLIs (and odd paths) emit a synthetic API-error reply without the
+ * `error` / `is_api_error_message` flags. Recognise the texts seen in the wild so
+ * an expired login is never filed as a harmless placeholder again.
+ */
+const RUNTIME_ERROR_TEXT =
+  /^API Error\b|Invalid API key|Please run \/login|Not logged in|OAuth token (has )?(expired|been revoked)|Credit balance is too low|authentication_error|\bunauthori[sz]ed\b/i;
+
+/** SDK error codes that will fail every retry until a human fixes the login/billing. */
+const NON_RETRYABLE_API_ERRORS = new Set([
+  "authentication_failed",
+  "oauth_org_not_allowed",
+  "account_on_hold",
+  "verification_required",
+  "billing_error",
+  "cloud_credential_error",
+]);
+
+/**
+ * The runtime-error notice for a synthetic assistant message, or null when the
+ * message is not one (#11). Reads the SDK stream's `error` / `is_api_error_message`,
+ * the transcript's `isApiErrorMessage` / `apiErrorStatus`, then the text.
+ */
+function syntheticApiError(m: RawMessage, text: string): TurnNotice | null {
+  const code = typeof m.error === "string" && m.error ? m.error : null;
+  const flagged = m.is_api_error_message === true || m.isApiErrorMessage === true;
+  if (!code && !flagged && !RUNTIME_ERROR_TEXT.test(text)) return null;
+  const statusRaw = m.api_error_status ?? m.apiErrorStatus;
+  const status = typeof statusRaw === "number" ? statusRaw : null;
+  const apiError = code ?? "unknown";
+  const message = sanitizeRuntimeText(text) || "Claude's runtime returned an error before producing a reply.";
+  return {
+    kind: "error",
+    message,
+    detail: [apiError, status !== null ? `HTTP ${status}` : null].filter(Boolean).join(" · "),
+    retryable: !NON_RETRYABLE_API_ERRORS.has(apiError),
+    apiError,
+  };
+}
+
+/**
+ * Classify a whole synthetic (`model: "<synthetic>"`) assistant message: a usage
+ * limit, a runtime API error (#11), a suppressed placeholder (`"declined"`), or
+ * null for empty text. The ONE classifier both the live path and the history scan
+ * use, so a reload never disagrees with what streamed.
+ */
+export function classifySyntheticMessage(m: RawMessage): TurnNotice | "declined" | null {
+  const text = contentText(m.message?.content);
+  const r = classifySyntheticText(text);
+  if (r && r !== "declined") return r; // the usage limit wins (it carries a reset time)
+  return syntheticApiError(m, text) ?? r;
 }
 
 /** Flatten an assistant `content` (string, or an array of text blocks) to text. */
@@ -179,7 +272,7 @@ export function errorNotice(message: string | undefined): TurnNotice {
  */
 export function noticeFromMessage(m: RawMessage): TurnNotice | null {
   if (m.type === "assistant" && m.message?.model === SYNTHETIC_MODEL) {
-    const r = classifySyntheticText(contentText(m.message?.content));
+    const r = classifySyntheticMessage(m);
     return r && r !== "declined" ? r : null;
   }
   if (m.type === "result") {
@@ -260,8 +353,9 @@ export function turnEffectivelySucceeded(rawSuccess: boolean, producedReply: boo
 
 /**
  * Scan a transcript JSONL file for a TRAILING dead-end notice to surface on
- * reload (the history-hydration path). Only the synthetic usage-limit case is
- * recoverable from history: `@herdctl/core` drops synthetic messages when it
+ * reload (the history-hydration path). Only the synthetic cases (a usage limit,
+ * and since #11 a runtime API error such as an expired login, which the CLI
+ * persists with `isApiErrorMessage`) are recoverable from history: `@herdctl/core` drops synthetic messages when it
  * parses the transcript, and an `error_max_turns` turn writes NOTHING at all —
  * so those are live-only.
  *
@@ -290,8 +384,8 @@ export async function scanTranscriptNotice(filePath: string): Promise<TurnNotice
       if (entry.type !== "assistant") continue;
       const model = entry.message?.model;
       if (model === SYNTHETIC_MODEL) {
-        const r = classifySyntheticText(contentText(entry.message?.content));
-        if (r && r !== "declined") pending = r; // a usage-limit dead-end
+        const r = classifySyntheticMessage(entry);
+        if (r && r !== "declined") pending = r; // a usage-limit or runtime-error dead-end
         // a "declined" placeholder neither sets nor clears the pending notice
       } else if (contentText(entry.message?.content).trim().length > 0) {
         // A real assistant reply: the turn was actually answered → clear.
@@ -302,4 +396,134 @@ export async function scanTranscriptNotice(filePath: string): Promise<TurnNotice
     return null;
   }
   return pending;
+}
+
+/** #11: the run error for a turn that ended with nothing at all. */
+export const NO_OUTPUT_ERROR =
+  "The agent produced no output: the turn ended with no assistant message and zero output tokens.";
+
+/** The notice a live viewer sees for a {@link NO_OUTPUT_ERROR} turn. */
+export function noOutputNotice(): TurnNotice {
+  return {
+    kind: "error",
+    message: "Claude ended the turn without producing any output.",
+    detail: "no assistant message · 0 output tokens",
+    retryable: true,
+  };
+}
+
+/** Is this notice the Claude runtime's own refusal (an API error or a usage limit), not the agent's? */
+export function isRuntimeNotice(n: TurnNotice | null | undefined): boolean {
+  return !!n && (n.apiError !== undefined || n.kind === "usage_limit");
+}
+
+/** A runtime notice as one stored error line: its message plus the detail (`authentication_failed · HTTP 401`). */
+export function runtimeErrorText(n: TurnNotice): string {
+  return sanitizeRuntimeText(n.detail && n.apiError !== undefined ? `${n.message} (${n.detail})` : n.message);
+}
+
+/** What a finished turn looked like, for {@link judgeTurn}. */
+export interface TurnFacts {
+  /** The drive's own verdict (`result.success`): reply-unaware, and blind to a synthetic API error. */
+  rawSuccess: boolean;
+  rawError?: string;
+  /** Real (non-synthetic) assistant prose streamed this turn. */
+  producedReply: boolean;
+  /** Any non-synthetic assistant content at all (text, a tool call, thinking). */
+  sawAssistantContent: boolean;
+  /** The turn's output tokens; undefined when no usage was observed (counts as zero). */
+  outputTokens: number | undefined;
+  /** The dead-end notice the turn surfaced, if any. */
+  deadEnd: TurnNotice | null;
+}
+
+export interface TurnVerdict {
+  /** Did the turn do its job? The run record's `succeeded`/`failed`. */
+  success: boolean;
+  error?: string;
+  errorKind?: "runtime" | "no-output";
+  /** Gate for the post-turn side effects (sweep, recovery arm), see {@link turnEffectivelySucceeded}. */
+  sideEffects: boolean;
+  /** A notice to surface because nothing else explained the failure (the empty turn). */
+  notice: TurnNotice | null;
+}
+
+/**
+ * The ONE judgement of whether a finished turn succeeded (#11), shared by the
+ * trigger/spawn engine (`ws-turn.ts`) and the human `chat:send` path (`ws.ts`).
+ *
+ * The drive's `success` cannot be trusted alone. When the Claude login has expired
+ * the SDK answers with a synthetic `model: "<synthetic>"` assistant message
+ * ("Not logged in · Please run /login", `error: "authentication_failed"`) and a
+ * `subtype: "success"` result with `is_error: true`. herdctl reads the subtype and
+ * reports success, and `classifyResult` deliberately ignores `is_error` (the #329
+ * regression). So:
+ *
+ *   - a runtime notice (synthetic API error or usage limit) fails the turn, with
+ *     the runtime's own text as the error (`errorKind: runtime`);
+ *   - a turn with no assistant content and zero output tokens fails
+ *     (`errorKind: no-output`), even when the drive said ok, and even when the
+ *     drive said why (`rawError` is kept as the error then);
+ *   - otherwise the M6 rule: success needs the drive's (reply-aware) success and
+ *     no surfaced dead-end.
+ */
+export function judgeTurn(f: TurnFacts): TurnVerdict {
+  const effective = turnEffectivelySucceeded(f.rawSuccess, f.producedReply);
+  if (f.deadEnd && isRuntimeNotice(f.deadEnd)) {
+    return {
+      success: false,
+      error: runtimeErrorText(f.deadEnd),
+      errorKind: "runtime",
+      sideEffects: effective && f.producedReply,
+      notice: null,
+    };
+  }
+  const empty = !f.producedReply && !f.sawAssistantContent && (f.outputTokens ?? 0) === 0;
+  if (empty && f.deadEnd === null) {
+    return {
+      success: false,
+      error: f.rawSuccess ? NO_OUTPUT_ERROR : (f.rawError ?? NO_OUTPUT_ERROR),
+      errorKind: "no-output",
+      sideEffects: false,
+      notice: f.rawSuccess ? noOutputNotice() : null,
+    };
+  }
+  const success = effective && f.deadEnd === null;
+  return {
+    success,
+    ...(success ? {} : { error: f.rawError ?? f.deadEnd?.message ?? "the turn did not succeed" }),
+    sideEffects: effective,
+    notice: null,
+  };
+}
+
+/**
+ * Did this streamed message carry any non-synthetic assistant content (text,
+ * tool_use, thinking)? The other half of {@link judgeTurn}'s empty-turn test:
+ * a tool-only turn produced no prose but did work.
+ */
+export function messageHasAssistantContent(m: RawMessage): boolean {
+  if (m.type !== "assistant" || m.message?.model === SYNTHETIC_MODEL) return false;
+  const c = m.message?.content;
+  return typeof c === "string" ? c.trim().length > 0 : Array.isArray(c) && c.length > 0;
+}
+
+/** Session ids are uuids; anything else never becomes a path. */
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * #11, the batch shape: the CLI writes its synthetic API-error reply and exits 1
+ * at once, and herdctl's transcript watcher can lose that race, so the drive
+ * fails with a generic "exit code 1" and the message never streams. Read it from
+ * the transcript instead. Returns the trailing RUNTIME notice (an API error or a
+ * usage limit), else null. Never throws.
+ */
+export async function runtimeNoticeFromTranscript(
+  claudeHome: string | undefined,
+  workingDir: string | undefined,
+  sessionId: string | null | undefined,
+): Promise<TurnNotice | null> {
+  if (!claudeHome || !workingDir || !sessionId || !SESSION_ID_RE.test(sessionId)) return null;
+  const n = await scanTranscriptNotice(path.join(encodedTranscriptDir(claudeHome, workingDir), `${sessionId}.jsonl`));
+  return n && isRuntimeNotice(n) ? n : null;
 }

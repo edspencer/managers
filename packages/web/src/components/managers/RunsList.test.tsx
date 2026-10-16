@@ -149,6 +149,24 @@ describe("RunDrawer (M12)", () => {
     expect(screen.getByTestId("run-briefing")).toHaveTextContent("What the manager saw on this wake.");
   });
 
+  it("#11: a run the Claude runtime refused says so above the runtime's own message", async () => {
+    const error = "Not logged in · Please run /login (authentication_failed · HTTP 401)";
+    managersRunDetail.mockResolvedValue(
+      detail({ run: run({ id: "r-261016-1500-ab", status: "failed", error, errorKind: "runtime" }) }),
+    );
+    wrap(<RunDrawer slug="acme" base="/projects/acme" runId="r-261016-1500-ab" onClose={vi.fn()} />);
+    const drawer = await screen.findByRole("dialog", { name: "Run r-261016-1500-ab" });
+    expect(within(drawer).getByTestId("run-error-kind")).toHaveTextContent("The Claude runtime refused this run");
+    expect(within(drawer).getByTestId("run-error")).toHaveTextContent(error);
+  });
+
+  it("CONTROL: an ordinary failure shows its error with no cause line", async () => {
+    managersRunDetail.mockResolvedValue(detail());
+    wrap(<RunDrawer slug="acme" base="/projects/acme" runId="r-260925-0700-fl" onClose={vi.fn()} />);
+    await screen.findByTestId("run-error");
+    expect(screen.queryByTestId("run-error-kind")).toBeNull();
+  });
+
   it("says when there is no briefing or chat", async () => {
     managersRunDetail.mockResolvedValue(detail({ briefingText: null, chat: null }));
     wrap(<RunDrawer slug="acme" base="/projects/acme" runId="r-x" onClose={vi.fn()} />);

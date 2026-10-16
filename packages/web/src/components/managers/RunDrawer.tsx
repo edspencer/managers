@@ -14,12 +14,18 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { formatTokens } from "../../lib/format";
-import type { RunDetail } from "../../lib/types";
+import type { RunDetail, RunRecord } from "../../lib/types";
 import { chatUrl, objectivesUrl, reportsUrl, tasksUrl } from "../../routes/ProjectView/urls";
 import { Button, Callout, Chip, Dialog } from "../ui";
 import { AlertIcon, CheckIcon, ChevronRightIcon, XIcon } from "../icons";
 import { AlertsList } from "./AlertsList";
 import { PaneError, RUN_STATUS_LABEL, RUN_STATUS_TONE, durationLabel, errorText } from "./shared";
+
+/** #11: what a classified failure means, above the error text itself. */
+const RUN_ERROR_KIND_LABEL: Record<NonNullable<RunRecord["errorKind"]>, string> = {
+  runtime: "The Claude runtime refused this run",
+  "no-output": "The run produced no output",
+};
 
 function when(iso: string | null): string {
   if (!iso) return "—";
@@ -133,7 +139,14 @@ export function RunDrawer({
 
             {run.error && (
               <Callout tone="danger" icon={<AlertIcon width={14} height={14} />} className="mb-3">
-                <span className="break-words">{run.error}</span>
+                {run.errorKind && (
+                  <span className="block font-medium" data-testid="run-error-kind">
+                    {RUN_ERROR_KIND_LABEL[run.errorKind]}
+                  </span>
+                )}
+                <span className="block break-words" data-testid="run-error">
+                  {run.error}
+                </span>
               </Callout>
             )}
 

@@ -24,6 +24,7 @@
  */
 import path from "node:path";
 import type { Alert, AlertSeverity } from "./alerts.js";
+import { foldRuntimeAlerts, runtimeAlert, type HealthRun } from "./runtime-health.js";
 import type { ManagersState } from "./state.js";
 import type { TaskSummary } from "./tasks-store.js";
 import type { ParseError } from "./store-util.js";
@@ -75,11 +76,22 @@ export interface NeedsYouTotals {
   withItems: number;
 }
 
+/** #11: an alert about the whole instance, shown once above the workspaces. */
+export interface InstanceAlert extends Alert {
+  /** Per-workspace alerts this one explains, left out of their groups. */
+  folded: number;
+}
+
 export interface NeedsYouResponse {
   generatedAt: string;
+  /** #11: instance-level alerts (today only `runtime-unavailable`); empty when none. */
+  instanceAlerts: InstanceAlert[];
   projects: NeedsYouEntry[];
   totals: NeedsYouTotals;
 }
+
+/** How many months of runs the runtime-health streak looks back over. */
+const HEALTH_MONTHS = 2;
 
 /** The slice of a workspace the collation needs. */
 export interface NeedsYouWorkspace {
@@ -178,15 +190,19 @@ export async function collectNeedsYou(opts: {
   now?: Date;
 }): Promise<NeedsYouResponse> {
   const now = opts.now ?? new Date();
-  const entries = await Promise.all(
+  const healthRuns: HealthRun[] = [];
+  const raw = await Promise.all(
     opts.workspaces.map(async (w): Promise<NeedsYouEntry> => {
       try {
         const layout = opts.state.layout(w.dir);
-        const [tasks, alerts, report] = await Promise.all([
+        const [tasks, alerts, report, runs] = await Promise.all([
           opts.state.tasks.list(layout, { status: ["awaiting-ed"] }),
           opts.alertsOf(w.slug),
           opts.state.reports.read(layout, "status", null),
+          // #11: a workspace whose runs cannot be read just adds nothing to the health check.
+          opts.state.runs.list(layout, { months: HEALTH_MONTHS }).catch(() => ({ runs: [] })),
         ]);
+        for (const r of runs.runs) healthRuns.push({ ...r, slug: w.slug });
         return {
           slug: w.slug,
           name: w.name,
@@ -201,6 +217,17 @@ export async function collectNeedsYou(opts: {
       }
     }),
   );
+  // #11: one instance-level alert when the Claude runtime keeps refusing runs,
+  // instead of a run-failed (and a stale) per trigger in every workspace.
+  const health = runtimeAlert(healthRuns);
+  let folded = 0;
+  const entries = raw.map((e): NeedsYouEntry => {
+    if (isNeedsYouError(e) || !health) return e;
+    const f = foldRuntimeAlerts(e.alerts, health.triggers.get(e.slug));
+    folded += f.folded;
+    return f.folded ? { ...e, alerts: f.alerts } : e;
+  });
+  const instanceAlerts: InstanceAlert[] = health ? [{ ...health.alert, folded }] : [];
   const totals: NeedsYouTotals = { checked: entries.length, needsYou: 0, alerts: 0, errors: 0, withItems: 0 };
   for (const e of entries) {
     if (isNeedsYouError(e)) {
@@ -212,6 +239,7 @@ export async function collectNeedsYou(opts: {
     totals.alerts += e.alerts.length;
     if (hasItems(e)) totals.withItems += 1;
   }
+  totals.alerts += instanceAlerts.length;
   const shown = entries.filter((e) => opts.all || isNeedsYouError(e) || hasItems(e));
-  return { generatedAt: now.toISOString(), projects: orderGroups(shown), totals };
+  return { generatedAt: now.toISOString(), instanceAlerts, projects: orderGroups(shown), totals };
 }

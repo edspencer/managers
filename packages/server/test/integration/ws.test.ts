@@ -369,6 +369,41 @@ describe("integration: WS transport edge cases (real app, fake claude)", () => {
     expect((notice?.payload?.notice as { kind?: string })?.kind).toBe("error");
   });
 
+  // --- #11: the Claude runtime refuses the turn (an expired login) ----------------
+  // The prompt used to sit there with nothing beneath it: the synthetic
+  // "Not logged in · Please run /login" reply was filed as a placeholder and
+  // dropped. It must reach the user live AND survive a reload.
+
+  it("shows the runtime's own error when it refuses a human turn ([[AUTHFAIL]], #11)", async () => {
+    const mark = ws.mark();
+    ws.send({
+      type: "chat:send",
+      payload: { projectSlug: "ws-proj", sessionId: null, message: "hello [[AUTHFAIL]]" },
+    });
+    const done = await ws.waitFor(isComplete("ws-proj"), { from: mark });
+    const notice = noticeIn(mark, "ws-proj")?.payload?.notice as Record<string, unknown> | undefined;
+    expect(notice).toMatchObject({
+      kind: "error",
+      message: "Not logged in · Please run /login",
+      apiError: "authentication_failed",
+    });
+    const sessionId = done.payload?.sessionId as string;
+    expect(typeof sessionId).toBe("string");
+    const res = await t.app.inject({ method: "GET", url: `/api/projects/ws-proj/chats/${sessionId}/messages` });
+    const body = res.json() as { messages: { role: string; notice?: Record<string, unknown> }[] };
+    expect(body.messages.at(-1)?.notice).toMatchObject({ kind: "error", message: "Not logged in · Please run /login" });
+  });
+
+  it("shows a notice when a human turn produces nothing at all ([[EMPTYTURN]], #11)", async () => {
+    const mark = ws.mark();
+    ws.send({
+      type: "chat:send",
+      payload: { projectSlug: "ws-proj", sessionId: null, message: "nothing back [[EMPTYTURN]]" },
+    });
+    await ws.waitFor(isComplete("ws-proj"), { from: mark });
+    expect(noticeIn(mark, "ws-proj")?.payload?.notice).toMatchObject({ kind: "error" });
+  });
+
   // --- #404: the queue-drain machinery the fix gates -----------------------------
   // Exercises the end-to-end flow the #404 gate routes through: a message queued
   // WHILE a turn is running is stored (not drained on set), then flushed +

@@ -326,12 +326,15 @@ export function registerManagerInstanceRoutes(app: FastifyInstance, ctx: RouteCt
           "files) are left out unless `all=1`; `totals.checked` counts them anyway. A workspace that cannot be " +
           "read is listed as `{ slug, name, error }` instead of failing the response. Order: workspaces with asks " +
           "(longest-waiting first), then unreadable ones, then alert-only ones (worst severity first), then quiet " +
-          "ones; ties by name.",
+          "ones; ties by name. `instanceAlerts` holds alerts about the whole instance (#11: `runtime-unavailable`, " +
+          "raised when runs across workspaces keep failing because the Claude runtime refuses them, cleared by the " +
+          "next run that succeeds); each carries `folded`, the per-workspace `run-failed`/`stale` alerts it explains " +
+          "and that are left out of their groups.",
         querystring: {
           type: "object",
           properties: { all: { type: "string", description: "`1` (or `true`) to include quiet workspaces." } },
         },
-        response: ok200("`{ generatedAt, projects, totals }`."),
+        response: ok200("`{ generatedAt, instanceAlerts, projects, totals }`."),
       },
     },
     async (req, reply) => {

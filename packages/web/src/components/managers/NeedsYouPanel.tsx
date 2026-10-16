@@ -21,6 +21,10 @@
  *   - a group shows at most {@link GROUP_CAP} asks and alerts each, with
  *     "Show all N" (or, past {@link PAGE_SIZE}, "Show N more") and "Show fewer".
  *
+ * #11: an instance-level alert (`runtime-unavailable`: the Claude runtime keeps
+ * refusing runs) sits above every group as one danger Callout; the per-project
+ * `run-failed`/`stale` alerts it explains are folded into it by the server.
+ *
  * Empty: "Nothing needs you — N projects checked". Failed: an error Callout with
  * Retry. Paddock's Running/Unread feeds stay below it, untouched.
  */
@@ -33,6 +37,7 @@ import type {
   NeedsYouEntry,
   NeedsYouError,
   NeedsYouGroup,
+  NeedsYouInstanceAlert,
   NeedsYouResponse,
   TaskAnswerResult,
   TaskSummary,
@@ -148,7 +153,7 @@ export function NeedsYouPanel() {
           )}
         </h3>
         {/* Not on the empty state, which already says how many were checked. */}
-        {data && data.projects.length > 0 && (
+        {data && (data.projects.length > 0 || (data.instanceAlerts?.length ?? 0) > 0) && (
           <span className="text-xs text-fg-subtle tabular" data-testid="needs-you-totals">
             {totalsLine(data.totals)}
           </span>
@@ -159,6 +164,8 @@ export function NeedsYouPanel() {
         <PaneError what="what needs you" message={error} onRetry={() => void load()} />
       ) : !data ? (
         <ListSkeleton rows={2} testId="needs-you-loading" />
+      ) : (data.instanceAlerts?.length ?? 0) > 0 && data.projects.length === 0 ? (
+        <InstanceAlerts alerts={data.instanceAlerts!} />
       ) : data.projects.length === 0 ? (
         <EmptyState
           variant="panel"
@@ -177,6 +184,8 @@ export function NeedsYouPanel() {
         // leaves Home ~700px, and two columns there wrap every ask into a
         // tower). `items-start` so a group with one alert doesn't stretch to its
         // neighbour's three asks. `min-w-0`: a long ask must wrap, not widen.
+        <>
+        {(data.instanceAlerts?.length ?? 0) > 0 && <InstanceAlerts alerts={data.instanceAlerts!} />}
         <div className="grid items-start gap-4 @4xl:grid-cols-2" data-testid="needs-you-groups">
           {data.projects.map((p) =>
             isError(p) ? (
@@ -190,9 +199,31 @@ export function NeedsYouPanel() {
             ),
           )}
         </div>
+        </>
       )}
       <Toast message={toast?.message ?? null} tone={toast?.tone} onDismiss={dismissToast} />
     </section>
+  );
+}
+
+/** #11: alerts about the whole instance, one danger Callout each, above the groups. */
+function InstanceAlerts({ alerts }: { alerts: NeedsYouInstanceAlert[] }) {
+  return (
+    <div className="mb-4 space-y-2">
+      {alerts.map((a) => (
+        <div key={a.id} data-testid={`needs-you-instance-alert-${a.kind}`}>
+          <Callout tone={ALERT_SEVERITY_TONE[a.severity]} icon={<AlertIcon width={14} height={14} />}>
+            <span className="block break-words font-medium">{a.message}</span>
+            {a.folded > 0 && (
+              <span className="mt-0.5 block text-xs" data-testid="needs-you-instance-folded">
+                {plural(a.folded, "per-project alert")} with the same cause {a.folded === 1 ? "is" : "are"} folded into
+                this one.
+              </span>
+            )}
+          </Callout>
+        </div>
+      ))}
+    </div>
   );
 }
 
