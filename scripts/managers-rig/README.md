@@ -49,6 +49,11 @@ don't rely on it.
   connection tokens `MANAGERS_MCP_PADDOCK_WIDGET_LIB="Bearer rig-token"` and
   `MANAGERS_MCP_PADDOCK_WRONG_TOKEN="Bearer wrong-secret"`
   (`MANAGERS_MCP_PADDOCK_BROKEN_CONN` stays unset on purpose);
+- `MANAGERS_FAKE_AUTHFAIL_FILE=<rig>/authfail` (#11): absent at boot; while it exists
+  EVERY fake-claude turn fails the way an expired Claude login does (a synthetic
+  "Not logged in · Please run /login" reply, see `[[AUTHFAIL]]` in `test/bin/claude`).
+  `touch` it to simulate a fleet-wide outage and `rm` it to recover (see "Runtime
+  outage" below);
 - `MANAGERS_FAKE_SCRIPT=<rig>/fake-script.json`, and
   `MANAGERS_FAKE_INVOCATION_LOG=<rig>/invocations.jsonl` (one line per fake-claude
   spawn, including its `--mcp-config`, its `--setting-sources` (`settingSources`,
@@ -328,6 +333,20 @@ Additions only. Consolidation **ships off** everywhere, the rig included.
   that chat may not.
 - The rig's scheduler reports no `nextRunAt` for any schedule, so "armed" is read
   from the keeper's `schedules` (or `/managers/consolidation` `enabled`).
+
+### Runtime outage (#11)
+
+No new fixture files: the switch is `<rig>/authfail` (above). With it present, every
+Run now and every chat message fails like an expired login. Expect: the run is
+`failed` with `errorKind: runtime` and the runtime's message; the project's Home
+shows a red `run-failed` alert naming it and the run drawer says "The Claude runtime
+refused this run"; the chat shows a "Claude couldn't run this turn" notice. Two
+failures across workspaces (e.g. `acme-site`'s `publish-check` and `widget-lib`'s
+`wake`) raise ONE `runtime-unavailable` error at the top of the root Home's Needs you,
+folding the per-trigger `run-failed`/`stale` alerts. `rm` the file and Run now
+anything: the instance alert clears. A single prompt can do the same with
+`[[AUTHFAIL]]` (the SDK shape), `[[AUTHFAIL:cli]]` (the batch shape) or
+`[[EMPTYTURN]]` (no output at all).
 
 Keep the fixtures synthetic, with no real names, hosts or paths. Keep
 `empty-project` empty: it is the empty-state fixture.

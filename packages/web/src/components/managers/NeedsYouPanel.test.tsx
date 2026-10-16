@@ -194,6 +194,55 @@ describe("NeedsYouPanel", () => {
     expect(managersNeedsYou).toHaveBeenCalledTimes(2);
   });
 
+  // #11: a fleet-wide Claude runtime outage is ONE red item, not a screenful.
+  const RUNTIME = {
+    id: "runtime-unavailable:",
+    kind: "runtime-unavailable" as const,
+    trigger: "",
+    severity: "error" as const,
+    message:
+      "Claude runtime is failing: Not logged in · Please run /login (authentication_failed · HTTP 401). " +
+      "40 runs failed across 3 workspaces since 2026-10-04 11:15 UTC. It clears on the next run that succeeds.",
+    runId: "r-261016-1500-ab",
+    at: null,
+    folded: 38,
+  };
+
+  it("an instance alert sits above the groups, saying how much it folded", async () => {
+    managersNeedsYou.mockResolvedValue(response({ instanceAlerts: [RUNTIME] }));
+    renderPanel();
+    const box = await screen.findByTestId("needs-you-instance-alert-runtime-unavailable");
+    expect(within(box).getByRole("alert")).toHaveTextContent("Claude runtime is failing: Not logged in");
+    expect(within(box).getByTestId("needs-you-instance-folded")).toHaveTextContent(
+      "38 per-project alerts with the same cause are folded into this one.",
+    );
+    // The groups still render beneath it.
+    expect(screen.getByTestId("needs-you-groups")).toBeInTheDocument();
+    expect(box.compareDocumentPosition(screen.getByTestId("needs-you-groups")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("an instance alert with nothing else to show is NOT the 'Nothing needs you' empty state", async () => {
+    managersNeedsYou.mockResolvedValue(
+      response({
+        instanceAlerts: [{ ...RUNTIME, folded: 0 }],
+        projects: [],
+        totals: { checked: 4, needsYou: 0, alerts: 1, errors: 0, withItems: 0 },
+      }),
+    );
+    renderPanel();
+    expect(await screen.findByTestId("needs-you-instance-alert-runtime-unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing needs you/)).toBeNull();
+    expect(screen.queryByTestId("needs-you-instance-folded")).toBeNull();
+    expect(screen.getByTestId("needs-you-totals")).toHaveTextContent("1 alert — 4 projects checked");
+  });
+
+  it("CONTROL: an older server without instanceAlerts renders as before", async () => {
+    managersNeedsYou.mockResolvedValue(response());
+    renderPanel();
+    await screen.findByTestId("needs-you-groups");
+    expect(screen.queryByTestId("needs-you-instance-alert-runtime-unavailable")).toBeNull();
+  });
+
   it("error: a Callout with Retry that recovers", async () => {
     managersNeedsYou.mockRejectedValueOnce(new ApiError("Internal Server Error", 500));
     managersNeedsYou.mockResolvedValueOnce(response());

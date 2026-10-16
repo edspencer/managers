@@ -46,6 +46,7 @@ import {
   type EpisodeWrite,
   type ObjectiveStatus,
   type RunWrite,
+  type RunErrorKind,
   type TaskSource,
   type TaskStatus,
 } from "./schemas.js";
@@ -192,6 +193,8 @@ export interface FinishRunInput {
   /** M9.5: calls that errored (denied or failed), counted apart from `mcpCalls`. */
   mcpErrors?: Record<string, Record<string, number>>;
   error?: string | null;
+  /** #11: why it failed, when known (see `RUN_ERROR_KINDS`). Ignored unless `status` is `failed`. */
+  errorKind?: RunErrorKind | null;
 }
 
 // --- results -------------------------------------------------------------------
@@ -1266,6 +1269,8 @@ export class StateWriter {
           ...(input.mcpErrors && Object.keys(input.mcpErrors).length > 0 ? { mcpErrors: input.mcpErrors } : {}),
           error: input.error ? oneLine(input.error, 500) : null,
         };
+        if (input.status === "failed" && input.errorKind) merged.errorKind = input.errorKind;
+        else delete merged.errorKind;
         const probe = runWriteSchema.safeParse(normaliseRun(merged));
         merged.expectResult = probe.success ? evaluateExpect(probe.data) : "missing";
         return merged;

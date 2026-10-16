@@ -1822,6 +1822,28 @@ describe("ChatPane: turn-notice surfacing (#329)", () => {
     expect(continues).toEqual([{ slug: "proj", sessionId: "sess-e" }]);
   });
 
+  it("#11: a runtime refusal (expired login) shows the runtime's own message, with no Retry", async () => {
+    const loadHistory = vi.fn().mockResolvedValue(historyResult([] as HistoryMessage[]));
+    render(<ChatPane projectSlug="proj" initialSessionId="sess-a" loadHistory={loadHistory} />);
+    await waitFor(() => expect(sub()).toBeTruthy());
+    act(() =>
+      sub().handlers.onNotice?.(
+        {
+          kind: "error",
+          message: "Not logged in · Please run /login",
+          detail: "authentication_failed · HTTP 401",
+          retryable: false,
+          apiError: "authentication_failed",
+        },
+        { sessionId: "sess-a", jobId: "job-a" },
+      ),
+    );
+    expect(await screen.findByText(/Claude couldn’t run this turn/)).toBeInTheDocument();
+    expect(screen.getByText(/Not logged in · Please run \/login/)).toBeInTheDocument();
+    expect(screen.getByText("authentication_failed · HTTP 401")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^retry$/i })).not.toBeInTheDocument();
+  });
+
   it("surfaces a LIVE max-turns notice with a Continue button", async () => {
     const loadHistory = vi.fn().mockResolvedValue(historyResult([] as HistoryMessage[]));
     render(

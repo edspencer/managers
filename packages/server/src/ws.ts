@@ -95,7 +95,9 @@ import {
   errorNotice,
   messageProducedReply,
   suppressNoticeAfterReply,
-  turnEffectivelySucceeded,
+  judgeTurn,
+  messageHasAssistantContent,
+  runtimeNoticeFromTranscript,
   type TurnNotice,
 } from "./turn-notice.js";
 import { resolveHooksMcpEnabled } from "./hook-config.js";
@@ -869,10 +871,16 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
       // history path (`scanTranscriptNotice`) already applies on reload. A
       // `usage_limit` dead-end still surfaces (a session-limit stop is real).
       let producedReply = false;
+      // #11: any non-synthetic assistant content (a tool-only turn counts), so a
+      // turn that produced nothing at all can be told apart and shown as failed.
+      let sawAssistantContent = false;
+      // #11: the dead-end this turn surfaced, if any (judgeTurn reads it).
+      let deadEnd: TurnNotice | null = null;
       const emitNotice = (notice: TurnNotice): void => {
         if (noticeEmitted) return;
         if (suppressNoticeAfterReply(notice, producedReply)) return;
         noticeEmitted = true;
+        deadEnd = notice;
         turn.emit({ type: "chat:notice", payload: { ...routing(), notice } });
       };
 
@@ -1138,6 +1146,10 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
             // (which races in AFTER the reply in session mode) is suppressed below.
             if (messageProducedReply(m as Parameters<typeof messageProducedReply>[0]))
               producedReply = true;
+            if (messageHasAssistantContent(m as Parameters<typeof messageHasAssistantContent>[0]))
+              sawAssistantContent = true;
+            // #11: a synthetic API-error reply (an expired login, a bad key) is
+            // classified here too, so the user sees the runtime's own message.
             const notice = noticeFromMessage(m as Parameters<typeof noticeFromMessage>[0]);
             if (notice) emitNotice(notice);
             // #429: recover any Task/Agent launch from this message's tool_use input
@@ -1173,7 +1185,28 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
         // side effects below on it silently strands a queued follow-up, skips the
         // sweep, and drops the recovery arm. Trust the same `producedReply` signal
         // the banner already does — a real reply supersedes a benign trailing failure.
-        const effectiveSuccess = turnEffectivelySucceeded(result.success, producedReply);
+        // #11: …except that a turn the Claude runtime refused (a synthetic API
+        // error) or that produced nothing at all is not a success for the sweep or
+        // the recovery arm either — judgeTurn is the one place that decides.
+        // #11, batch: the CLI can exit before herdctl's watcher reads its
+        // synthetic error reply; the transcript still has the runtime's message.
+        if (!result.success && !deadEnd && !sawAssistantContent) {
+          const found = await runtimeNoticeFromTranscript(
+            deps.cfg.claudeHome,
+            sendFileWorkingDir,
+            result.sessionId ?? resolvedSession,
+          );
+          if (found) emitNotice(found);
+        }
+        const verdict = judgeTurn({
+          rawSuccess: result.success,
+          rawError: result.error?.message,
+          producedReply,
+          sawAssistantContent,
+          outputTokens: resolveTurnUsage(seen)?.outputTokens,
+          deadEnd,
+        });
+        const effectiveSuccess = verdict.sideEffects;
 
         // Post-turn sweep (issues #2/#6): on a successful USER turn, enqueue a
         // coalesced/debounced curation sweep. Out of band — never blocks or breaks
@@ -1219,6 +1252,9 @@ export function makeChatHandler(deps: ChatHandlerDeps) {
         // noticeFromMessage. Surface it inline so the failure is visible — before
         // chat:complete flips streaming off (deduped against any notice already sent).
         if (!result.success) emitNotice(errorNotice(result.error?.message));
+        // #11: an empty turn the drive called a success still gets a notice, so
+        // the prompt is never left sitting there with nothing beneath it.
+        if (verdict.notice) emitNotice(verdict.notice);
         turn.emit({
           type: "chat:complete",
           payload: {

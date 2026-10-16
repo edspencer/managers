@@ -113,6 +113,7 @@ export async function beginTriggerRun(p: BeginTriggerRunParams): Promise<Trigger
             mcpCalls: r.mcpCalls,
             mcpErrors: r.mcpErrors,
             error: r.success ? null : (r.error ?? "the turn did not succeed"),
+            errorKind: r.success ? null : (r.errorKind ?? null),
           },
           actor(runId),
         );

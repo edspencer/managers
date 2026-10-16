@@ -484,7 +484,9 @@ function KilledTaskNotice({ summary }: { summary: string }) {
  *  - `max_turns` — the keeper hit its per-turn cap and wrote nothing renderable:
  *    an amber banner with a Continue affordance.
  *  - `error` — a network / API 5xx-overload / auth / crash failure: a rose banner
- *    with the underlying detail and a Retry affordance.
+ *    with the underlying detail and a Retry affordance. When the Claude runtime
+ *    itself refused the turn (#11: `apiError`, e.g. an expired login), the
+ *    message is the runtime's own text ("Not logged in · Please run /login").
  *
  * The Continue/Retry button reuses the Layer-2 recovery path ({@link
  * RecoveryContext}) — a nudge that re-drives the still-alive keeper — and only
@@ -508,7 +510,9 @@ function NoticeBlock({ notice }: { notice: TurnNotice }) {
       ? "Session limit reached"
       : notice.kind === "max_turns"
         ? "Turn limit reached"
-        : "The turn failed";
+        : notice.apiError
+          ? "Claude couldn’t run this turn"
+          : "The turn failed";
   return (
     <div className="flex animate-fade-in justify-center" data-notice={notice.kind}>
       <div className={`flex max-w-[90%] flex-col gap-1.5 rounded-lg border px-3 py-2 text-xs ${tone}`}>

@@ -177,6 +177,12 @@ export interface TurnCompletion {
   model?: string;
   usage?: ChatCompleteUsage;
   error?: string;
+  /**
+   * #11: why the turn failed, when the engine could tell: `runtime` (the Claude
+   * runtime answered with a synthetic API error, e.g. an expired login) or
+   * `no-output` (no assistant content and zero output tokens).
+   */
+  errorKind?: "runtime" | "no-output";
   /** Calls per declared MCP server and tool (`mcp__<server>__<tool>`), excluding `managers*`. */
   mcpCalls: Record<string, Record<string, number>>;
   /**

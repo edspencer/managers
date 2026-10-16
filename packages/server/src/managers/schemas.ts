@@ -228,6 +228,15 @@ export const RUN_STATUSES = ["running", "succeeded", "failed", "cancelled"] as c
 export const EXPECT_KINDS = ["episode", "report", "artifact", "none"] as const;
 export const EXPECT_RESULTS = ["met", "missing", "n/a"] as const;
 export const EXPECT_WITHIN_RE = /^\d+[hd]$/;
+/**
+ * #11: why a failed run failed, when the server could tell. `runtime` = the
+ * Claude runtime itself refused the turn (a synthetic API-error reply: an expired
+ * login, a bad key, billing, a usage limit); `no-output` = the turn ended with no
+ * assistant content and zero output tokens. Both feed Home's instance-level
+ * `runtime-unavailable` alert. Absent on any other failure.
+ */
+export const RUN_ERROR_KINDS = ["runtime", "no-output"] as const;
+export type RunErrorKind = (typeof RUN_ERROR_KINDS)[number];
 
 const count = z.number().int().nonnegative();
 const usageRead = z.looseObject({
@@ -285,6 +294,7 @@ export const runReadSchema = z.looseObject({
     .nullish()
     .transform((v) => v ?? null),
   error: strOrNull,
+  errorKind: z.enum(RUN_ERROR_KINDS).nullish().catch(null).transform((v) => v ?? null),
 });
 export type RunRecord = z.output<typeof runReadSchema>;
 
@@ -339,6 +349,8 @@ export const runWriteSchema = z.strictObject({
   expectResult: z.enum(EXPECT_RESULTS).nullable(),
   briefing: z.strictObject({ path: z.string().min(1), sha256: z.string().min(1) }).nullable(),
   error: z.string().nullable(),
+  /** #11: written only on a failure the server classified (older records round-trip unchanged). */
+  errorKind: z.enum(RUN_ERROR_KINDS).optional(),
 });
 export type RunWrite = z.infer<typeof runWriteSchema>;
 

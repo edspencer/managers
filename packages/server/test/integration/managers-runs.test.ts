@@ -27,6 +27,8 @@ type Run = {
   expect: { kind: string; within: string | null } | null;
   expectResult: string | null;
   error: string | null;
+  errorKind?: string | null;
+  usage?: { outputTokens: number } | null;
   file: string;
 };
 type Alert = { id: string; kind: string; trigger: string; severity: string; message: string; runId: string | null };
@@ -203,5 +205,92 @@ describe("integration: Managers runs, expect and alerts (M6)", () => {
       },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // --- #11: the runtime refuses the turn -----------------------------------------
+  // From 2026-10-04 to 2026-10-16 every turn died on an expired Claude login and
+  // every run was recorded `succeeded`, error null, 0 output tokens.
+
+  /** Fire a one-off trigger in ANY project and wait for its finished run. */
+  async function fireIn(slug: string, name: string, prompt: string): Promise<Run> {
+    await t.triggers.set(slug, name, {
+      trigger: { type: "schedule", cron: "0 0 1 1 *" },
+      run: { prompt, expect: { kind: "episode", within: "48h" } },
+      enabled: true,
+    });
+    const runsOf = async () =>
+      ((await t.app.inject({ method: "GET", url: `/api/projects/${slug}/managers/runs?trigger=${name}` })).json() as {
+        runs: Run[];
+      }).runs;
+    const before = new Set((await runsOf()).map((r) => r.id));
+    const res = await t.app.inject({ method: "POST", url: `/api/projects/${slug}/triggers/${name}/run` });
+    expect(res.statusCode).toBe(202);
+    return waitFor(async () => (await runsOf()).find((r) => !before.has(r.id) && r.status !== "running") ?? null);
+  }
+  const needsYou = async () =>
+    (await t.app.inject({ method: "GET", url: "/api/managers/needs-you" })).json() as {
+      instanceAlerts: (Alert & { folded: number })[];
+      projects: { slug: string; alerts?: Alert[] }[];
+    };
+
+  it("[[AUTHFAIL]] (the SDK shape: a synthetic error + a 'success' result) → failed, with the runtime's message", async () => {
+    // Run finish times are to the second, and a success tying a failure counts as
+    // newer; keep the earlier tests' successes out of this streak's second.
+    await new Promise((r) => setTimeout(r, 1100));
+    const run = await fire("auth-sdk", "[[AUTHFAIL]]", { kind: "episode", within: "48h" });
+    expect(run).toMatchObject({
+      status: "failed",
+      errorKind: "runtime",
+      error: "Not logged in · Please run /login (authentication_failed · HTTP 401)",
+    });
+    expect(run.usage?.outputTokens ?? 0).toBe(0);
+    // The run-failed alert carries the message; nothing says artifact-missing.
+    const all = await alerts();
+    expect(all.find((x) => x.id === "run-failed:auth-sdk")?.message).toContain("Not logged in · Please run /login");
+    expect(all.find((x) => x.id === "artifact-missing:auth-sdk")).toBeUndefined();
+    // The run detail (the RunDrawer's read) has it too.
+    const detail = await get<{ run: Run }>(`/runs/${run.id}`);
+    expect(detail.run).toMatchObject({ errorKind: "runtime", error: run.error });
+  });
+
+  it("[[AUTHFAIL:cli]] (the CLI shape: no result line, exit 1) → failed with the runtime's message, not the exit code", async () => {
+    const run = await fire("auth-cli", "[[AUTHFAIL:cli]]", undefined);
+    expect(run).toMatchObject({ status: "failed", errorKind: "runtime" });
+    expect(run.error).toContain("Not logged in · Please run /login");
+    expect(run.error).not.toContain("exited with code");
+  });
+
+  it("[[EMPTYTURN]] (no assistant message, 0 output tokens, 'success') → failed as no-output", async () => {
+    const run = await fire("empty", "[[EMPTYTURN]]", undefined);
+    expect(run).toMatchObject({ status: "failed", errorKind: "no-output" });
+    expect(run.error).toMatch(/produced no output/);
+  });
+
+  it("failures across projects raise ONE runtime-unavailable on Home, folding the per-trigger alerts; the next good run clears it", async () => {
+    await t.app.inject({ method: "POST", url: "/api/projects", payload: { name: "Blog" } });
+    await fireIn("blog", "roadmap", "[[AUTHFAIL]]");
+
+    const down = await needsYou();
+    expect(down.instanceAlerts).toHaveLength(1);
+    const alert = down.instanceAlerts[0]!;
+    expect(alert).toMatchObject({ id: "runtime-unavailable:", kind: "runtime-unavailable", severity: "error" });
+    expect(alert.message).toMatch(
+      /^Claude runtime is failing: Not logged in · Please run \/login \(authentication_failed · HTTP 401\)\. \d+ runs failed across 2 workspaces since /,
+    );
+    // The per-trigger run-failed (and stale) alerts it explains are folded away…
+    expect(alert.folded).toBeGreaterThanOrEqual(2);
+    const shown = down.projects.flatMap((p) => p.alerts ?? []).map((a) => a.id);
+    expect(shown).not.toContain("run-failed:roadmap");
+    expect(shown).not.toContain("run-failed:auth-sdk");
+    // …but an unrelated failure (the agent's own error) still shows.
+    expect(shown).toContain("run-failed:pub-fail");
+    // The project's own alerts route is unchanged: the full truth stays there.
+    expect((await alerts()).map((a) => a.id)).toContain("run-failed:auth-sdk");
+
+    // The runtime comes back: one good run anywhere clears the instance alert.
+    await new Promise((r) => setTimeout(r, 1100));
+    const ok = await fireIn("blog", "roadmap", "All good.");
+    expect(ok.status).toBe("succeeded");
+    expect((await needsYou()).instanceAlerts).toEqual([]);
   });
 });
