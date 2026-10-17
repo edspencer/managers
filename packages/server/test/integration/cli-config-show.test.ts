@@ -16,6 +16,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
@@ -23,7 +24,11 @@ import { makeTmpDir, rmTmpDir } from "../helpers/tmp.js";
 const run = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const entry = path.resolve(here, "../../src/cli/managers.ts");
-const tsx = path.resolve(here, "../../node_modules/.bin/tsx");
+// npm hoists tsx to the workspace root or keeps it under packages/server,
+// depending on the rest of the tree, so take whichever exists.
+const tsx = ["../../node_modules/.bin/tsx", "../../../../node_modules/.bin/tsx"]
+  .map((p) => path.resolve(here, p))
+  .find((p) => existsSync(p)) as string;
 
 let tmp: string;
 

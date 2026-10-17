@@ -31,7 +31,7 @@ two hardenings marked with a test.
 | `yaml` 2.5.1 → 2.9.1 | GHSA-48c2-rrv3-qjmp (stack overflow on deeply nested YAML; `project.yaml` and frontmatter are parsed with it) |
 | `react-router-dom` 6.26.2 → 6.30.6 | GHSA-2w69-qvjg-hvjx, GHSA-2j2x-hqr9-3h42, GHSA-9jcx-v3wj-wh4m |
 | `mermaid` ^11.15.0 → ^11.17.2 | GHSA-c4c3-pg64-4m4v, GHSA-6x64-9x62-f2gx (agent-written diagrams are rendered) |
-| `overrides: dockerode → uuid ^11.1.1` | GHSA-w5hq-g745-h8pq (and with it the dockerode / `@herdctl/core` / `@herdctl/chat` entries, which only carried it) |
+| `overrides: dockerode → uuid ^11.1.1` | GHSA-w5hq-g745-h8pq (and with it the dockerode / `@herdctl/core` / `@herdctl/chat` entries, which only carried it). Unreachable anyway: dockerode only calls `uuid.v4()` with no buffer. Root `overrides` apply to this lockfile, not to the published `@edspencer/managers` npm package, whose installs resolve dockerode's own `uuid` ^10. |
 | `npm audit fix` (lockfile only) | `@fastify/busboy`, `@grpc/grpc-js`, `@hono/node-server`, `hono`, `@modelcontextprotocol/sdk`, `brace-expansion`, `dompurify`, `fast-uri` (both lines), `ip-address`, `qs` |
 
 ## Still open

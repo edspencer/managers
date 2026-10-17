@@ -114,7 +114,9 @@ function run(cmd: string, args: string[], label: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
-    child.stderr.on("data", (d) => {
+    // Through the global stream type: @fastify/busboy >= 3.2.1 augments
+    // `stream.Readable` with `on('limit')`, which hides the `'data'` overload.
+    (child.stderr as NodeJS.ReadableStream).on("data", (d) => {
       stderr += String(d);
     });
     child.on("error", (err) => {
