@@ -37,6 +37,18 @@ jobs:
       - name: Unit + integration tests
         run: npm test
 
+  # Fails on a high/critical npm advisory that is not a documented exception
+  # (docs/security/npm-audit.md). Reads only the lockfile, so no `npm ci`.
+  audit:
+    name: npm audit (high/critical)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm run audit:check
+
   e2e:
     name: E2E (Playwright, fake-claude)
     runs-on: ubuntu-latest

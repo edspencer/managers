@@ -1,0 +1,13 @@
+{
+  "$comment": "HIGH/CRITICAL npm advisories that scripts/npm-audit-check.mjs lets through. Each must have a row in docs/security/npm-audit.md. Moderate/low advisories never gate CI and are documented there only.",
+  "exceptions": [
+    { "id": "GHSA-667r-xxjv-c9mm", "package": "fastify", "reason": "No $async JSON Schema validators in any route. Fix needs fastify 5." },
+    { "id": "GHSA-9q9j-q6p8-xq58", "package": "fastify", "reason": "No route declares a headers schema. Fix needs fastify 5." },
+    { "id": "GHSA-hwr6-493r-vm6h", "package": "fastify", "reason": "No route uses a boolean `false` schema. Fix needs fastify 5." },
+    { "id": "GHSA-jx2c-rxcm-jvmq", "package": "fastify", "reason": "No Content-Type-keyed body schemas; state writes are re-validated by strict zod schemas. Fix needs fastify 5." },
+    { "id": "GHSA-p68q-wchp-6fh7", "package": "fastify", "reason": "One root not-found handler, no encapsulated ones and no preHandler; auth is a global onRequest hook. Fix needs fastify 5." },
+    { "id": "GHSA-c96f-x56v-gq3h", "package": "find-my-way", "reason": "HTTP/2 is never enabled. Fix needs fastify 5." },
+    { "id": "GHSA-83w8-p2f5-377r", "package": "@fastify/static", "reason": "No route guard protects static files; it serves only the public web bundle (wildcard: false). Fix needs fastify 5." },
+    { "id": "GHSA-vfj7-8cjw-p6xm", "package": "braces", "reason": "Optional nodejs-whisper -> shelljs -> fast-glob chain; patterns are server-built temp paths. No fixed braces release." }
+  ]
+}

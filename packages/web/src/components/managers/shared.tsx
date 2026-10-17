@@ -205,8 +205,13 @@ export function useInternalLinks(): (e: MouseEvent<HTMLElement>) => void {
       const a = (e.target as HTMLElement).closest?.("a");
       const href = a?.getAttribute("href");
       if (!href || !href.startsWith("/") || href.startsWith("//")) return;
+      // Resolve it the way the browser will: `/\host` and `/<tab>/host` parse as
+      // `//host`, an external URL react-router v6 would still follow
+      // (GHSA-wrjc-x8rr-h8h6). Only a same-origin result is navigated in-app.
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return;
       e.preventDefault();
-      navigate(href);
+      navigate(url.pathname + url.search + url.hash);
     },
     [navigate],
   );

@@ -50,3 +50,10 @@ against later releases.
 - `screenshots/` — historical UI captures. Nothing *renders* them, but
   `HISTORY.md` names specific files here nine times as the record of what each
   milestone captured, so they are not free to delete.
+
+## 4. Maintained for Managers
+
+- `security/npm-audit.md` — the npm audit triage: what was fixed, and why each
+  advisory still open is not reachable. `security/npm-audit-exceptions.json` is
+  the machine-readable list the CI `audit` job (`npm run audit:check`) enforces;
+  keep the two in step.
