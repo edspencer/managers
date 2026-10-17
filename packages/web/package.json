@@ -1,6 +1,6 @@
 {
   "name": "@managers/web",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Managers web SPA (Vite + React + Tailwind).",
   "license": "MIT",
