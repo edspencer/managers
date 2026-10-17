@@ -1,5 +1,20 @@
 # @managers/server
 
+## 0.3.0
+
+### Minor Changes
+
+- [#9](https://github.com/edspencer/managers/pull/9) [`2eae37c`](https://github.com/edspencer/managers/commit/2eae37c5780550e65f06cb7ec50f031e1955c00e) Thanks [@edspencer](https://github.com/edspencer)! - Chat turns now see state changes made since the chat's previous turn. Each later human turn of an open chat is sent a bounded "Changed since your last turn" block (Ed's answers, task and objective updates, new episodes from Ed, runs and other chats, by id), and nothing when nothing changed. A reloaded chat shows only what Ed typed.
+
+### Patch Changes
+
+- [#12](https://github.com/edspencer/managers/pull/12) [`5684cc7`](https://github.com/edspencer/managers/commit/5684cc7785960c70b73f13b5f0c1be9020c55600) Thanks [@edspencer](https://github.com/edspencer)! - Runs that the Claude runtime refuses are now recorded as failed, not succeeded (#11). Claude Code answers a turn it cannot run (an expired login, a bad API key, billing) with a synthetic `model: "<synthetic>"` reply such as "Not logged in · Please run /login" and a `subtype: "success"` result. That reply used to be dropped as a placeholder, so the run read `succeeded`, `error: null`, with 0 output tokens. Now:
+
+  - such a turn, and any turn that ends with no assistant content and zero output tokens, is a `failed` run, with the runtime's own message (clipped, credentials redacted) as its `error` and a new `errorKind` (`runtime` or `no-output`). This holds on both drive modes (session and batch), and the `run-failed` alert carries the message;
+  - the run drawer says "The Claude runtime refused this run" above the message;
+  - the chat shows a "Claude couldn't run this turn" notice with the message, both live and after a reload, instead of leaving the prompt sitting there;
+  - when such failures repeat across workspaces (or with the same error), Home's Needs you shows ONE `runtime-unavailable` error ("Claude runtime is failing: … N runs failed since …"). The per-trigger `run-failed`/`stale` alerts it explains are folded into it, and the next successful run clears it.
+
 ## 0.2.0
 
 ### Minor Changes
