@@ -6,6 +6,15 @@ not part of the app build (the `packages/*` workspaces are) — most are `.mjs`
 this directory carries its own `package.json` (`"type": "commonjs"`) so it does
 not inherit the repo root's `"type": "module"`.
 
+## `npm-audit-check.mjs` — CI gate on npm advisories
+
+`npm run audit:check` runs `npm audit --json` and fails on any **high or
+critical** advisory whose GHSA id is not listed in
+`docs/security/npm-audit-exceptions.json`; moderate/low never fail it. It reads
+only the lockfile (no `npm ci` needed), fails if npm returns no report, and
+prints a note for an exception that no longer matches anything. The triage
+behind each exception is `docs/security/npm-audit.md`.
+
 ## `check-no-nul-bytes.mjs` — CI guard against raw NUL bytes
 
 `npm run check:nul` walks every `.ts`/`.tsx`/`.mjs`/`.js` file in the repo

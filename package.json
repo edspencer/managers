@@ -28,6 +28,7 @@
     "dev:web": "npm run dev -w packages/web",
     "typecheck": "npm run typecheck -w packages/server && npm run typecheck -w packages/web",
     "check:nul": "node scripts/check-no-nul-bytes.mjs",
+    "audit:check": "node scripts/npm-audit-check.mjs",
     "start": "npm run start -w packages/server",
     "test": "npm run test -w packages/server && npm run test -w packages/web",
     "test:server": "npm run test -w packages/server",
@@ -44,5 +45,10 @@
     "@changesets/cli": "^2.31.0",
     "@playwright/test": "^1.61.0",
     "playwright": "^1.61.0"
+  },
+  "overrides": {
+    "dockerode": {
+      "uuid": "^11.1.1"
+    }
   }
 }

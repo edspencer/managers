@@ -90,6 +90,23 @@ describe("isTrustedProxy", () => {
       expect(isTrustedProxy(addr, d)).toBe(false);
     }
   });
+
+  // GHSA-jqcg-44mw-7w3h (proxy-addr < 2.0.8): an IPv4-mapped subnet written with
+  // an IPv4-sized prefix compiled to all-zero leading bits and matched EVERY
+  // IPv4 peer, so one plausible-looking entry believed the whole internet.
+  it("an IPv4-mapped subnet with a short prefix does not trust every IPv4 peer", () => {
+    for (const entry of ["::ffff:10.0.0.0/8", "::/1"]) {
+      const { trusted, errors } = parseTrustedProxies([entry]);
+      expect(errors).toEqual([]);
+      for (const addr of ["203.0.113.9", "8.8.8.8", "::ffff:203.0.113.9"]) {
+        expect(isTrustedProxy(addr, trusted)).toBe(false);
+      }
+    }
+    // The full spelling still names exactly the block it means.
+    const right = parseTrustedProxies(["::ffff:10.0.0.0/104"]).trusted;
+    expect(isTrustedProxy("10.1.2.3", right)).toBe(true);
+    expect(isTrustedProxy("203.0.113.9", right)).toBe(false);
+  });
 });
 
 describe("isLoopbackAddress", () => {
