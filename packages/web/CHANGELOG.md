@@ -1,5 +1,11 @@
 # @managers/web
 
+## 0.3.1
+
+### Patch Changes
+
+- [#13](https://github.com/edspencer/managers/pull/13) [`5a6d526`](https://github.com/edspencer/managers/commit/5a6d5266e12fd286d9d039006d3a4906dfd80455) Thanks [@edspencer](https://github.com/edspencer)! - Triage the npm audit advisories inherited from Paddock: production dependencies go from 30 vulnerable packages (1 critical, 17 high) to 13 (0 critical, 8 high), the whole tree including dev tooling from 58 (4 critical, 34 high) to 37 (3 critical, all dev-only test tooling), and every open advisory is documented in `docs/security/npm-audit.md`. `proxy-addr` 2.0.8 stops an IPv4-mapped `managementApi.trustedProxies` entry such as `::ffff:10.0.0.0/8` from trusting every IPv4 peer, and links in rendered Markdown that resolve off-origin (`/\host`) are no longer navigated in-app. CI now fails on any undocumented high or critical advisory.
+
 ## 0.3.0
 
 ### Patch Changes
