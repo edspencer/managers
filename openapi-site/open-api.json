@@ -3,7 +3,7 @@
   "info": {
     "title": "Managers HTTP API",
     "description": "HTTP API for Managers — the Claude Code workspace platform (persistent chats, projects, unified triggers).\n\nThis document is **generated from the server's route schemas** via `@fastify/swagger`, so it\ntracks the code: a new or changed route with a schema shows up here automatically.\n\n**Live chat is WebSocket, not REST.** Sending a message, streaming the response, tool-call\nevents, cancel, slash-commands and the live queue all flow over `GET /ws`. This spec covers the\nHTTP surface: reads, project/chat/trigger/git management, instance config, and attachment\nupload/serve. The two-step attachment flow is: `POST .../chats/:sessionId/upload` (HTTP, here)\nthen reference the returned file ids in the `chat:send` WebSocket frame.\n\n## Authentication\n\nManagers has no built-in login — authentication is provider-agnostic and handled at the edge (reverse proxy / IdP). **When these docs are served by the Managers instance itself, behind your proxy, a `Try it out` request is a same-origin call that inherits your existing SSO session — it authenticates automatically, nothing to paste here.** Use the **Authorize** button only for the explicit-token path (a different origin, a programmatic client, or testing without the proxy).\n\nThis instance runs **jwt** mode: a signed token in the `Authorization` header, verified against the JWKS.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "components": {
     "securitySchemes": {
@@ -1454,7 +1454,7 @@
         "tags": [
           "Managers"
         ],
-        "description": "Home's cross-project collation, computed on the server from the same caches the per-workspace routes use (no model involved): `{ generatedAt, projects: [{ slug, name, needsYou, alerts, status: { generated, stale }, parseErrors }], totals: { checked, needsYou, alerts, errors, withItems } }`. `needsYou` is the workspace's awaiting-ed tasks (as `…/managers/tasks?status=awaiting-ed`), `alerts` its alerts (as `…/managers/alerts`), `status.stale` whether its status report is over 48 h old. Home (the root workspace) has `slug: \"\"`. Quiet workspaces (nothing awaiting, no alerts, no unreadable task files) are left out unless `all=1`; `totals.checked` counts them anyway. A workspace that cannot be read is listed as `{ slug, name, error }` instead of failing the response. Order: workspaces with asks (longest-waiting first), then unreadable ones, then alert-only ones (worst severity first), then quiet ones; ties by name.",
+        "description": "Home's cross-project collation, computed on the server from the same caches the per-workspace routes use (no model involved): `{ generatedAt, projects: [{ slug, name, needsYou, alerts, status: { generated, stale }, parseErrors }], totals: { checked, needsYou, alerts, errors, withItems } }`. `needsYou` is the workspace's awaiting-ed tasks (as `…/managers/tasks?status=awaiting-ed`), `alerts` its alerts (as `…/managers/alerts`), `status.stale` whether its status report is over 48 h old. Home (the root workspace) has `slug: \"\"`. Quiet workspaces (nothing awaiting, no alerts, no unreadable task files) are left out unless `all=1`; `totals.checked` counts them anyway. A workspace that cannot be read is listed as `{ slug, name, error }` instead of failing the response. Order: workspaces with asks (longest-waiting first), then unreadable ones, then alert-only ones (worst severity first), then quiet ones; ties by name. `instanceAlerts` holds alerts about the whole instance (#11: `runtime-unavailable`, raised when runs across workspaces keep failing because the Claude runtime refuses them, cleared by the next run that succeeds); each carries `folded`, the per-workspace `run-failed`/`stale` alerts it explains and that are left out of their groups.",
         "parameters": [
           {
             "schema": {
@@ -1468,11 +1468,11 @@
         ],
         "responses": {
           "200": {
-            "description": "`{ generatedAt, projects, totals }`.",
+            "description": "`{ generatedAt, instanceAlerts, projects, totals }`.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "`{ generatedAt, projects, totals }`.",
+                  "description": "`{ generatedAt, instanceAlerts, projects, totals }`.",
                   "type": "object",
                   "additionalProperties": true
                 }
