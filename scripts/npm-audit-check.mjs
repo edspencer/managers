@@ -19,6 +19,9 @@
  * - If npm audit cannot produce a report (registry down), this fails rather
  *   than passing silently.
  *
+ * `--include=dev` because `NODE_ENV=production` makes npm audit silently skip
+ * devDependencies, which would let a local run pass where CI fails.
+ *
  * Reads only package-lock.json, so it needs no `npm ci`. Run it locally with
  * `npm run audit:check`.
  */
@@ -37,7 +40,7 @@ const excepted = new Map(exceptions.map((e) => [e.id, e]));
 
 let raw;
 try {
-  raw = execFileSync("npm", ["audit", "--json"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  raw = execFileSync("npm", ["audit", "--json", "--include=dev"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 } catch (err) {
   // npm audit exits 1 whenever it finds anything; the report is still on stdout.
   raw = err.stdout;

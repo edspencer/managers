@@ -8,6 +8,10 @@
     { "id": "GHSA-p68q-wchp-6fh7", "package": "fastify", "reason": "One root not-found handler, no encapsulated ones and no preHandler; auth is a global onRequest hook. Fix needs fastify 5." },
     { "id": "GHSA-c96f-x56v-gq3h", "package": "find-my-way", "reason": "HTTP/2 is never enabled. Fix needs fastify 5." },
     { "id": "GHSA-83w8-p2f5-377r", "package": "@fastify/static", "reason": "No route guard protects static files; it serves only the public web bundle (wildcard: false). Fix needs fastify 5." },
-    { "id": "GHSA-vfj7-8cjw-p6xm", "package": "braces", "reason": "Optional nodejs-whisper -> shelljs -> fast-glob chain; patterns are server-built temp paths. No fixed braces release." }
+    { "id": "GHSA-vfj7-8cjw-p6xm", "package": "braces", "reason": "Optional nodejs-whisper -> shelljs -> fast-glob chain (patterns are server-built temp paths), and dev-only @changesets/cli (globs this repo's own files). No fixed braces release." },
+    { "id": "GHSA-5gmw-xhrv-c9v3", "package": "tinypool", "reason": "Dev-only (vitest 2 worker pool). Needs a polluted prototype inside the test process, which only runs this repo's tests. Fix needs vitest 5." },
+    { "id": "GHSA-85c8-ppgw-ccpr", "package": "tinypool", "reason": "Dev-only (vitest 2 worker pool), as GHSA-5gmw-xhrv-c9v3. Fix needs vitest 5." },
+    { "id": "GHSA-5xrq-8626-4rwp", "package": "vitest", "reason": "Dev-only; needs the Vitest UI server (`vitest --ui`), which no script or CI job starts. Fix needs vitest 3.2.6+." },
+    { "id": "GHSA-fx2h-pf6j-xcff", "package": "vite", "reason": "Dev-only and Windows-only (vite dev server fs.deny bypass); production serves the built bundle through Fastify. Fix needs vite 6." }
   ]
 }
