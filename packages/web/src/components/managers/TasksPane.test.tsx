@@ -218,6 +218,11 @@ describe("TasksPane (Managers M11)", () => {
     const r = { task: AWAIT_1, episode: { id: "e", file: "f", importance: 5, objective: null } };
     expect(answeredMessage(r, "Yes, go ahead.", false)).toBe("Answered “Yes, go ahead”. The manager will see it on its next run.");
     expect(answeredMessage({ ...r, wake: { fired: true } }, "merge", true)).toBe("Answered “merge”. The manager has been woken.");
+    // t-261001-5ti7: a trigger other than `wake` is named.
+    expect(answeredMessage({ ...r, wake: { fired: true, trigger: "wake" } }, "merge", true)).toBe("Answered “merge”. The manager has been woken.");
+    expect(answeredMessage({ ...r, wake: { fired: true, trigger: "roadmap" } }, "merge", true)).toBe(
+      "Answered “merge”. The manager has been woken (roadmap).",
+    );
     expect(answeredMessage({ ...r, wake: { fired: false, reason: "the wake trigger is disabled" } }, "", true)).toBe(
       "Answered. The manager was not woken: the wake trigger is disabled.",
     );

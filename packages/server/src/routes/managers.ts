@@ -100,6 +100,7 @@ import {
   isReflection,
 } from "../managers/consolidation.js";
 import { BehaviourOffError } from "../managers/behaviours.js";
+import { raisedRunFromLog, resolveWakeTarget, type WakeTarget } from "../managers/wake-target.js";
 import type { Project } from "../projects.js";
 import type { PaddockTrigger } from "../trigger-config.js";
 import { promises as fs } from "node:fs";
@@ -1149,44 +1150,61 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
   );
 
   /**
-   * Whether "answer and wake the manager" can fire this workspace's `wake`
-   * trigger: it must exist, be enabled, and every behaviour gating it must be on
-   * (M8). The reason is phrased for the UI's tooltip and the answer response.
+   * Which trigger "answer and wake the manager" fires for a task, and whether it
+   * can (`wake-target.ts`): the trigger whose run raised the task — its
+   * `raisedBy`, or for an older task the run named in its log — else `wake`.
+   * Without a task, just `wake`. The reason is phrased for the UI's tooltip and
+   * the answer response. The GET and the answer route both come here.
    */
-  async function wakeAvailability(project: Project): Promise<{ available: boolean; reason: string | null }> {
-    const rec = project.triggers?.wake;
-    if (!rec) return { available: false, reason: "this project has no wake trigger" };
-    if (rec.enabled !== true) return { available: false, reason: "the wake trigger is disabled" };
-    // M8: the M5 follow-up — the wake's behaviour gate, checked up front so the
-    // reason is specific (the fire path would refuse it anyway).
-    const gate = triggerGate("wake", rec, await behavioursFor(projects, project));
-    if (!gate.open) {
-      return {
-        available: false,
-        reason: `the wake trigger's behaviour ${gate.off.map((n) => `"${n}"`).join(", ")} is off`,
-      };
+  async function wakeTargetFor(project: Project, layout: WorkspaceLayout, taskId?: string): Promise<WakeTarget> {
+    let asker: string | null = null;
+    if (taskId) {
+      const task = await state.tasks.get(layout, taskId);
+      if (task && !isParseFailure(task)) {
+        asker = task.raisedBy?.trigger ?? null;
+        const run = asker ? null : raisedRunFromLog(task.log);
+        if (run) {
+          const rec = await state.runs.get(layout, run);
+          if (rec && !isParseFailure(rec) && typeof rec.trigger === "string") asker = rec.trigger;
+        }
+      }
     }
-    return { available: true, reason: null };
+    return resolveWakeTarget(project.triggers, await behavioursFor(projects, project), asker);
   }
 
-  app.get<{ Params: { slug: string } }>(
+  app.get<{ Params: { slug: string }; Querystring: { task?: string } }>(
     "/managers/wake",
     {
       schema: {
         tags: TAGS,
         summary: "Can an answer wake the manager?",
         description:
-          "`{ available, reason }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire this " +
-          "workspace's `wake` trigger — it exists, is enabled, and every behaviour gating it is on. `reason` " +
-          "says why not (null when available). Drives the answer form's \"Wake the manager now\" switch (M11).",
+          "`{ available, reason, trigger, tasks }`: whether `POST …/tasks/:id/answer` with `wake: true` would " +
+          "fire a trigger, and which. For a task that is the trigger whose run raised it (its `raisedBy`, or the " +
+          "run in its log), falling back to the workspace's `wake`; a trigger counts only when it exists, is " +
+          "enabled and every behaviour gating it is on. The top level answers for `?task=` (or, without one, " +
+          "for `wake` alone); `tasks` maps every awaiting-ed task's id to its own `{ available, reason, trigger }`. " +
+          "`reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch.",
         params: paramsSchema(),
-        response: ok200("`{ available, reason }`."),
+        querystring: {
+          type: "object",
+          properties: { task: { type: "string", description: "Task id, t-YYMMDD-xxxx: answer for this task." } },
+        },
+        response: ok200("`{ available, reason, trigger, tasks }`."),
       },
     },
     async (req, reply) => {
       try {
-        return await wakeAvailability(await projects.get(req.params.slug));
+        const q = req.query ?? {};
+        if (q.task !== undefined && !isTaskId(q.task)) throw new Invalid(`Invalid task id: ${q.task}`);
+        const project = await projects.get(req.params.slug);
+        const layout = state.layout(project.dir);
+        const { tasks: asks } = await state.tasks.list(layout, { status: ["awaiting-ed"] });
+        const tasks: Record<string, WakeTarget> = {};
+        for (const t of asks) tasks[t.id] = await wakeTargetFor(project, layout, t.id);
+        return { ...(await wakeTargetFor(project, layout, q.task)), tasks };
       } catch (err) {
+        if (err instanceof Invalid) return invalid(reply, err.message);
         return sendProjectError(reply, err);
       }
     },
@@ -1202,9 +1220,10 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` " +
           "must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, " +
           "and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With " +
-          "`wake: true` it also fires the project's `wake` trigger when that trigger exists, is enabled and every " +
-          "behaviour gating it is on (M8). " +
-          "409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
+          "`wake: true` it also fires the trigger whose run raised the task, or else the project's `wake` — the " +
+          "one `GET …/managers/wake` names — when it exists, is enabled and every behaviour gating it is on " +
+          "(M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`; `wake.trigger` " +
+          "names the trigger it fired or tried.",
         params: paramsSchema({ id: { description: "Task id, t-YYMMDD-xxxx." } }),
         body: bodySchema("`{ choice?, text?, wake? }`."),
         response: ok200("`{ task, episode, wake? }`."),
@@ -1223,20 +1242,25 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           { choice: strField(b, "choice"), text: strField(b, "text") },
           actor,
         );
-        let wake: { fired: boolean; sessionId?: string; reason?: string } | undefined;
+        let wake: { fired: boolean; trigger?: string; sessionId?: string; reason?: string } | undefined;
         if (wakeArg === true) {
-          const avail = await wakeAvailability(await projects.get(req.params.slug));
-          if (!avail.available) wake = { fired: false, reason: avail.reason ?? "the wake trigger cannot fire" };
-          else if (!ctx.fireTrigger) wake = { fired: false, reason: "trigger firing is unavailable" };
+          // The answer keeps `raisedBy` and the log, so this is the target the GET showed.
+          const target = await wakeTargetFor(await projects.get(req.params.slug), layout, id);
+          if (!target.available || !target.trigger) {
+            wake = { fired: false, reason: target.reason ?? "no trigger can be woken" };
+          } else if (!ctx.fireTrigger) wake = { fired: false, trigger: target.trigger, reason: "trigger firing is unavailable" };
           else {
+            const trigger = target.trigger;
             try {
               // M15: say WHY in the briefing (it used to read "Run now (a manual fire)").
-              const sessionId = await ctx.fireTrigger(req.params.slug, "wake", {
+              const sessionId = await ctx.fireTrigger(req.params.slug, trigger, {
                 why: `Ed answered ${id} and asked you to wake now; act on the answer`,
               });
-              wake = sessionId ? { fired: true, sessionId } : { fired: false, reason: "the wake trigger did not start" };
+              wake = sessionId
+                ? { fired: true, trigger, sessionId }
+                : { fired: false, trigger, reason: `the ${trigger} trigger did not start` };
             } catch (err) {
-              wake = { fired: false, reason: (err as Error).message };
+              wake = { fired: false, trigger, reason: (err as Error).message };
             }
           }
         }

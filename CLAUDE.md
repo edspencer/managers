@@ -225,8 +225,12 @@ What changed from Paddock, and what did not:
   done", `#<task-id>` marks a row (the report's Needs-you link), a row `Menu` moves
   the status (never to awaiting-ed), `/tasks/:taskId` is `TaskDetailView`.
   `TaskAnswer` (self-contained, for M13's reuse) posts `…/answer`; its "Wake the
-  manager now" switch reads `GET …/managers/wake` `{available, reason}`, the same
-  check the answer route uses. Every pane has a skeleton, an error `Callout` with
+  manager now" switch reads `GET …/managers/wake` `{available, reason, trigger,
+  tasks}`, the same resolver the answer route uses (`managers/wake-target.ts`): the
+  trigger whose run raised the task (`raisedBy: {trigger, run}`, written by
+  `upsertTask` when a run sets awaiting-ed and cleared by a raise without one; an
+  older task's log line `(run r-…): … → awaiting-ed`), else `wake`; disabled,
+  gated-off and derived (`report-*`, `consolidate`) triggers are skipped. Every pane has a skeleton, an error `Callout` with
   Retry and an empty state; tokens and `ui/` primitives only.
 - **Project overview, report history, Memory (M12).** A PROJECT's Home opens on
   `ManagersOverview` (passed into `HomePane` as the `managers` slot; the root's Home is

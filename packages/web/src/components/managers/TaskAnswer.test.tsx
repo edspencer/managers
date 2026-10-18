@@ -5,9 +5,16 @@ import { TaskAnswer } from "./TaskAnswer";
 import { task } from "./testData";
 
 const managersAnswerTask = vi.fn();
+const managersWake = vi.fn();
 vi.mock("../../lib/api", async () => {
   const actual = await vi.importActual<typeof import("../../lib/api")>("../../lib/api");
-  return { ...actual, api: { managersAnswerTask: (...a: unknown[]) => managersAnswerTask(...a) } };
+  return {
+    ...actual,
+    api: {
+      managersAnswerTask: (...a: unknown[]) => managersAnswerTask(...a),
+      managersWake: (...a: unknown[]) => managersWake(...a),
+    },
+  };
 });
 
 const ask = task({
@@ -23,7 +30,10 @@ const result = (over = {}) => ({
 });
 
 describe("TaskAnswer (Managers M11)", () => {
-  beforeEach(() => managersAnswerTask.mockReset());
+  beforeEach(() => {
+    managersAnswerTask.mockReset();
+    managersWake.mockReset();
+  });
 
   it("with options: one button per option, and a click is the answer", async () => {
     managersAnswerTask.mockResolvedValue(result());
@@ -95,5 +105,45 @@ describe("TaskAnswer (Managers M11)", () => {
     expect(await screen.findByTestId("task-answer-error")).toHaveTextContent("is not awaiting-ed");
     expect(onAnswered).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "merge" })).toBeEnabled();
+  });
+
+  // t-261001-5ti7: the switch targets the trigger that asked, per task.
+  const noWake = { available: false, reason: "this project has no wake trigger", trigger: null };
+  const roadmap = { available: true, reason: null, trigger: "roadmap" };
+
+  it("a task raised by roadmap in a project without wake: the switch is on offer and names roadmap", async () => {
+    managersAnswerTask.mockResolvedValue(result({ wake: { fired: true, trigger: "roadmap", sessionId: "s1" } }));
+    render(<TaskAnswer slug="managers" task={ask} wake={{ ...noWake, tasks: { [ask.id]: roadmap } }} onAnswered={vi.fn()} />);
+    const sw = screen.getByRole("checkbox", { name: "Wake the manager now" });
+    expect(sw).toBeEnabled();
+    expect(screen.getByTestId("wake-trigger")).toHaveTextContent("(runs roadmap)");
+    expect(screen.queryByTestId("wake-reason")).toBeNull();
+    await userEvent.click(sw);
+    await userEvent.click(screen.getByRole("button", { name: "merge" }));
+    expect(managersAnswerTask).toHaveBeenCalledWith("managers", ask.id, { choice: "merge", wake: true });
+    expect(managersWake).not.toHaveBeenCalled();
+  });
+
+  it("names nothing extra when the target is wake itself", () => {
+    const wake = { available: true, reason: null, trigger: "wake" };
+    render(<TaskAnswer slug="acme" task={ask} wake={{ ...wake, tasks: { [ask.id]: wake } }} onAnswered={vi.fn()} />);
+    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeEnabled();
+    expect(screen.queryByTestId("wake-trigger")).toBeNull();
+  });
+
+  it("a task the map predates asks for its own target (?task=)", async () => {
+    managersWake.mockResolvedValue(roadmap);
+    render(<TaskAnswer slug="managers" task={ask} wake={{ ...noWake, tasks: {} }} onAnswered={vi.fn()} />);
+    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeEnabled());
+    expect(managersWake).toHaveBeenCalledWith("managers", ask.id);
+    expect(screen.getByTestId("wake-trigger")).toHaveTextContent("roadmap");
+  });
+
+  it("nothing to wake: disabled with the task's own reason", () => {
+    const none = { available: false, reason: 'the roadmap trigger\'s behaviour "x" is off, and this project has no wake trigger', trigger: null };
+    render(<TaskAnswer slug="managers" task={ask} wake={{ ...noWake, tasks: { [ask.id]: none } }} onAnswered={vi.fn()} />);
+    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeDisabled();
+    expect(screen.getByTestId("wake-reason")).toHaveTextContent('behaviour "x" is off, and this project has no wake trigger');
   });
 });

@@ -4,14 +4,16 @@
  *
  * It shows the manager's `ask`, then either one button per `options` entry (a
  * click IS the answer) or, when the ask is open-ended, a textarea. The "Wake the
- * manager now" switch also fires the workspace's `wake` trigger so the manager
- * acts on the answer straight away; it is disabled, with the reason, when no
- * enabled and permitted `wake` exists (`GET …/managers/wake`).
+ * manager now" switch also fires a trigger so the manager acts on the answer
+ * straight away: the one whose run asked, else the workspace's `wake` — this
+ * task's entry in `GET …/managers/wake`'s `tasks` map (or `?task=` when the map
+ * predates the task), the same target the answer route fires. It names a
+ * trigger other than `wake`, and is disabled, with the reason, when none can.
  *
  * Self-contained on purpose: it takes the workspace key and the task, and
  * reports success upward. M13's cross-project "Needs you" list reuses it as is.
  */
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api } from "../../lib/api";
 import { notifyNeedsYouChanged } from "../../lib/needsYouCounts";
 import type { TaskAnswerResult, TaskSummary, WakeAvailability } from "../../lib/types";
@@ -23,7 +25,10 @@ export interface TaskAnswerProps {
   /** Workspace key (`""` = Home). */
   slug: string;
   task: Pick<TaskSummary, "id" | "title" | "ask" | "options">;
-  /** `null` while unknown: the switch stays off and disabled until it is known. */
+  /**
+   * The workspace's `GET …/managers/wake`; this task's own entry is read from its
+   * `tasks` map. `null` while unknown: the switch stays off and disabled until known.
+   */
   wake: WakeAvailability | null;
   /** Called with the server's result and a short label for what was answered. */
   onAnswered: (result: TaskAnswerResult, answer: string) => void;
@@ -39,8 +44,27 @@ export function TaskAnswer({ slug, task, wake, onAnswered, className }: TaskAnsw
   const textId = useId();
   const wakeId = useId();
   const hasOptions = task.options.length > 0;
-  const canWake = wake?.available === true;
-  const wakeReason = wake === null ? "Checking whether the manager can be woken…" : wake.reason;
+  // This task's target: its entry in the map; a task the map predates asks for
+  // itself; a response without a map (an older server) is the workspace's answer.
+  const listed = wake?.tasks?.[task.id] ?? null;
+  const needOwn = wake !== null && wake.tasks !== undefined && listed === null;
+  const [own, setOwn] = useState<WakeAvailability | null>(null);
+  useEffect(() => {
+    if (!needOwn) return;
+    let live = true;
+    api
+      .managersWake(slug, task.id)
+      .then((w) => live && setOwn(w))
+      .catch(() => live && setOwn({ available: false, reason: "couldn't check the wake trigger" }));
+    return () => {
+      live = false;
+    };
+  }, [needOwn, slug, task.id]);
+  const target = wake === null ? null : (listed ?? (needOwn ? own : wake));
+  const canWake = target?.available === true;
+  const wakeReason = target === null ? "Checking whether the manager can be woken…" : target.reason;
+  // Name the trigger when it is not the obvious one.
+  const wakeTrigger = canWake && target?.trigger && target.trigger !== "wake" ? target.trigger : null;
 
   const send = async (input: { choice?: string; text?: string }, key: string) => {
     if (sending) return;
@@ -78,6 +102,12 @@ export function TaskAnswer({ slug, task, wake, onAnswered, className }: TaskAnsw
         className={cx("text-xs", canWake ? "cursor-pointer text-fg-muted" : "text-fg-subtle")}
       >
         Wake the manager now
+        {wakeTrigger && (
+          <span className="text-fg-subtle" data-testid="wake-trigger">
+            {" "}
+            (runs {wakeTrigger})
+          </span>
+        )}
       </label>
     </span>
   );

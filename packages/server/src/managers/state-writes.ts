@@ -327,7 +327,7 @@ function rawDoc(text: string, what: string): { data: Record<string, unknown>; bo
 /** The frontmatter keys each strict write schema owns; anything else is a hand-added extra. */
 export const TASK_KEYS = [
   "id", "title", "status", "objective", "source", "ask", "options", "answer",
-  "github", "dispatched", "shovel_ready", "due", "created", "updated",
+  "github", "dispatched", "shovel_ready", "due", "created", "updated", "raisedBy",
 ] as const;
 const OBJECTIVE_KEYS = Object.keys(objectiveWriteSchema.shape);
 const FACT_KEYS = Object.keys(factWriteSchema.shape);
@@ -375,6 +375,14 @@ function dispatchSummary(added: DispatchedEntry[]): string {
 }
 
 /** YAML may hand back `answer.choice: null`; the strict schema wants the key absent. */
+/** A task's `raisedBy` worth keeping (a hand-edited or partial one is dropped, not rejected). */
+function raisedByOr(v: unknown): { trigger: string; run: string } | undefined {
+  const r = (v ?? {}) as Record<string, unknown>;
+  return typeof r.trigger === "string" && r.trigger && typeof r.run === "string" && isRunId(r.run)
+    ? { trigger: r.trigger, run: r.run }
+    : undefined;
+}
+
 function dropNulls(v: unknown): unknown {
   if (!v || typeof v !== "object" || Array.isArray(v)) return v;
   return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== null));
@@ -614,6 +622,15 @@ export class StateWriter {
       }
       // A fresh question supersedes the previous answer.
       if (prior && base.status === "awaiting-ed" && input.ask) base.answer = null;
+      // Who asked: the trigger run that (re)raised it, so "Answer & wake" wakes
+      // that trigger (wake-target.ts). A raise from a chat or Ed clears it.
+      const prevRaisedBy = raisedByOr(known.raisedBy);
+      if (prevRaisedBy) base.raisedBy = prevRaisedBy;
+      if (base.status === "awaiting-ed" && (!prior || oldStatus !== "awaiting-ed" || input.ask)) {
+        const raisedBy = await this.raisedByRun(ws, actor.runId);
+        if (raisedBy) base.raisedBy = raisedBy;
+        else delete base.raisedBy;
+      }
 
       const r = taskWriteSchema.safeParse(base);
       if (!r.success) throw zodFail("task", r.error);
@@ -715,6 +732,7 @@ export class StateWriter {
         due: known.due ?? null,
         created: known.created ?? stamp,
         updated: stamp,
+        ...(raisedByOr(known.raisedBy) ? { raisedBy: raisedByOr(known.raisedBy) } : {}),
       };
       const r = taskWriteSchema.safeParse(next);
       if (!r.success) throw zodFail("task", r.error);
@@ -1116,6 +1134,20 @@ export class StateWriter {
   }
 
   // --- runs (M6) -----------------------------------------------------------------------
+
+  /** `{trigger, run}` for the run writing now, from its record; null outside a run. Call under the lock. */
+  private async raisedByRun(ws: WriteWorkspace, runId: string | null | undefined): Promise<{ trigger: string; run: string } | null> {
+    if (!runId || !isRunId(runId)) return null;
+    const file = await this.findRunFile(ws, runId);
+    if (!file) return null;
+    try {
+      const data = YAML.parse(await fs.readFile(file, "utf8"), { schema: "core" }) as Record<string, unknown> | null;
+      const trigger = data && typeof data.trigger === "string" ? data.trigger : "";
+      return trigger ? { trigger, run: runId } : null;
+    } catch {
+      return null;
+    }
+  }
 
   /** The run record's file, looking in its id's month first, or null. Call under the lock. */
   private async findRunFile(ws: WriteWorkspace, runId: string): Promise<string | null> {
