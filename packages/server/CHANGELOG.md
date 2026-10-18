@@ -1,5 +1,11 @@
 # @managers/server
 
+## 0.3.2
+
+### Patch Changes
+
+- [#15](https://github.com/edspencer/managers/pull/15) [`f0aba1c`](https://github.com/edspencer/managers/commit/f0aba1c88a0074aa72692d1c3685e56e583d208d) Thanks [@edspencer](https://github.com/edspencer)! - "Wake the manager now" wakes the trigger that asked, not only `wake`. A run that sets a task to awaiting-ed now records `raisedBy: {trigger, run}` on it (older tasks are traced through the run id in their log). Answering with wake fires that trigger, or falls back to `wake`, and never a trigger whose behaviour is off. `GET …/managers/wake` returns the same target per task (`trigger`, a `tasks` map, `?task=`), and the switch names a trigger other than `wake` ("runs roadmap").
+
 ## 0.3.1
 
 ### Patch Changes
