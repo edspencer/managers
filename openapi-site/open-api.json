@@ -4883,8 +4883,17 @@
         "tags": [
           "Managers"
         ],
-        "description": "`{ available, reason }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire this workspace's `wake` trigger — it exists, is enabled, and every behaviour gating it is on. `reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch (M11).",
+        "description": "`{ available, reason, trigger, tasks }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire a trigger, and which. For a task that is the trigger whose run raised it (its `raisedBy`, or the run in its log), falling back to the workspace's `wake`; a trigger counts only when it exists, is enabled and every behaviour gating it is on. The top level answers for `?task=` (or, without one, for `wake` alone); `tasks` maps every awaiting-ed task's id to its own `{ available, reason, trigger }`. `reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch.",
         "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "task",
+            "required": false,
+            "description": "Task id, t-YYMMDD-xxxx: answer for this task."
+          },
           {
             "schema": {
               "type": "string"
@@ -4897,11 +4906,11 @@
         ],
         "responses": {
           "200": {
-            "description": "`{ available, reason }`.",
+            "description": "`{ available, reason, trigger, tasks }`.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "`{ available, reason }`.",
+                  "description": "`{ available, reason, trigger, tasks }`.",
                   "type": "object",
                   "additionalProperties": true
                 }
@@ -4917,7 +4926,7 @@
         "tags": [
           "Managers"
         ],
-        "description": "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With `wake: true` it also fires the project's `wake` trigger when that trigger exists, is enabled and every behaviour gating it is on (M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
+        "description": "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With `wake: true` it also fires the trigger whose run raised the task, or else the project's `wake` — the one `GET …/managers/wake` names — when it exists, is enabled and every behaviour gating it is on (M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`; `wake.trigger` names the trigger it fired or tried.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -8567,8 +8576,17 @@
         "tags": [
           "Managers"
         ],
-        "description": "`{ available, reason }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire this workspace's `wake` trigger — it exists, is enabled, and every behaviour gating it is on. `reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch (M11).",
+        "description": "`{ available, reason, trigger, tasks }`: whether `POST …/tasks/:id/answer` with `wake: true` would fire a trigger, and which. For a task that is the trigger whose run raised it (its `raisedBy`, or the run in its log), falling back to the workspace's `wake`; a trigger counts only when it exists, is enabled and every behaviour gating it is on. The top level answers for `?task=` (or, without one, for `wake` alone); `tasks` maps every awaiting-ed task's id to its own `{ available, reason, trigger }`. `reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch.",
         "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "task",
+            "required": false,
+            "description": "Task id, t-YYMMDD-xxxx: answer for this task."
+          },
           {
             "schema": {
               "type": "string"
@@ -8581,11 +8599,11 @@
         ],
         "responses": {
           "200": {
-            "description": "`{ available, reason }`.",
+            "description": "`{ available, reason, trigger, tasks }`.",
             "content": {
               "application/json": {
                 "schema": {
-                  "description": "`{ available, reason }`.",
+                  "description": "`{ available, reason, trigger, tasks }`.",
                   "type": "object",
                   "additionalProperties": true
                 }
@@ -8601,7 +8619,7 @@
         "tags": [
           "Managers"
         ],
-        "description": "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With `wake: true` it also fires the project's `wake` trigger when that trigger exists, is enabled and every behaviour gating it is on (M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`.",
+        "description": "Ed's reply to a task's `ask`: `{ choice?, text?, wake? }` (at least one of choice/text; `choice` must be one of the task's `options` when it has any). Sets `answer`, returns the task to `open`, and records an `#answer` episode (`source ed`) in the objective's journal or the project log. With `wake: true` it also fires the trigger whose run raised the task, or else the project's `wake` — the one `GET …/managers/wake` names — when it exists, is enabled and every behaviour gating it is on (M8). 409 when the task is not awaiting-ed. Returns `{ task, episode, wake? }`; `wake.trigger` names the trigger it fired or tried.",
         "requestBody": {
           "content": {
             "application/json": {

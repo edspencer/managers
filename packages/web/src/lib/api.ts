@@ -1274,8 +1274,8 @@ export const api = {
   },
 
   /** M11: whether an answer's "wake the manager" can fire this workspace's `wake` trigger. */
-  async managersWake(slug: string): Promise<WakeAvailability> {
-    return req<WakeAvailability>(`${mgr(slug)}/wake`);
+  async managersWake(slug: string, taskId?: string): Promise<WakeAvailability> {
+    return req<WakeAvailability>(`${mgr(slug)}/wake${taskId ? `?task=${encodeURIComponent(taskId)}` : ""}`);
   },
 
   /** Ed answers an awaiting-ed task; `wake: true` also fires the project's enabled `wake` trigger. */

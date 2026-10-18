@@ -2046,6 +2046,8 @@ export interface TaskSummary {
   due: string | null;
   created: string | null;
   updated: string | null;
+  /** The trigger run that last set it to awaiting-ed (null: a chat, Ed, or an older task). */
+  raisedBy?: { trigger: string | null; run: string | null } | null;
   location: "open" | "done";
   /** The `tasks/done/` month, when closed. */
   month: string | null;
@@ -2278,21 +2280,28 @@ export interface TaskWriteInput {
 export interface TaskAnswerInput {
   choice?: string;
   text?: string;
-  /** Also fire the project's `wake` trigger (when it exists and is enabled). */
+  /** Also fire the trigger that asked, else the project's `wake` (whichever `GET …/wake` names). */
   wake?: boolean;
 }
 
-/** `GET …/managers/wake` (M11): can an answer fire the workspace's `wake` trigger? */
+/**
+ * `GET …/managers/wake` (M11): can an answer wake the manager, and which trigger?
+ * For a task it is the trigger whose run raised it, else the workspace's `wake`.
+ */
 export interface WakeAvailability {
   available: boolean;
   /** Why not, phrased for a tooltip; null when available. */
   reason: string | null;
+  /** The trigger an answer would fire; null when none can. */
+  trigger?: string | null;
+  /** Every awaiting-ed task's own answer (the top level is `?task=`'s, or `wake` alone's). */
+  tasks?: Record<string, WakeAvailability>;
 }
 
 export interface TaskAnswerResult {
   task: TaskDetail;
   episode: { id: string; file: string; importance: number; objective: string | null };
-  wake?: { fired: boolean; sessionId?: string; reason?: string };
+  wake?: { fired: boolean; trigger?: string; sessionId?: string; reason?: string };
 }
 
 /** Fields for `POST`/`PATCH …/managers/objectives` (only given fields change). */

@@ -155,18 +155,27 @@ describe("integration: Managers read routes", () => {
   });
 
   it("M11: /managers/wake says whether an answer can wake the manager, and why not", async () => {
-    expect((await get("/api/projects/waker/managers/wake")).body).toEqual({ available: true, reason: null });
+    // (t-261001-5ti7 adds `trigger` and the per-task `tasks` map.)
+    expect((await get("/api/projects/waker/managers/wake")).body).toEqual({
+      available: true,
+      reason: null,
+      trigger: "wake",
+      tasks: {},
+    });
     expect((await get("/api/projects/sleepy/managers/wake")).body).toEqual({
       available: false,
       reason: "the wake trigger is disabled",
+      trigger: null,
+      tasks: {},
     });
-    expect((await get("/api/projects/acme/managers/wake")).body).toEqual({
-      available: false,
-      reason: "this project has no wake trigger",
-    });
+    // acme's awaiting-ed task was raised by no run, so it falls back to (the missing) wake too.
+    const noWake = { available: false, reason: "this project has no wake trigger", trigger: null };
+    expect((await get("/api/projects/acme/managers/wake")).body).toEqual({ ...noWake, tasks: { "t-260920-bbbb": noWake } });
     expect((await get("/api/projects/gated/managers/wake")).body).toEqual({
       available: false,
       reason: 'the wake trigger\'s behaviour "wake-up" is off',
+      trigger: null,
+      tasks: {},
     });
     // Home (the root) has no wake trigger in this fixture.
     expect((await get("/api/root/managers/wake")).body).toMatchObject({ available: false });

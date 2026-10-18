@@ -111,6 +111,12 @@ export const taskReadSchema = z.looseObject({
   due: tsRead,
   created: tsRead,
   updated: tsRead,
+  /** The trigger run that last set the task to awaiting-ed (absent: a chat, Ed, or a task older than it). */
+  raisedBy: z
+    .looseObject({ trigger: strOrNull, run: strOrNull })
+    .nullish()
+    .catch(null)
+    .transform((v) => v ?? null),
 });
 export type TaskFrontmatter = z.output<typeof taskReadSchema>;
 
@@ -169,6 +175,8 @@ export const taskWriteSchema = z
     due: dateOrTs.nullable(),
     created: isoTs,
     updated: isoTs,
+    /** Written only when a trigger run raised the ask (older records round-trip unchanged). */
+    raisedBy: z.strictObject({ trigger: z.string().min(1), run: z.string().regex(RUN_ID_RE) }).optional(),
   })
   .superRefine((t, ctx) => {
     if (t.status === "awaiting-ed" && !t.ask) {

@@ -152,7 +152,11 @@ describe("schemas round-trip (strict write → file → lenient read)", () => {
       created: "2026-09-26T07:05:00Z",
       updated: "2026-09-26T07:05:00Z",
     };
-    expect(roundTrip(taskWriteSchema, taskReadSchema, rec)).toEqual(rec);
+    // `raisedBy` is written only when a run raised the ask; absent, it reads as null.
+    expect(roundTrip(taskWriteSchema, taskReadSchema, rec)).toEqual({ ...rec, raisedBy: null });
+    const raised = { ...rec, raisedBy: { trigger: "roadmap", run: "r-260926-0700-ab12" } };
+    expect(roundTrip(taskWriteSchema, taskReadSchema, raised)).toEqual(raised);
+    expect(taskWriteSchema.safeParse({ ...rec, raisedBy: { trigger: "roadmap", run: "nope" } }).success).toBe(false);
     const answered = {
       ...rec,
       status: "open" as const,
@@ -162,6 +166,7 @@ describe("schemas round-trip (strict write → file → lenient read)", () => {
     expect(roundTrip(taskWriteSchema, taskReadSchema, answered)).toEqual({
       ...answered,
       answer: { ...answered.answer, text: null },
+      raisedBy: null,
     });
   });
 
