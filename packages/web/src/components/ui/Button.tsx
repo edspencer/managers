@@ -68,6 +68,8 @@ export function Button({
       className={cx(
         "inline-flex select-none items-center font-medium",
         "motion-fast transition-[color,background-color,border-color,box-shadow,transform]",
+        // A keyboard focus cue on every button (box-shadow, never outline).
+        "focus-visible:focus-ring",
         "disabled:cursor-not-allowed disabled:opacity-50",
         align === "start" ? "justify-start text-left" : "justify-center",
         SIZES[size],

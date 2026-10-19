@@ -224,9 +224,13 @@ What changed from Paddock, and what did not:
   the URL query (`?objective=<id>|none&status=a,b`), closed months lazy behind "Show
   done", `#<task-id>` marks a row (the report's Needs-you link), a row `Menu` moves
   the status (never to awaiting-ed), `/tasks/:taskId` is `TaskDetailView`.
-  `TaskAnswer` (self-contained, for M13's reuse) posts `…/answer`; its "Wake the
-  manager now" switch reads `GET …/managers/wake` `{available, reason, trigger,
-  tasks}`, the same resolver the answer route uses (`managers/wake-target.ts`): the
+  `TaskAnswer` (self-contained, for M13's reuse) posts `…/answer`: options are
+  primary buttons (a click answers), free text has **Answer**, and when this task's
+  target can fire every answer also gets an **Answer & wake** (an option's "& wake"
+  half; labelled "(roadmap)" for a trigger other than `wake`), HIDDEN — never
+  disabled — when nothing can be woken. The target is this task's entry in `GET
+  …/managers/wake` `{available, reason, trigger, tasks}` (`?task=` when the map
+  predates it), the same resolver the answer route uses (`managers/wake-target.ts`): the
   trigger whose run raised the task (`raisedBy: {trigger, run}`, written by
   `upsertTask` when a run sets awaiting-ed and cleared by a raise without one; an
   older task's log line `(run r-…): … → awaiting-ed`), else `wake`; disabled,

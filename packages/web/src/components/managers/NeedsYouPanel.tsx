@@ -9,7 +9,7 @@
  *   - the group's header links to that workspace's Home, with its counts and a
  *     "Status report 3d old" hint when the report is out of date;
  *   - each ask renders {@link TaskAnswer}, so Ed answers from here — the same
- *     form, the same route and the same "Wake the manager now" switch as the
+ *     form, the same route and the same Answer / Answer & wake actions as the
  *     Tasks tab;
  *   - each alert is a row with its severity that opens the project's Home, where
  *     the status card shows the same alert live;

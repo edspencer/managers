@@ -136,7 +136,8 @@ describe("NeedsYouPanel", () => {
     // Wake availability is asked per workspace with asks, never for the error row.
     await waitFor(() => expect(managersWake).toHaveBeenCalledTimes(3));
     expect(managersWake.mock.calls.map((c) => c[0]).sort()).toEqual(["", "acme-site", "widget-lib"]);
-    expect(within(acme).getAllByTestId("wake-reason")[0]).toHaveTextContent("this project has no wake trigger");
+    // Nothing to wake in acme-site: no Answer & wake, and no explanation either.
+    expect(within(acme).queryByRole("button", { name: /wake/ })).toBeNull();
   });
 
   it("answering removes the row, toasts, and re-reads the collation", async () => {
@@ -163,10 +164,7 @@ describe("NeedsYouPanel", () => {
     managersAnswerTask.mockResolvedValue({ ...answered(), wake: { fired: true, sessionId: "s" } });
     renderPanel();
     const widget = await screen.findByTestId("needs-you-group-widget-lib");
-    const toggle = await within(widget).findByRole("checkbox", { name: "Wake the manager now" });
-    await waitFor(() => expect(toggle).toBeEnabled());
-    await userEvent.click(toggle);
-    await userEvent.click(within(widget).getByRole("button", { name: "skip" }));
+    await userEvent.click(await within(widget).findByRole("button", { name: "skip & wake" }));
     expect(managersAnswerTask).toHaveBeenCalledWith("widget-lib", "t-260926-rn88", { choice: "skip", wake: true });
     expect(await screen.findByText(/Answered “skip”\. The manager has been woken\./)).toBeInTheDocument();
   });

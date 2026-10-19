@@ -701,7 +701,7 @@ export function enforceManagementPolicy(
   // The chat ops pass through untouched (same objects); only `state` is wrapped,
   // plus (M14.5, audit M9–M14 #12) the in-process agent's trigger WRITES, which
   // are confined to its own project: a manager must not rewrite another
-  // project's triggers (e.g. the `wake` Ed's "Wake the manager now" fires).
+  // project's triggers (e.g. the `wake` Ed's "Answer & wake" fires).
   if (isInternalPrincipal(principal)) {
     const w = ops.write;
     const write: SelfMcpWriteContext | undefined = w && {
