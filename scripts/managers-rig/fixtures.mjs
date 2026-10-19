@@ -524,7 +524,7 @@ export const PROJECTS = [
         enabled: true,
       },
       // M13: an ENABLED wake (its cron, 03:00 on 1 January, never fires during QA),
-      // so answering widget-lib's ask with "Wake the manager now" from Home's Needs
+      // so answering widget-lib's ask with "& wake" from Home's Needs
       // you really fires a run. Its prompt records one episode on the objective.
       wake: {
         trigger: { type: "schedule", cron: "0 3 1 1 *" },

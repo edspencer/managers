@@ -35,65 +35,103 @@ describe("TaskAnswer (Managers M11)", () => {
     managersWake.mockReset();
   });
 
-  it("with options: one button per option, and a click is the answer", async () => {
+  const noWake = { available: false, reason: "this project has no wake trigger", trigger: null };
+  const roadmap = { available: true, reason: null, trigger: "roadmap" };
+  const wakeItself = { available: true, reason: null, trigger: "wake" };
+
+  it("with options: one primary button per option, and a click is the answer", async () => {
     managersAnswerTask.mockResolvedValue(result());
     const onAnswered = vi.fn();
     render(<TaskAnswer slug="widget-lib" task={ask} wake={{ available: false, reason: "the wake trigger is disabled" }} onAnswered={onAnswered} />);
     expect(screen.getByText(ask.ask!)).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "merge" }));
+    const merge = screen.getByRole("button", { name: "merge" });
+    // t-261001-4cru: a real button, not a grey chip.
+    expect(merge.className).toContain("bg-accent-solid");
+    expect(merge.className).toContain("focus-visible:focus-ring");
+    await userEvent.click(merge);
     expect(managersAnswerTask).toHaveBeenCalledWith("widget-lib", "t-260926-rn88", { choice: "merge" });
     await waitFor(() => expect(onAnswered).toHaveBeenCalledWith(expect.objectContaining({ episode: expect.anything() }), "merge"));
   });
 
-  it("without options: a textarea, and Send is disabled until there is text", async () => {
+  it("option buttons answer from the keyboard", async () => {
+    managersAnswerTask.mockResolvedValue(result());
+    render(<TaskAnswer slug="acme" task={ask} wake={noWake} onAnswered={vi.fn()} />);
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: "merge" })).toHaveFocus();
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: "skip" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(managersAnswerTask).toHaveBeenCalledWith("acme", ask.id, { choice: "skip" });
+  });
+
+  it("without options: a textarea, and Answer is disabled until there is text", async () => {
     managersAnswerTask.mockResolvedValue(result());
     const onAnswered = vi.fn();
     render(
       <TaskAnswer
         slug=""
         task={{ ...ask, options: [], ask: "What should the post say?" }}
-        wake={{ available: true, reason: null }}
+        wake={{ available: false, reason: "this project has no wake trigger" }}
         onAnswered={onAnswered}
       />,
     );
-    const send = screen.getByRole("button", { name: "Send answer" });
-    expect(send).toBeDisabled();
+    const answer = screen.getByRole("button", { name: "Answer" });
+    expect(answer).toBeDisabled();
     await userEvent.type(screen.getByRole("textbox", { name: "Your answer" }), "  Keep it short  ");
-    await userEvent.click(send);
+    await userEvent.click(answer);
     expect(managersAnswerTask).toHaveBeenCalledWith("", "t-260926-rn88", { text: "Keep it short" });
     await waitFor(() => expect(onAnswered).toHaveBeenCalledWith(expect.anything(), "Keep it short"));
   });
 
-  it("disables the wake switch, with the reason, when no enabled wake exists", () => {
+  it("the old wake switch is gone", () => {
+    render(<TaskAnswer slug="acme" task={ask} wake={{ available: true, reason: null }} onAnswered={vi.fn()} />);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText(/Wake the manager now/)).toBeNull();
+  });
+
+  it("nothing to wake: Answer & wake is hidden, with no disabled control or explanation", () => {
     render(<TaskAnswer slug="acme" task={ask} wake={{ available: false, reason: "the wake trigger is disabled" }} onAnswered={vi.fn()} />);
-    const sw = screen.getByRole("checkbox", { name: "Wake the manager now" });
-    expect(sw).toBeDisabled();
-    expect(sw).not.toBeChecked();
-    expect(screen.getByTestId("wake-reason")).toHaveTextContent("the wake trigger is disabled");
+    expect(screen.queryByRole("button", { name: /wake/ })).toBeNull();
+    expect(screen.queryByText(/the wake trigger is disabled/)).toBeNull();
+    expect(screen.queryByTestId("wake-hint")).toBeNull();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["merge", "skip"]);
   });
 
-  it("keeps the switch disabled while availability is unknown", () => {
-    render(<TaskAnswer slug="acme" task={ask} wake={null} onAnswered={vi.fn()} />);
-    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeDisabled();
+  it("free text, nothing to wake: only Answer", () => {
+    render(<TaskAnswer slug="" task={{ ...ask, options: [] }} wake={{ ...noWake, tasks: { [ask.id]: noWake } }} onAnswered={vi.fn()} />);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer"]);
   });
 
-  it("sends wake: true only when the switch is on and a wake is available", async () => {
+  it("hides Answer & wake while availability is unknown", () => {
+    render(<TaskAnswer slug="acme" task={{ ...ask, options: [] }} wake={null} onAnswered={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /wake/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Answer" })).toBeInTheDocument();
+  });
+
+  it("free text: Answer & wake sends wake: true, Answer does not", async () => {
+    managersAnswerTask.mockResolvedValue(result({ wake: { fired: true, sessionId: "s1" } }));
+    const free = { ...ask, options: [] };
+    render(<TaskAnswer slug="acme" task={free} wake={{ ...wakeItself, tasks: { [ask.id]: wakeItself } }} onAnswered={vi.fn()} />);
+    const both = screen.getByRole("button", { name: "Answer & wake" });
+    expect(both).toBeDisabled();
+    await userEvent.type(screen.getByRole("textbox", { name: "Your answer" }), "Ship it");
+    await userEvent.click(both);
+    expect(managersAnswerTask).toHaveBeenLastCalledWith("acme", ask.id, { text: "Ship it", wake: true });
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Your answer" })).toHaveValue(""));
+    await userEvent.type(screen.getByRole("textbox", { name: "Your answer" }), "Again");
+    await userEvent.click(screen.getByRole("button", { name: "Answer" }));
+    expect(managersAnswerTask).toHaveBeenLastCalledWith("acme", ask.id, { text: "Again" });
+  });
+
+  it("options: each option has an “& wake” half that answers and wakes", async () => {
     managersAnswerTask.mockResolvedValue(result({ wake: { fired: true, sessionId: "s1" } }));
     render(<TaskAnswer slug="acme" task={ask} wake={{ available: true, reason: null }} onAnswered={vi.fn()} />);
-    const sw = screen.getByRole("checkbox", { name: "Wake the manager now" });
-    expect(sw).toBeEnabled();
-    await userEvent.click(sw);
-    await userEvent.click(screen.getByRole("button", { name: "skip" }));
+    expect(screen.getByTestId("wake-hint")).toHaveTextContent("“& wake” also wakes the manager now.");
+    await userEvent.click(screen.getByRole("button", { name: "skip & wake" }));
     expect(managersAnswerTask).toHaveBeenCalledWith("acme", "t-260926-rn88", { choice: "skip", wake: true });
-  });
-
-  // M15: in the real-Claude shakedown a click on the words did nothing.
-  it("toggles the wake switch when its text is clicked", async () => {
-    render(<TaskAnswer slug="acme" task={ask} wake={{ available: true, reason: null }} onAnswered={vi.fn()} />);
-    const sw = screen.getByRole("checkbox", { name: "Wake the manager now" });
-    await userEvent.click(screen.getByText("Wake the manager now"));
-    expect(sw).toBeChecked();
+    await userEvent.click(screen.getByRole("button", { name: "merge" }));
+    expect(managersAnswerTask).toHaveBeenLastCalledWith("acme", "t-260926-rn88", { choice: "merge" });
   });
 
   it("shows the server's message on a 4xx and keeps the form usable", async () => {
@@ -107,43 +145,39 @@ describe("TaskAnswer (Managers M11)", () => {
     expect(screen.getByRole("button", { name: "merge" })).toBeEnabled();
   });
 
-  // t-261001-5ti7: the switch targets the trigger that asked, per task.
-  const noWake = { available: false, reason: "this project has no wake trigger", trigger: null };
-  const roadmap = { available: true, reason: null, trigger: "roadmap" };
-
-  it("a task raised by roadmap in a project without wake: the switch is on offer and names roadmap", async () => {
+  // t-261001-5ti7: the wake action targets the trigger that asked, per task.
+  it("a task raised by roadmap in a project without wake: Answer & wake is offered and names roadmap", async () => {
     managersAnswerTask.mockResolvedValue(result({ wake: { fired: true, trigger: "roadmap", sessionId: "s1" } }));
     render(<TaskAnswer slug="managers" task={ask} wake={{ ...noWake, tasks: { [ask.id]: roadmap } }} onAnswered={vi.fn()} />);
-    const sw = screen.getByRole("checkbox", { name: "Wake the manager now" });
-    expect(sw).toBeEnabled();
-    expect(screen.getByTestId("wake-trigger")).toHaveTextContent("(runs roadmap)");
-    expect(screen.queryByTestId("wake-reason")).toBeNull();
-    await userEvent.click(sw);
-    await userEvent.click(screen.getByRole("button", { name: "merge" }));
+    expect(screen.getByTestId("wake-hint")).toHaveTextContent("(runs roadmap)");
+    await userEvent.click(screen.getByRole("button", { name: "merge & wake (roadmap)" }));
     expect(managersAnswerTask).toHaveBeenCalledWith("managers", ask.id, { choice: "merge", wake: true });
     expect(managersWake).not.toHaveBeenCalled();
   });
 
+  it("free text raised by roadmap: the action reads “Answer & wake (roadmap)”", () => {
+    render(<TaskAnswer slug="managers" task={{ ...ask, options: [] }} wake={{ ...noWake, tasks: { [ask.id]: roadmap } }} onAnswered={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Answer & wake (roadmap)" })).toBeInTheDocument();
+  });
+
   it("names nothing extra when the target is wake itself", () => {
-    const wake = { available: true, reason: null, trigger: "wake" };
-    render(<TaskAnswer slug="acme" task={ask} wake={{ ...wake, tasks: { [ask.id]: wake } }} onAnswered={vi.fn()} />);
-    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeEnabled();
-    expect(screen.queryByTestId("wake-trigger")).toBeNull();
+    render(<TaskAnswer slug="acme" task={{ ...ask, options: [] }} wake={{ ...wakeItself, tasks: { [ask.id]: wakeItself } }} onAnswered={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Answer & wake" })).toBeInTheDocument();
+    expect(screen.queryByText(/\(wake\)/)).toBeNull();
   });
 
   it("a task the map predates asks for its own target (?task=)", async () => {
     managersWake.mockResolvedValue(roadmap);
     render(<TaskAnswer slug="managers" task={ask} wake={{ ...noWake, tasks: {} }} onAnswered={vi.fn()} />);
-    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeDisabled();
-    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: /wake/ })).toBeNull();
+    expect(await screen.findByRole("button", { name: "merge & wake (roadmap)" })).toBeEnabled();
     expect(managersWake).toHaveBeenCalledWith("managers", ask.id);
-    expect(screen.getByTestId("wake-trigger")).toHaveTextContent("roadmap");
   });
 
-  it("nothing to wake: disabled with the task's own reason", () => {
+  it("the task's own target wins over the workspace's: nothing to wake hides it", () => {
     const none = { available: false, reason: 'the roadmap trigger\'s behaviour "x" is off, and this project has no wake trigger', trigger: null };
-    render(<TaskAnswer slug="managers" task={ask} wake={{ ...noWake, tasks: { [ask.id]: none } }} onAnswered={vi.fn()} />);
-    expect(screen.getByRole("checkbox", { name: "Wake the manager now" })).toBeDisabled();
-    expect(screen.getByTestId("wake-reason")).toHaveTextContent('behaviour "x" is off, and this project has no wake trigger');
+    render(<TaskAnswer slug="managers" task={ask} wake={{ ...wakeItself, tasks: { [ask.id]: none } }} onAnswered={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /wake/ })).toBeNull();
+    expect(screen.queryByText(/behaviour "x" is off/)).toBeNull();
   });
 });

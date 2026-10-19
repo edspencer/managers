@@ -264,7 +264,7 @@ run of yesterday (`r-…-wk`, the run the `blog-cadence` "Morning wake" journal
 entry names) now carries `sessionId` = the seeded `acme-site:morning` chat, so
 the journal's run link opens a chat. Home has one awaiting-ed task and no
 objectives. No fixture has an ENABLED `wake` (until M13's `widget-lib` one), so
-the answer form's "Wake the manager now" switch is disabled with its reason;
+the answer form offers no "Answer & wake";
 enable `acme-site`'s `wake` in the Triggers tab to exercise the enabled path (its
 cron is 07:00 UTC).
 
@@ -297,11 +297,10 @@ Additions only:
   shows "Status report 3d old" on its group (`acme-site`'s is fresh, the control).
 - `widget-lib` has an **enabled** `wake` trigger (cron 03:00 on 1 January, so it
   never fires by itself) whose prompt records one `#wake` episode on
-  `burn-down-issues`. Answering `widget-lib`'s ask from Home with "Wake the manager
-  now" on therefore fires a real run (fake `claude`) that shows on `widget-lib`'s
-  Home. It is the first enabled `wake` in the rig: the answer form's disabled
-  switch and its reason are now on `acme-site` ("the wake trigger is disabled") and
-  Home ("no wake trigger").
+  `burn-down-issues`. Answering `widget-lib`'s ask from Home with an option's "& wake"
+  half therefore fires a real run (fake `claude`) that shows on `widget-lib`'s
+  Home. It is the first enabled `wake` in the rig: `acme-site` (its wake is disabled) and Home
+  (no wake trigger) offer no "Answer & wake".
 - With the seed as is, `/` shows three groups — `acme-site` (2 asks, the
   `stale:publish-check` warning), `widget-lib` (1 ask, 1 unreadable task file,
   the stale hint) and Home (1 ask) — and "4 asks · 1 alert — 6 projects checked".

@@ -1184,7 +1184,7 @@ export function registerManagerWorkspaceRoutes(app: FastifyInstance, ctx: RouteC
           "run in its log), falling back to the workspace's `wake`; a trigger counts only when it exists, is " +
           "enabled and every behaviour gating it is on. The top level answers for `?task=` (or, without one, " +
           "for `wake` alone); `tasks` maps every awaiting-ed task's id to its own `{ available, reason, trigger }`. " +
-          "`reason` says why not (null when available). Drives the answer form's \"Wake the manager now\" switch.",
+          "`reason` says why not (null when available). Decides whether the answer form offers \"Answer & wake\" and what it names.",
         params: paramsSchema(),
         querystring: {
           type: "object",

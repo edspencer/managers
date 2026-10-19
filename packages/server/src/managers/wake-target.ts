@@ -1,5 +1,5 @@
 /**
- * wake-target — which trigger "Answer & wake the manager now" fires.
+ * wake-target — which trigger the answer form's "Answer & wake" fires.
  *
  * The trigger whose run ASKED (it set the task to awaiting-ed, recorded as the
  * task's `raisedBy`; older tasks only have the run id in their `## Log`), and
@@ -9,7 +9,7 @@
  * never a target: they write a report or curate memory, not act on an answer.
  *
  * Pure: `GET …/managers/wake` and `POST …/tasks/:id/answer` both call
- * `resolveWakeTarget`, so the switch and the fire always agree.
+ * `resolveWakeTarget`, so the offered action and the fire always agree.
  */
 import type { EffectiveBehaviour } from "./behaviours.js";
 import { triggerGate } from "./behaviours.js";
