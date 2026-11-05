@@ -1,4 +1,4 @@
-// From edspencer/cli-contract reference/service/launchd.ts @ 0.2; local changes: `.ts` import specifiers → `.js`.
+// From edspencer/cli-contract reference/service/launchd.ts @ 0.2 (with #7, d5ddc0e); local changes: `.ts` import specifiers → `.js`.
 // macOS: a launchd LaunchAgent in the `gui/<uid>` domain (SPEC §7). It starts at login, not at boot, and runs as the
 // user, inside their login session (so the login keychain is unlocked). Node built-ins only.
 //
@@ -6,7 +6,7 @@
 //
 // `launchctl bootout` returns once launchd has accepted the request, not once the job has gone. A bootstrap of the
 // same label straight after it races launchd's own teardown, and when it loses, fails with exit 5 (`EIO`,
-// "Input/output error"). It's timing-dependent: Managers 0.80.0's release run failed on it after the PR had passed.
+// "Input/output error"). It's timing-dependent: Paddock 0.80.0's release run failed on it after the PR had passed.
 // Both halves of the fix are needed:
 //
 // - **after a bootout we issue, wait for the job to go:** poll `launchctl print` until it fails (the label is
@@ -154,6 +154,7 @@ export function createLaunchd(id: ServiceIdentity, o: LaunchdOptions): ServiceMa
     kind: 'a launchd LaunchAgent',
 
     install(spec) {
+      const existed = fs.existsSync(file);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.mkdirSync(spec.workingDirectory, { recursive: true });
       // launchd doesn't create the log's folder; without it the job fails to spawn, and says nothing.
@@ -161,7 +162,14 @@ export function createLaunchd(id: ServiceIdentity, o: LaunchdOptions): ServiceMa
       fs.writeFileSync(file, renderPlist(id, spec), 'utf8');
       // A bootout first, because bootstrap refuses a label that's loaded. It fails on a first install, as expected.
       bootoutAndWait();
-      bootstrap();
+      try {
+        bootstrap();
+      } catch (err) {
+        // A first install launchd refused mustn't leave a plist behind: `status` would then say it's installed, and
+        // the next login would try it again. A reinstall keeps its plist.
+        if (!existed) fs.rmSync(file, { force: true });
+        throw err;
+      }
       run('launchctl', ['kickstart', '-k', target]);
     },
 
