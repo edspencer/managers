@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import {
   describeShutdown,
+  describeShutdownStart,
   drainInFlight,
   recordInterruptedRuns,
   type InFlight,
@@ -119,5 +120,17 @@ describe("describeShutdown", () => {
     expect(line).toContain("SIGINT: shutting down with 2 chat turns and 2 trigger runs still in flight");
     expect(line).toContain("2 of 2 run records marked failed (interrupted by shutdown)");
     expect(line).toContain("managers busy");
+  });
+});
+
+describe("describeShutdownStart", () => {
+  it("says nothing when idle, and names what is in flight before the wait otherwise", () => {
+    expect(describeShutdownStart("SIGTERM", { turns: 0, runs: 0 })).toBeUndefined();
+    expect(describeShutdownStart("SIGTERM", { turns: 1, runs: 0 })).toBe(
+      "SIGTERM: 1 chat turn in flight; waiting up to 8s for it to finish.",
+    );
+    expect(describeShutdownStart("SIGINT", { turns: 2, runs: 1 })).toBe(
+      "SIGINT: 2 chat turns and 1 trigger run in flight; waiting up to 8s for them to finish.",
+    );
   });
 });
