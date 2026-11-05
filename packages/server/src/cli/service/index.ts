@@ -920,6 +920,15 @@ export async function runService(
 }
 
 /**
+ * The report `service status` prints, for `managers doctor` — one builder, so
+ * the doctor's unit checks and `status`'s warnings cannot disagree. Throws on a
+ * platform with no service manager, as `runService` does.
+ */
+export async function serviceStatusReport(ctx: ServiceContext): Promise<StatusReport> {
+  return buildStatus(ctx, backendFor(ctx));
+}
+
+/**
  * What `managers update` needs to know and do about the service (SPEC §5).
  *
  * Built here rather than in the update module so that everything which reads a

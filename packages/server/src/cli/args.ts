@@ -115,6 +115,8 @@ export interface CliOptions {
    * `--port 9000` service comes back on 7234.
    */
   refresh?: boolean;
+  /** `doctor --offline`: skip the one check that asks the npm registry (SPEC §1). */
+  offline?: boolean;
 }
 
 /**
@@ -188,7 +190,7 @@ export type ConfigAction = (typeof CONFIG_ACTIONS)[number];
  * Paddock and Managers, every existing service unit's `ExecStart` names it, and
  * it is in two years of other people's scripts. They parse to the same command.
  */
-export const VERBS = ["serve", "start", "service", "config", "busy", "update", "upgrade"] as const;
+export const VERBS = ["serve", "start", "service", "config", "busy", "update", "upgrade", "doctor"] as const;
 
 /**
  * A parsed invocation: which verb, plus the flags that followed it.
@@ -209,7 +211,9 @@ export type Command =
    * the documentation, two that work, so nobody has to remember which word this
    * tool chose.
    */
-  | { verb: "update"; opts: CliOptions };
+  | { verb: "update"; opts: CliOptions }
+  /** `doctor` (SPEC §1): checks, each with a fix. Asks the registry unless `--offline`. */
+  | { verb: "doctor"; opts: CliOptions };
 
 /**
  * Split an action off a verb's argv, then parse what follows as flags.
@@ -318,6 +322,12 @@ const SCOPED_FLAGS: readonly {
     why: "`update` is the only command that asks a question.",
   },
   {
+    flag: "--offline",
+    read: (o) => o.offline === true,
+    where: ["doctor"],
+    why: "It skips the registry check, and `doctor` is the command that has one.",
+  },
+  {
     flag: "--refresh",
     read: (o) => o.refresh === true,
     where: ["service install"],
@@ -365,6 +375,9 @@ function dispatch(argv: string[]): Command {
 
   // `update`, with `upgrade` accepted and undocumented (SPEC §1).
   if (first === "update" || first === "upgrade") return { verb: "update", opts: parseArgs(rest) };
+
+  // `doctor` (SPEC §1).
+  if (first === "doctor") return { verb: "doctor", opts: parseArgs(rest) };
 
   // `serve` and `start` are one command: see VERBS.
   if (first === "serve" || first === "start") return { verb: "serve", opts: parseArgs(rest) };
@@ -462,6 +475,10 @@ export function parseArgs(argv: string[]): CliOptions {
       case "--refresh":
         opts.refresh = true;
         break;
+      // `doctor --offline` (SPEC §1).
+      case "--offline":
+        opts.offline = true;
+        break;
       // `service logs` flags, the names `tail`, `journalctl` and every other
       // log reader uses — this is not the place to be original.
       case "-f":
@@ -545,6 +562,7 @@ export const USAGE_SYNOPSIS = `Usage
   managers service <action> [options]      install|uninstall|status|start|stop|restart|logs
   managers busy [--json]                   is the running instance busy?
   managers update [--check] [--to <v>]     install a newer Managers
+  managers doctor [--json] [--offline]     checks, with a fix for each failure
   managers config <show|eject> [options]   what this instance's config resolved to
   managers -v | --version                  print the version and exit
   managers -h | --help                     the full help`;
@@ -569,6 +587,8 @@ Usage
   managers update [--check] [--to <v>]     install a newer Managers and restart
                                           the service
                                           (\`managers update --help\`)
+  managers doctor [--json] [--offline]     checks, with a fix for each failure
+                                          (\`managers doctor --help\`)
   managers config show [--resolved]        what this instance's config resolved
                                           to, and where each value came from
   managers config eject [--write]          freeze that resolution into
@@ -802,6 +822,35 @@ A note on access
   you are logged in rather than as long as a terminal tab.
 
 Docs: https://github.com/edspencer/managers`;
+
+export const DOCTOR_USAGE = `managers doctor — is this install, its service and its configuration healthy?
+
+Usage
+  managers doctor                      the checks, one line each: ✓ ok, ! warning, ✗ failed
+  managers doctor --json               the same checks as one JSON document
+  managers doctor --offline            skip the one check that asks the npm registry
+  managers doctor -d <path>            check a particular instance's data dir
+
+Checks
+  node-engines     this Node satisfies the package's engines
+  install-method   how Managers was installed, and whether \`managers update\` can update it
+  unit             the service unit: present, its Node and CLI still there
+  running-version  the running version is the installed one
+  port             the port is free, or held by Managers
+  linger           (Linux) the service keeps running when you log out
+  data-home        the data dir is writable
+  update           a newer version exists (skipped with --offline)
+  config           the configuration loads, so \`managers serve\` would start
+  security         the security posture (/api/security): no authentication,
+                   trusted-header, any-audience JWTs, batch drive mode
+
+  Every failure has a \`fix:\` line under it. Asking the registry also refreshes
+  <data-dir>/update-check.json, which \`managers service status\` repeats.
+
+Exit codes
+  0   nothing failed (warnings don't count)
+  1   at least one check failed
+  2   usage: an unknown flag`;
 
 export const BUSY_USAGE = `managers busy — is the running instance in the middle of something?
 

@@ -133,7 +133,7 @@ COPY --from=build /app/packages/web/dist packages/web/dist
 #
 # An operator who manages this container with something that knows how to upgrade it — Ansible, a
 # Helm chart, a Watchtower label — sets MANAGERS_UPDATE_HINT at `docker run` time, and `update`
-# prints that sentence instead of guessing at a `docker compose` line (see docs/UPDATING.md).
+# prints that sentence instead of guessing at a `docker compose` line (see UPDATING.md).
 RUN printf '#!/bin/sh\nexec node /app/packages/server/dist/cli/managers.js "$@"\n' > /usr/local/bin/managers \
     && chmod +x /usr/local/bin/managers
 
