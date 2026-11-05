@@ -117,6 +117,20 @@ export interface CliOptions {
   refresh?: boolean;
   /** `doctor --offline`: skip the one check that asks the npm registry (SPEC §1). */
   offline?: boolean;
+  /**
+   * `service install --dry-run`: print the unit it would write, and write
+   * nothing — not the unit, not a folder (SPEC §1).
+   */
+  dryRun?: boolean;
+  /**
+   * `service install --from-checkout`: install a unit that runs THIS copy even
+   * though it is a git checkout (SPEC §1). Without it, `install` refuses: a unit
+   * pointing into a working tree breaks the next time it is rebuilt, switched
+   * to another branch or moved.
+   */
+  fromCheckout?: boolean;
+  /** `serve --quiet` / `-q`: print the `Managers <version>: <url>` line and nothing else (SPEC §3). */
+  quiet?: boolean;
 }
 
 /**
@@ -322,6 +336,41 @@ const SCOPED_FLAGS: readonly {
     why: "`update` is the only command that asks a question.",
   },
   {
+    flag: "--json",
+    read: (o) => o.json === true,
+    where: [
+      "service status",
+      "service install",
+      "service uninstall",
+      "service start",
+      "service stop",
+      "service restart",
+      "busy",
+      "update",
+      "doctor",
+      "config show",
+    ],
+    why: "It prints one JSON document on stdout, and those are the commands that have one.",
+  },
+  {
+    flag: "--dry-run",
+    read: (o) => o.dryRun === true,
+    where: ["service install"],
+    why: "It prints the unit `install` would write, and writes nothing.",
+  },
+  {
+    flag: "--from-checkout",
+    read: (o) => o.fromCheckout === true,
+    where: ["service install"],
+    why: "It lets `install` write a unit that runs a git checkout.",
+  },
+  {
+    flag: "--quiet",
+    read: (o) => o.quiet === true,
+    where: ["serve"],
+    why: "It keeps `serve` to its one `Managers <version>: <url>` line.",
+  },
+  {
     flag: "--offline",
     read: (o) => o.offline === true,
     where: ["doctor"],
@@ -475,6 +524,18 @@ export function parseArgs(argv: string[]): CliOptions {
       case "--refresh":
         opts.refresh = true;
         break;
+      // `service install` (SPEC §1).
+      case "--dry-run":
+        opts.dryRun = true;
+        break;
+      case "--from-checkout":
+        opts.fromCheckout = true;
+        break;
+      // `serve --quiet` (SPEC §3).
+      case "-q":
+      case "--quiet":
+        opts.quiet = true;
+        break;
       // `doctor --offline` (SPEC §1).
       case "--offline":
         opts.offline = true;
@@ -574,6 +635,7 @@ Usage
   managers serve [options]                 the same thing, said out loud
                                           (\`managers start\` is a permanent alias)
   managers service install [options]       run it in the background from login
+                                          (--dry-run prints the unit instead)
   managers service uninstall               stop it and remove the unit
   managers service status [--json]         installed? running? which version?
   managers service start                   start an installed service
@@ -600,6 +662,7 @@ Options
       --host <host>       Bind address (default 127.0.0.1)
   -d, --data-dir <path>   Projects + state (default ~/.managers, or $MANAGERS_DATA_DIR)
   -o, --open              Open the app in your browser once it is listening
+  -q, --quiet             Print only the first line, \`Managers <version>: <url>\`
       --verbose           Show the server's own logs (quiet by default)
   -v, --version           Print the Managers version and exit
   -h, --help              Show this help
@@ -723,6 +786,7 @@ export const SERVICE_USAGE = `managers service — keep Managers running in the 
 Usage
   managers service install [options]   register it and start it now
   managers service install --refresh   re-write the unit, keeping its settings
+  managers service install --dry-run   print the unit it would write; write nothing
   managers service uninstall           stop it and deregister it
   managers service status [--json]     is it registered, is it running, which
                                       version, where are the logs
@@ -738,16 +802,31 @@ Options (logs)
 Options (stop, restart)
       --force             stop it even though it is busy
 
+Options (install, uninstall, start, stop, restart, status)
+      --json              One JSON document on stdout: ok, action, and the
+                          service's status afterwards (the same fields as
+                          \`status --json\`), plus error on a failure. All
+                          prose goes to stderr. The exit code is unchanged
+
 Options (install)
+      --dry-run           Print the unit (and where it would go) and write
+                          nothing — not the unit, not a folder
+      --from-checkout     Install from a git checkout anyway. Without it,
+                          install refuses: a unit that runs a working tree
+                          breaks when you rebuild, switch branch or move it
       --refresh           Re-render the unit from the settings the EXISTING one
                           carries — its port, host, data dir and verbosity —
-                          rather than from this shell's flags and environment.
+                          and never from MANAGERS_DATA_DIR in this shell.
                           This is what \`managers update\` runs, through the new
                           version's CLI, so the unit is written in the format
                           that version writes. Exit 4 with nothing installed:
                           there is no unit to refresh, and doing a first
                           install with defaults instead is how a --port 9000
                           service comes back on 7234.
+
+  Running install again is safe: it keeps the port, host, data dir and
+  verbosity the installed unit records, unless you give new ones, and
+  restarts the running service onto the new unit.
 
 Busy
   \`stop\` and \`restart\` ask the running instance whether it is busy first, and
@@ -799,19 +878,25 @@ Where it lives
   itself at 8 MB, keeping three older generations beside it.
 
 Exit codes
-  0   it is installed, running and answering
+  0   it is installed, running and answering (status), or done
   3   installed, but not running or not answering
   4   not installed: there is no unit  (status, logs, start, stop, restart)
   1   something failed
   2   usage: an unknown action or flag, or a bad value
   75  busy, and --force was not given  (stop, restart)
 
-Installed from npx?
+Installed from npx, or running from a checkout?
   \`service install\` refuses. An npx cache path is hash-keyed and npm may prune
   it, so the unit would work until it silently didn't, at some future login.
-  Install properly first:
+  A checkout is yours to rebuild, switch and move, and the unit would follow
+  it. Install properly first:
 
-    npm link -w packages/server && managers service install   (from a built checkout)
+    npm i -g @edspencer/managers && managers service install
+
+  (--from-checkout installs from the checkout anyway, for working on Managers.)
+
+  It also refuses when something that isn't Managers holds the port: pick
+  another with --port.
 
 A note on access
   Managers binds loopback, and the managers command runs it with authentication
