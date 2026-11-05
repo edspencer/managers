@@ -125,5 +125,5 @@ export async function guardServiceBusy(
   if (refusal === null) return null;
   // Spell out the way past it, after the hint about where to run it from.
   out.warn(`\n    managers service ${action} --force      ${action} it anyway\n`);
-  return EXIT.busy;
+  return EXIT.BUSY;
 }

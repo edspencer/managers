@@ -33,12 +33,13 @@ import {
   SERVICE_USAGE,
   CONFIG_USAGE,
   BUSY_USAGE,
+  UPDATE_USAGE,
   parseCommand,
   nodeVersionProblem,
   explainListenError,
 } from "./args.js";
 import { EXIT } from "./exit-codes.js";
-import { runService, safeHomeDir, realpathOr } from "./service/index.js";
+import { runService, safeHomeDir, realpathOr, type ServiceContext } from "./service/index.js";
 import { MANAGERS_NAME, MANAGERS_VERSION } from "../version.js";
 
 /**
@@ -93,9 +94,9 @@ const packageRoot = findUp("package.json") ?? path.resolve(moduleDir, "../..");
  * says the usage follows the message — the short one, not {@link USAGE}'s
  * thousand words, which would bury the line that says what was wrong.
  */
-function fail(message: string, code: number = EXIT.failure): number {
+function fail(message: string, code: number = EXIT.FAILED): number {
   console.error(`managers: ${message}`);
-  if (code === EXIT.usage) {
+  if (code === EXIT.USAGE) {
     console.error("");
     console.error(USAGE_SYNOPSIS);
   }
@@ -193,28 +194,10 @@ async function service(command: Extract<Command, { verb: "service" }>): Promise<
   // which `main` has already handled. Typed rather than asserted.
   if (action === undefined) {
     console.log(SERVICE_USAGE);
-    return EXIT.ok;
+    return EXIT.OK;
   }
   try {
-    return await runService(action, opts, {
-      platform: process.platform,
-      // Realpath'd (SPEC §7). `process.execPath` under a version manager is
-      // routinely a symlink into a per-shell directory — fnm's
-      // `fnm_multishells/<pid>_<ts>/bin/node` is deleted when that terminal
-      // exits — so a unit naming the symlink stops working when the tab closes,
-      // at some later login, with nothing in the logs because it never ran.
-      nodePath: realpathOr(process.execPath),
-      scriptPath: entryScript,
-      packageRoot,
-      homeDir: safeHomeDir(),
-      ...(process.env.MANAGERS_DATA_DIR !== undefined
-        ? { envDataDir: process.env.MANAGERS_DATA_DIR }
-        : {}),
-      ...(process.env.XDG_CONFIG_HOME !== undefined
-        ? { xdgConfigHome: process.env.XDG_CONFIG_HOME }
-        : {}),
-      ...(process.env.PATH !== undefined ? { pathEnv: process.env.PATH } : {}),
-    });
+    return await runService(action, opts, serviceContext());
   } catch (err) {
     // A CliError carries its own code: an unsupported platform or an npx
     // refusal is a failure (1), a misspelled flag is usage (2).
@@ -222,6 +205,36 @@ async function service(command: Extract<Command, { verb: "service" }>): Promise<
     if (err instanceof Error) return fail(err.message);
     throw err;
   }
+}
+
+/**
+ * The facts about THIS install that every unit-reading command needs.
+ *
+ * One function, used by `managers service` and by `managers update`, because the
+ * two have to agree: an `update` that refreshed a unit built from a different
+ * Node path or a different script than `service status` reports would be the
+ * worst kind of nearly-working.
+ */
+function serviceContext(): ServiceContext {
+  return {
+    platform: process.platform,
+    // Realpath'd (SPEC §7). `process.execPath` under a version manager is
+    // routinely a symlink into a per-shell directory — fnm's
+    // `fnm_multishells/<pid>_<ts>/bin/node` is deleted when that terminal
+    // exits — so a unit naming the symlink stops working when the tab closes,
+    // at some later login, with nothing in the logs because it never ran.
+    nodePath: realpathOr(process.execPath),
+    scriptPath: entryScript,
+    packageRoot,
+    homeDir: safeHomeDir(),
+    ...(process.env.MANAGERS_DATA_DIR !== undefined
+      ? { envDataDir: process.env.MANAGERS_DATA_DIR }
+      : {}),
+    ...(process.env.XDG_CONFIG_HOME !== undefined
+      ? { xdgConfigHome: process.env.XDG_CONFIG_HOME }
+      : {}),
+    ...(process.env.PATH !== undefined ? { pathEnv: process.env.PATH } : {}),
+  };
 }
 
 /**
@@ -254,13 +267,13 @@ async function config(command: Extract<Command, { verb: "config" }>): Promise<nu
   // which `main` has already handled. Typed rather than asserted.
   if (action === undefined) {
     console.log(CONFIG_USAGE);
-    return EXIT.ok;
+    return EXIT.OK;
   }
   process.env.MANAGERS_DATA_DIR = resolveDataDir(opts);
   const { runConfig } = await import("./config.js");
   try {
     await runConfig(action, opts);
-    return EXIT.ok;
+    return EXIT.OK;
   } catch (err) {
     // A config that will not load reaches here as a CliError already carrying
     // the "start would fail too" note; anything else is reported as itself,
@@ -292,14 +305,16 @@ async function main(): Promise<number> {
           ? CONFIG_USAGE
           : command.verb === "busy"
             ? BUSY_USAGE
-            : USAGE,
+            : command.verb === "update"
+              ? UPDATE_USAGE
+              : USAGE,
     );
-    return EXIT.ok;
+    return EXIT.OK;
   }
   if (opts.version) {
     // Bare: the version and a newline, nothing else (SPEC §1). Scripts parse this.
     console.log(MANAGERS_VERSION);
-    return EXIT.ok;
+    return EXIT.OK;
   }
 
   const problem = nodeVersionProblem(process.versions.node);
@@ -316,6 +331,21 @@ async function main(): Promise<number> {
   if (command.verb === "busy") {
     const { runBusy } = await import("./busy-command.js");
     return runBusy(resolveDataDir(opts), opts.json === true);
+  }
+
+  // `update` (SPEC §1, §5). Imported dynamically for the same reason `busy` is:
+  // nothing in it needs the server, and a command whose whole job is to replace
+  // the files it would have loaded has particularly good reason not to load
+  // them.
+  if (command.verb === "update") {
+    const { runUpdateCommand } = await import("./update-command.js");
+    try {
+      return await runUpdateCommand(opts, serviceContext());
+    } catch (err) {
+      if (err instanceof CliError) return fail(err.message, err.exitCode);
+      if (err instanceof Error) return fail(err.message);
+      throw err;
+    }
   }
 
   addBundledBinsToPath();
@@ -425,7 +455,7 @@ async function main(): Promise<number> {
   // 0, but NOT yet: a foreground serve keeps running because the server holds
   // the event loop open. `process.exitCode` is set and never acted on until the
   // listener closes, which is what SIGTERM does (start.ts).
-  return EXIT.ok;
+  return EXIT.OK;
 }
 
 /**
@@ -448,6 +478,6 @@ main().then(
   },
   (err: unknown) => {
     console.error("fatal:", err);
-    process.exitCode = EXIT.failure;
+    process.exitCode = EXIT.FAILED;
   },
 );
