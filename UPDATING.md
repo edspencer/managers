@@ -199,4 +199,7 @@ managers service status
 `service install --refresh` is the one worth remembering: it re-renders the unit from
 what the **existing** one records, rather than from the flags and environment of the shell
 you happen to be in. With nothing installed it exits 4 rather than quietly performing a
-first install with defaults.
+first install with defaults. A plain `managers service install` keeps the installed unit's
+port, host and data dir too, unless you give new ones; `--refresh` differs in ignoring
+`MANAGERS_DATA_DIR` in your shell, and in refusing to do a first install.
+`managers service install --dry-run` prints the unit either would write, and writes nothing.

@@ -115,7 +115,10 @@ Each GitHub Release also carries a self-contained tarball.
 said out loud (`managers start` is a permanent alias). `managers service install`
 runs it in the background from login (a launchd LaunchAgent on macOS, a
 `systemd --user` unit on Linux), with `uninstall`, `start`, `stop`, `restart`,
-`status [--json]` and `logs [-f] [-n <lines>]`. `service status` exits **0** when
+`status [--json]` and `logs [-f] [-n <lines>]`; `install --dry-run` prints the unit
+and writes nothing, a reinstall keeps the unit's port, host and data dir, and
+`install` refuses a git checkout (unless `--from-checkout`) and a port something else
+holds. `service status` exits **0** when
 it is up and answering, **3** when installed but not, and **4** when there is no
 unit; a bad command, flag or value exits **2**. `managers busy` exits **75** while
 a chat turn or trigger run is in flight (0 when idle, 3 when nothing is running),

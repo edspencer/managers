@@ -59,6 +59,7 @@ the API as you. The UI shows a permanent banner saying so.
       --host <host>       Bind address (default 127.0.0.1)
   -d, --data-dir <path>   Projects + state (default ~/.managers)
   -o, --open              Open the app in your browser once it is listening
+  -q, --quiet             Print only the first line, `Managers <version>: <url>`
       --verbose           Show the server's own logs (quiet by default)
   -v, --version           Print the version
   -h, --help              Show help
@@ -66,7 +67,11 @@ the API as you. The UI shows a permanent banner saying so.
 
 `managers service install` keeps it running in the background from login
 (launchd on macOS, a systemd user unit on Linux; it refuses to install from the
-`npx` cache, so `npm i -g` first). `managers config show --resolved` prints every
+`npx` cache or a git checkout, so `npm i -g` first, and refuses a port something
+else holds). Running it again keeps the port, host and data dir the installed unit
+records unless you give new ones; `--dry-run` prints the unit and writes nothing,
+and `--json` on `install`, `uninstall`, `start`, `stop` and `restart` prints one
+JSON document. `managers config show --resolved` prints every
 effective setting and where it came from.
 
 Your projects, objectives, tasks, memory, chats and settings persist in

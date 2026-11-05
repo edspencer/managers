@@ -166,7 +166,7 @@ describe("managers CLI: verb dispatch (#796)", () => {
   it("SERVICE_USAGE says at login, not at boot, and names enable-linger", () => {
     expect(SERVICE_USAGE).toMatch(/LOG IN, not when the machine boots/);
     expect(SERVICE_USAGE).toContain("loginctl enable-linger");
-    expect(SERVICE_USAGE).toContain("managers service install   (from a built checkout)");
+    expect(SERVICE_USAGE).toContain("npm i -g @edspencer/managers");
   });
 });
 
@@ -1318,7 +1318,7 @@ describe("managers service: refusals", () => {
     const npx = { ...ctx, packageRoot: "/Users/ed/.npm/_npx/399ccf38/node_modules" };
     await expect(runService("install", opts, npx)).rejects.toThrow(CliError);
     await expect(runService("install", opts, npx)).rejects.toThrow(
-      /npm link -w packages\/server && managers service install/,
+      /npm i -g @edspencer\/managers && managers service install/,
     );
   });
 
