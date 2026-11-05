@@ -38,12 +38,8 @@
     "unknown-flag": true,
     "service-status": true,
     "service-status-json": true,
-    "busy": {
-      "skip": "no `managers busy` until wave F2 of the CLI-contract rollout"
-    },
-    "busy-json": {
-      "skip": "no `managers busy` until wave F2 of the CLI-contract rollout"
-    },
+    "busy": true,
+    "busy-json": true,
     "serve-banner": true,
     "serve-health": true
   }

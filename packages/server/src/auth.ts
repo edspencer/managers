@@ -18,9 +18,10 @@
  *                         paddock holds no key material, only the JWKS URL, and
  *                         rejects missing/invalid/expired tokens with 401.
  *
- * Paddock's health route (`/api/health`) is always exempt so the proxy and
- * monitoring can poll a server that is otherwise locked down. Only registered
- * routes may be exempted — see HEALTH_PATHS below for why (issue #569).
+ * Managers' health route (`/api/health`) is always exempt so the proxy and
+ * monitoring can poll a server that is otherwise locked down, as is the CLI
+ * contract's `/api/busy` — which carries counts and nothing else. Only
+ * registered routes may be exempted — see HEALTH_PATHS below for why (#569).
  *
  * Registered in app.ts BEFORE the routes so the `onRequest` hook guards every
  * REST + WS request. The decorator + hook are added directly to the root app
@@ -78,7 +79,18 @@ declare module "fastify" {
  * to a real route returning JSON, so the set cannot drift from the router again.
  */
 export const HEALTH_PATHS: ReadonlySet<string> = new Set<string>([
-  "/api/health", // paddock's own health route (routes/meta.ts)
+  "/api/health", // Managers' own health route (routes/meta.ts)
+  // The CLI contract's busy check (SPEC §4, §8). Exempt for the same reason
+  // health is, and safe for a reason health does not need: the answer is four
+  // integers and the version, with no chat title, session id or project name in
+  // it — SPEC §10 keeps `reasons` out until there is a way for a caller to prove
+  // it is local. `managers service stop`, `managers update` and Watchtower's
+  // pre-update hook all ask it with no credential to offer, and a 401 would be
+  // read by `cli/busy.ts` as exit 1 rather than as "not busy" — so gating it
+  // would fail every stop on an authenticated instance.
+  //
+  // If this answer ever grows a label, this line has to be revisited with it.
+  "/api/busy", // routes/meta.ts
 ]);
 
 /**

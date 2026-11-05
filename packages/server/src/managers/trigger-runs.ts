@@ -126,6 +126,13 @@ export async function beginTriggerRun(p: BeginTriggerRunParams): Promise<Trigger
   };
 }
 
+/**
+ * The error a run still in flight when this process is told to stop is finished
+ * with (the SIGTERM path in start.ts records it rather than leaving the next boot
+ * to call it {@link INTERRUPTED_BY_RESTART}).
+ */
+export const INTERRUPTED_BY_SHUTDOWN = "interrupted by shutdown";
+
 /** The error a run left `running` by a previous server process is finished with (M9.5). */
 export const INTERRUPTED_BY_RESTART = "interrupted by restart";
 

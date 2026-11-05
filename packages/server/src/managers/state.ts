@@ -32,6 +32,16 @@ export class ManagersState {
    * unlocks `memory_op`) and the per-workspace early-fire claim.
    */
   readonly consolidations = new ConsolidationTracker();
+  /**
+   * The trigger runs in flight in THIS process, each with the way to finish it
+   * early: added once a fire's `running` record is written, removed when its
+   * completion hook has finished that record (or the turn never started). In
+   * memory only, so `GET /api/busy` can count them without reading `runs/`
+   * (CLI contract SPEC §4), a run left `running` on disk by a previous process
+   * never counts, and the SIGTERM path (start.ts) can record the ones a stop
+   * cuts short — `interrupt(reason)` finishes the record as failed, once.
+   */
+  readonly liveRuns = new Map<string, (reason: string) => Promise<void>>();
   /** When each chat's previous human turn ran, for its next turn's delta (`chat-delta.ts`). */
   readonly chatTurns = new ChatTurnStore();
 

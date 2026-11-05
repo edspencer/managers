@@ -117,7 +117,11 @@ runs it in the background from login (a launchd LaunchAgent on macOS, a
 `systemd --user` unit on Linux), with `uninstall`, `start`, `stop`, `restart`,
 `status [--json]` and `logs [-f] [-n <lines>]`. `service status` exits **0** when
 it is up and answering, **3** when installed but not, and **4** when there is no
-unit; a bad command, flag or value exits **2**. The CLI follows the shared
+unit; a bad command, flag or value exits **2**. `managers busy` exits **75** while
+a chat turn or trigger run is in flight (0 when idle, 3 when nothing is running),
+and `service stop`/`restart` refuse with 75 unless given `--force`. A SIGTERM
+waits briefly for in-flight work, then records what it cut short; under Docker,
+give the container a `stop_grace_period` of 20 s or more. The CLI follows the shared
 [CLI contract](https://github.com/edspencer/cli-contract) (`cli-contract.json`
 says which of its checks apply).
 

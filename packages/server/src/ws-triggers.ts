@@ -312,6 +312,31 @@ async function fireTriggerForProject(
       await finish(r);
     };
   }
+  // CLI contract (SPEC §4): the run is in flight from here until its record is
+  // finished — counted by `/api/busy`, and recorded by a SIGTERM that cuts it
+  // short. Wrapped LAST, so an interrupt runs the consolidation's #reflection
+  // too, and made once-only, because a stop's interrupt and the dying turn's own
+  // completion can both arrive.
+  let runSessionId: string | null = null;
+  if (run && deps.managers) {
+    const state = deps.managers;
+    const runId = run.runId;
+    const complete = run.onComplete;
+    let finished = false;
+    run.onComplete = async (r) => {
+      if (finished) return;
+      finished = true;
+      try {
+        await complete(r);
+      } finally {
+        state.liveRuns.delete(runId);
+      }
+    };
+    const onComplete = run.onComplete;
+    state.liveRuns.set(runId, (reason) =>
+      onComplete({ success: false, sessionId: runSessionId, error: reason, mcpCalls: {} }),
+    );
+  }
   if (run && opts.onRun) {
     try {
       opts.onRun(run.runId);
@@ -387,6 +412,7 @@ async function fireTriggerForProject(
         project: slug,
       },
     });
+    runSessionId = sessionId;
     // First fire of an accreting trigger: remember the chat it created so the next
     // fire resumes THIS transcript (a resume already had an id).
     if (trigger.run.session === "resume" && !resume && deps.triggerSessions) {
@@ -394,6 +420,9 @@ async function fireTriggerForProject(
     }
     return sessionId;
   } catch {
+    // The turn never started, so its completion hook will not run: the run is
+    // no longer in flight as far as `/api/busy` is concerned.
+    if (run) deps.managers?.liveRuns.delete(run.runId);
     return null;
   }
 }
