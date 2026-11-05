@@ -1,5 +1,116 @@
 # @managers/server
 
+## 0.4.0
+
+### Minor Changes
+
+- [#20](https://github.com/edspencer/managers/pull/20) [`a19f89b`](https://github.com/edspencer/managers/commit/a19f89b59b2e309fed99d90115a896883ff9150e) Thanks [@edspencer](https://github.com/edspencer)! - Align the `managers` CLI with the CLI contract (SPEC 0.2)
+
+  `serve` is now the name for running in the foreground, `/api/health` reports the
+  version it is running, `service status` answers in scriptable exit codes and
+  `--json`, there is a `service logs`, and the generated units are hardened. Ported
+  from Paddock 0.80–0.82, whose CLI this is.
+
+  **Behaviour changes a script can see.** These are why this is a minor:
+
+  - **Usage errors now exit `2`, not `1`.** An unknown command, flag or bad value
+    exits 2 and prints a short usage synopsis after the message. `1` now means only
+    that something genuinely failed.
+  - **`service status` now exits `3` or `4`.** `0` when installed, running and
+    answering; `3` when installed but not running, or running and not answering;
+    `4` when there is no unit. `service logs`, `start`, `stop` and `restart` exit
+    `4` with no unit too.
+  - **An `install`, `start` or `restart` that never answers now exits `1`**, not 0.
+  - **Linux service logs go to a file, not the journal.** Both streams append to
+    `<data-dir>/logs/service.log` (the path macOS already used, now one file rather
+    than two), which Managers rotates itself at 8 MB, keeping three generations.
+    An existing unit keeps the path it names until `managers service install` is
+    re-run.
+  - **The server's logs now go to stderr, not stdout**, so `serve`'s first stdout
+    line is `Managers <version>: <url>`. Docker, Kubernetes and the service units
+    collect both streams; a log shipper reading stdout ALONE is the one thing that
+    changes.
+
+  Everything else is additive:
+
+  - `managers serve` runs the server; **`managers start` stays an alias, for good.**
+  - `GET /api/health` answers `{ ok, version }`, with no auth.
+  - `managers service status --json`: installed / running / answering, the
+    installed and running versions, port, URL, pid, unit, log file and warnings.
+  - `managers service logs [-f] [-n <lines>]`, the last 50 lines by default.
+  - The main `--help` lists all seven `service` actions.
+  - Generated units: Node resolved through symlinks, a `PATH` without per-session
+    entries or missing directories, every systemd `ExecStart` word quoted, and
+    warnings for a vanished Node, a running-vs-installed version gap and (Linux)
+    lingering being off, which is now checked rather than printed at everyone.
+  - **macOS:** `install`, `start` and `restart` no longer lose a race with launchd
+    (`Bootstrap failed: 5: Input/output error`): they wait for a bootout to finish,
+    and retry a bootstrap that returns launchd's race codes 5 or 37.
+  - **Linux:** a reinstall over a RUNNING service now restarts it.
+    `systemctl --user enable --now` does nothing to an active unit, so the old
+    process went on serving the old code.
+
+- [#21](https://github.com/edspencer/managers/pull/21) [`6be9d28`](https://github.com/edspencer/managers/commit/6be9d287c216ccc6117d2dc670b18b790d19e14b) Thanks [@edspencer](https://github.com/edspencer)! - `managers busy`, `GET /api/busy`, a `service stop` that refuses when Managers is mid-turn, and a SIGTERM that finishes or records the work under way
+
+  Wave F2 of the CLI-contract rollout (edspencer/cli-contract SPEC 0.2, §4), ported from Paddock 0.81.
+
+  **New: `managers busy [--json]`.** Asks the running instance whether it is in the
+  middle of something a restart would lose. It exits **0** not busy, **75** busy,
+  **3** when nothing answers, and **1** when something answered but not as
+  Managers' busy check. 75 is `EX_TEMPFAIL`, which Watchtower's
+  `lifecycle.pre-update` hook reads as "skip this one".
+
+  **`service stop` and `service restart` now run that check first and refuse with
+  exit 75 unless `--force` is given.** A script that stops Managers unconditionally
+  needs `--force`, or needs to handle 75: that is the behaviour change in this
+  release. `service uninstall` and `service start` don't check. A forced stop
+  prints the message it would have refused with, prefixed `Overriding:`.
+  **`--force` anywhere else is now a usage error (exit 2)** rather than being
+  silently ignored. When the busy work is chat turns, the refusal says to run the
+  command from a terminal rather than from inside a Managers chat.
+
+  **New: `GET /api/busy`**, answering `{ busy, version, counts }` with four counts:
+  `chat` (chat turns running, triggers and schedules included), `background`
+  (background tasks a live session still holds after its turn), `job` (herdctl
+  scheduler jobs) and **`run`** (Managers trigger runs in flight: from the moment a
+  fire writes its `running` record until that record is finished and committed,
+  which is wider than the turn at both ends). No authentication, because it
+  carries counts and nothing else; in-memory state only.
+
+  **New: `<data-dir>/runtime.json`**, written 0600 once the server is listening and
+  removed when it stops, holding `{ pid, port, url, version, startedAt }`.
+
+  **SIGTERM now finishes or records the work under way, instead of closing at
+  once.** If chat turns or trigger runs are in flight, a stop waits up to 8 seconds
+  for them to end by themselves; whatever is left is recorded — each trigger run's
+  record is finished as `failed`, `error: interrupted by shutdown` (through its own
+  completion hook, so a consolidation still gets its `#reflection` episode and the
+  record is committed), and the log names what was cut short. An idle instance
+  stops at once. Signals are idempotent and the whole stop is bounded at 15
+  seconds, inside launchd's 20-second kill budget. Under Docker, whose default
+  `docker stop` timeout is 10 seconds, give the container a `stop_grace_period` of
+  at least 20 seconds to let the wait run.
+
+- [#22](https://github.com/edspencer/managers/pull/22) [`0b24695`](https://github.com/edspencer/managers/commit/0b24695ce814e4a1d38629a7a641a5b234924a2e) Thanks [@edspencer](https://github.com/edspencer)! - `managers update`, `managers doctor`, and `service install --refresh`
+
+  Wave F3 of the CLI-contract rollout (edspencer/cli-contract SPEC 0.2), ported from Paddock 0.82 and the contract's `reference/`.
+
+  **New: `managers update [--check] [--to <version|tag>] [--yes] [--force] [--json]`** (`upgrade` is a hidden alias). It asks the registry, checks the running instance is not busy, stops the service, installs with the package manager this copy came from, hands over to the new CLI to rewrite the unit, waits for `/api/health` to report the new version, and **rolls back** if it doesn't. Exit codes a script can see: **5** this install can't update itself (a checkout, npx, a container, or a managed install: the right command is printed), **6** the update failed and the old version is running again, **7** it failed and could not be rolled back, **75** busy, **2** no terminal and no `--yes`. `--check` exits 0 whether or not there is an update; read `updateAvailable` from `--json`. Nothing contacts the registry on its own.
+
+  **New: `managers doctor [--json] [--offline]`.** SPEC §1's eight checks (Node against `engines`, the install method, the unit, the running version, the port, linger, the data dir, a newer version), then Managers' own: the configuration loads, and **the security posture `/api/security` reports** (no authentication, trusted-header, any-audience JWTs, batch drive mode), asked of the running instance or computed from this shell's configuration by the server's own rule. Exits 1 if any check failed.
+
+  **New: `managers service install --refresh`** re-renders an existing unit from the settings it records (port, host, data dir), and exits 4 with nothing installed. `service status` repeats what the last `update --check` or `doctor` found (`update` in `--json`, absent rather than null when there's nothing). `service start` and `restart` run `systemctl --user reset-failed` first. A first `service install` that launchd or systemd refuses no longer leaves a unit behind (so `status` doesn't report it installed); a refused reinstall keeps the unit it had.
+
+  **The image** sets `MANAGERS_IN_DOCKER=1` and puts `managers` on `PATH`, so `docker exec <container> managers busy` works as a pre-update hook and `managers update` inside it prints the image to pull and exits 5. Set `MANAGERS_UPDATE_HINT` to have `update` print your own upgrade command instead (for a container or install managed by Ansible, say).
+
+  `--check`, `--to`, `--yes`, `--refresh` and `--offline` exit 2 on commands that can't act on them. See UPDATING.md.
+
+### Patch Changes
+
+- [#15](https://github.com/edspencer/managers/pull/15) [`f0aba1c`](https://github.com/edspencer/managers/commit/f0aba1c88a0074aa72692d1c3685e56e583d208d) Thanks [@edspencer](https://github.com/edspencer)! - "Wake the manager now" wakes the trigger that asked, not only `wake`. A run that sets a task to awaiting-ed now records `raisedBy: {trigger, run}` on it (older tasks are traced through the run id in their log). Answering with wake fires that trigger, or falls back to `wake`, and never a trigger whose behaviour is off. `GET …/managers/wake` returns the same target per task (`trigger`, a `tasks` map, `?task=`), and the switch names a trigger other than `wake` ("runs roadmap").
+
+- [#19](https://github.com/edspencer/managers/pull/19) [`2b760a6`](https://github.com/edspencer/managers/commit/2b760a6fd51bcf3c923f0da43b7e0bf3b335b621) Thanks [@edspencer](https://github.com/edspencer)! - Dependency security updates: `zod` goes to ^4.6.6 (GHSA-mrhx-c7xc-m3w5, memory exhaustion when validating oversized constrained collections; every state write is validated by a strict zod schema) and `body-parser` to 2.4.0 (GHSA-27r3-jxmh-p828, via the MCP SDK's express).
+
 ## 0.3.1
 
 ### Patch Changes
