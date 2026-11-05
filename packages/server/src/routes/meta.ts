@@ -24,6 +24,7 @@ import { resolveModels, resolveDefaultModel } from "../models.js";
 import { sendProjectError } from "../route-errors.js";
 import { evaluateBootPosture, bootPostureInput } from "../boot-posture.js";
 import { cspFor, parseRangeHeader } from "../http-bytes.js";
+import { MANAGERS_VERSION } from "../version.js";
 import { type RouteCtx, type MultipartRequest, type UploadedFile } from "../route-context.js";
 
 export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
@@ -172,23 +173,31 @@ export function registerMetaRoutes(app: FastifyInstance, ctx: RouteCtx): void {
     },
   );
 
+  // The CLI contract's one required server endpoint (SPEC §8): `{ ok, version }`,
+  // no auth. The version is load-bearing rather than decorative — it is how
+  // `managers service status` can say that the version RUNNING differs from the
+  // one installed (an upgrade that never restarted), and how wave C2's
+  // `managers update` will confirm the service came back as the version it just
+  // installed rather than merely coming back. `ALWAYS_PUBLIC_PATHS` in auth.ts
+  // keeps it answerable whatever `MANAGERS_AUTH_MODE` is set to.
   app.get(
     "/api/health",
     {
       schema: {
         tags: ["System"],
         summary: "Health check",
-        description: "Liveness probe. Returns a JSON object `{ ok: true }`.",
+        description:
+          "Liveness probe. Returns a JSON object `{ ok: true, version: \"<semver>\" }`. Never requires authentication.",
         response: {
           200: {
-            description: "Service is up.",
+            description: "Service is up, and the version it is running.",
             type: "object",
             additionalProperties: true,
           },
         },
       },
     },
-    async () => ({ ok: true }),
+    async () => ({ ok: true, version: MANAGERS_VERSION }),
   );
 
   // --- instance-wide settings (issue #385) --------------------------------

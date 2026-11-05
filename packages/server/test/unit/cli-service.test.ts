@@ -40,6 +40,7 @@ import {
   portFromArgv,
   hostFromArgv,
   serviceDir,
+  serviceLogPath,
   LAUNCHD_LABEL,
   SYSTEMD_UNIT,
 } from "../../src/cli/service/spec.js";
@@ -98,13 +99,19 @@ describe("managers CLI: verb dispatch (#796)", () => {
     [["--version"]],
   ])("bare argv %j parses exactly as it did before", (argv) => {
     const command = parseCommand(argv);
-    expect(command.verb).toBe("start");
+    expect(command.verb).toBe("serve");
     expect(command.opts).toEqual(parseArgs(argv));
   });
 
-  it("`start` is an exact synonym for no verb", () => {
+  it("`serve` and `start` are exact synonyms for no verb", () => {
+    // `serve` is the contract's name (SPEC §1); `start` is a PERMANENT alias —
+    // every unit installed before the rename names it, and so do other
+    // people's scripts. All three parse to the same command.
+    expect(parseCommand(["serve"])).toEqual(parseCommand([]));
     expect(parseCommand(["start"])).toEqual(parseCommand([]));
+    expect(parseCommand(["serve"])).toEqual(parseCommand(["start"]));
     expect(parseCommand(["start", "--port", "7299"]).opts.port).toBe("7299");
+    expect(parseCommand(["serve", "--port", "7299"]).opts.port).toBe("7299");
   });
 
   it("parses flags AFTER a verb", () => {
@@ -168,15 +175,23 @@ describe("managers CLI: verb dispatch (#796)", () => {
 
 const BASE = {
   nodePath: "/opt/node/bin/node",
-  scriptPath: "/usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/managers.js",
+  scriptPath: "/usr/local/lib/node_modules/@edspencer/managers/packages/server/dist/cli/managers.js",
   dataDir: "/home/ed/.managers",
   pathEnv: "/opt/node/bin:/usr/bin:/bin",
+  // `servicePath` keeps only directories that exist, so without these the
+  // rendered PATH would depend on whether THIS machine happens to have
+  // /opt/node/bin or /opt/homebrew/bin — which is how a golden unit passes on
+  // the box and fails on a macOS runner for no reason worth debugging.
+  pathExists: () => true,
+  systemDirs: ["/usr/bin", "/bin"] as readonly string[],
 };
 
 describe("managers service: the spec", () => {
-  it("leads the argument vector with the `start` verb", () => {
+  it("leads the argument vector with the `serve` verb", () => {
     // So `launchctl print` shows an argv you can read rather than recognise.
-    expect(buildSpec(BASE).args).toEqual(["start"]);
+    // `serve` rather than `start` since the contract named it (SPEC §1, §7);
+    // `start` stays an alias, so a unit written by an older Managers still runs.
+    expect(buildSpec(BASE).args).toEqual(["serve"]);
   });
 
   /**
@@ -194,7 +209,7 @@ describe("managers service: the spec", () => {
 
   it("forwards a data dir only when one was asked for", () => {
     expect(buildSpec({ ...BASE, dataDirArg: "/srv/pad" }).args).toEqual([
-      "start",
+      "serve",
       "--data-dir",
       "/srv/pad",
     ]);
@@ -202,13 +217,17 @@ describe("managers service: the spec", () => {
 
   it("forwards port, host and verbose", () => {
     const spec = buildSpec({ ...BASE, port: "7299", host: "127.0.0.1", verbose: true });
-    expect(spec.args).toEqual(["start", "--port", "7299", "--host", "127.0.0.1", "--verbose"]);
+    expect(spec.args).toEqual(["serve", "--port", "7299", "--host", "127.0.0.1", "--verbose"]);
   });
 
   it("puts the working directory and logs inside the data dir, not $HOME", () => {
     const spec = buildSpec(BASE);
     expect(spec.workingDirectory).toBe(serviceDir("/home/ed/.managers"));
-    expect(spec.stdoutPath.startsWith(spec.workingDirectory)).toBe(true);
+    // ONE log file, under <dataDir>/logs — not under the service directory, so
+    // it survives an uninstall and the server can rotate it from the data dir
+    // alone (SPEC §7).
+    expect(spec.logPath).toBe(serviceLogPath("/home/ed/.managers"));
+    expect(spec.logPath).toBe("/home/ed/.managers/logs/service.log");
     // $HOME is the obvious choice and the wrong one: a background process has
     // no cwd anyone chose, and it should not sit in a directory full of the
     // user's things. (Until #798 it was worse than untidy — `.managers` was both
@@ -218,8 +237,8 @@ describe("managers service: the spec", () => {
   });
 
   it.each([
-    ["/home/ed/.npm/_npx/399ccf3865bb9552/node_modules/@edspencer/paddock", true],
-    ["/usr/local/lib/node_modules/@edspencer/paddock", false],
+    ["/home/ed/.npm/_npx/399ccf3865bb9552/node_modules/@edspencer/managers", true],
+    ["/usr/local/lib/node_modules/@edspencer/managers", false],
     ["/home/ed/code/_npx-experiments/paddock", false],
     ["/home/ed/code/paddock", false],
   ])("isNpxPath(%s) === %s", (p, expected) => {
@@ -227,11 +246,14 @@ describe("managers service: the spec", () => {
   });
 
   it("reads the port and host back out of an argv", () => {
+    expect(portFromArgv(["serve", "--port", "7299"])).toBe("7299");
+    expect(portFromArgv(["serve", "-p", "7299"])).toBe("7299");
+    expect(portFromArgv(["serve"])).toBe("7234");
+    expect(hostFromArgv(["serve", "--host", "0.0.0.0"])).toBe("0.0.0.0");
+    expect(hostFromArgv(["serve"])).toBe("127.0.0.1");
+    // A unit written before the rename, which is the one still on disk for
+    // everybody who installed one.
     expect(portFromArgv(["start", "--port", "7299"])).toBe("7299");
-    expect(portFromArgv(["start", "-p", "7299"])).toBe("7299");
-    expect(portFromArgv(["start"])).toBe("7234");
-    expect(hostFromArgv(["start", "--host", "0.0.0.0"])).toBe("0.0.0.0");
-    expect(hostFromArgv(["start"])).toBe("127.0.0.1");
   });
 });
 
@@ -254,8 +276,8 @@ describe("managers service: the generated plist", () => {
           <key>ProgramArguments</key>
           <array>
             <string>/opt/node/bin/node</string>
-            <string>/usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/managers.js</string>
-            <string>start</string>
+            <string>/usr/local/lib/node_modules/@edspencer/managers/packages/server/dist/cli/managers.js</string>
+            <string>serve</string>
           </array>
           <key>RunAtLoad</key>
           <true/>
@@ -266,9 +288,9 @@ describe("managers service: the generated plist", () => {
           <key>WorkingDirectory</key>
           <string>/Users/ed/.managers/service</string>
           <key>StandardOutPath</key>
-          <string>/Users/ed/.managers/service/managers.log</string>
+          <string>/Users/ed/.managers/logs/service.log</string>
           <key>StandardErrorPath</key>
-          <string>/Users/ed/.managers/service/managers.error.log</string>
+          <string>/Users/ed/.managers/logs/service.log</string>
           <key>EnvironmentVariables</key>
           <dict>
             <key>PATH</key>
@@ -337,7 +359,7 @@ describe("managers service: the generated plist", () => {
   it("round-trips its own argv", () => {
     const withFlags = renderPlist(buildSpec({ ...BASE, port: "7299", dataDirArg: "/srv/p&d" }));
     expect(parsePlistArgv(withFlags).slice(2)).toEqual([
-      "start",
+      "serve",
       "--port",
       "7299",
       "--data-dir",
@@ -387,15 +409,19 @@ describe("managers service: the generated systemd unit", () => {
 
   it("matches the golden output", () => {
     expect(unit).toMatchInlineSnapshot(`
-      "[Unit]
+      "# Generated by Managers — \`managers service install\` rewrites this file.
+      # Node: /opt/node/bin/node
+      [Unit]
       Description=Managers — persistent, resumable Claude Code sessions, by project
       Documentation=https://github.com/edspencer/managers
 
       [Service]
       Type=simple
-      ExecStart=/opt/node/bin/node /usr/local/lib/node_modules/@edspencer/paddock/packages/server/dist/cli/managers.js start
+      ExecStart=/opt/node/bin/node /usr/local/lib/node_modules/@edspencer/managers/packages/server/dist/cli/managers.js serve
       WorkingDirectory=/home/ed/.managers/service
-      Environment=PATH=/opt/node/bin:/usr/bin:/bin
+      Environment="PATH=/opt/node/bin:/usr/bin:/bin"
+      StandardOutput=append:/home/ed/.managers/logs/service.log
+      StandardError=append:/home/ed/.managers/logs/service.log
       Restart=always
       RestartSec=10
 
@@ -429,7 +455,7 @@ describe("managers service: the generated systemd unit", () => {
 
   it("round-trips its ExecStart", () => {
     expect(parseUnitArgv(renderUnit(buildSpec({ ...BASE, port: "7299" }))).slice(2)).toEqual([
-      "start",
+      "serve",
       "--port",
       "7299",
     ]);
@@ -477,14 +503,33 @@ describe("managers service: the generated systemd unit", () => {
 // The flows, against a recording runner
 // ---------------------------------------------------------------------------
 
+/**
+ * A fake runner that records what was asked of it.
+ *
+ * With no argument it is **a machine with nothing loaded**, which is why
+ * `launchctl print` answers 3 rather than 0: a bare `recorder()` drives the
+ * installs below, and `install` now polls `print` until launchd says the label
+ * has gone (the bootout/bootstrap race, see launchd.ts). A fake that kept
+ * claiming the label was loaded would make every one of those tests sit out the
+ * ten-second bootout timeout and then pass anyway, which is the worst of both.
+ *
+ * Pass a `result` and it answers EVERY command with it, `print` included — that
+ * is what the tests describing one particular launchctl failure want.
+ */
 function recorder(result: Partial<RunResult> = {}): { run: Runner; calls: string[][] } {
   const calls: string[][] = [];
+  const nothingLoaded = Object.keys(result).length === 0;
   const run: Runner = (cmd, args) => {
     calls.push([cmd, ...args]);
+    if (nothingLoaded && cmd === "launchctl" && args[0] === "print")
+      return { status: 3, stdout: "", stderr: "Could not find service" };
     return { status: 0, stdout: "", stderr: "", ...result };
   };
   return { run, calls };
 }
+
+/** The injected sleep, as a no-op: the poll and retry loops without their waits. */
+const noSleep = (): void => undefined;
 
 /**
  * Run `body` with `console.log` diverted, and hand back everything it printed.
@@ -513,7 +558,7 @@ function contextFor(platform: "darwin" | "linux", home: string, run: Runner) {
     platform: platform as NodeJS.Platform,
     nodePath: BASE.nodePath,
     scriptPath: BASE.scriptPath,
-    packageRoot: "/usr/local/lib/node_modules/@edspencer/paddock",
+    packageRoot: "/usr/local/lib/node_modules/@edspencer/managers",
     homeDir: home,
     run,
   };
@@ -538,7 +583,10 @@ describe("managers service: install / uninstall / status flows", () => {
     const backend = createLaunchdBackend(run, home);
     backend.install(spec());
 
-    expect(calls.map((c) => c[1])).toEqual(["bootout", "bootstrap", "kickstart"]);
+    // `print` between the two is the bootout poll: launchctl returns from a
+    // bootout before the job has gone, and bootstrapping into that window is
+    // the exit-5 race (see launchd.ts).
+    expect(calls.map((c) => c[1])).toEqual(["bootout", "print", "bootstrap", "kickstart"]);
     // `load`/`unload` are the legacy API; on a modern macOS they are shims that
     // report success in cases where `bootstrap` reports the actual error.
     expect(calls.flat()).not.toContain("load");
@@ -548,19 +596,61 @@ describe("managers service: install / uninstall / status flows", () => {
   });
 
   it("launchd install surfaces a bootstrap failure rather than claiming success", () => {
+    // Exit 5 is retried first (the bootout/bootstrap race), hence `noSleep`;
+    // what this pins is that running out of retries still REPORTS, with
+    // launchd's own words, rather than returning as if it had worked.
     const { run } = recorder({ status: 5, stderr: "Bootstrap failed: 5: Input/output error" });
-    expect(() => createLaunchdBackend(run, home).install(spec())).toThrow(/Input\/output error/);
+    expect(() => createLaunchdBackend(run, home, noSleep).install(spec())).toThrow(
+      /Input\/output error/,
+    );
   });
 
-  it("systemd install reloads the daemon before enabling", () => {
+  it("systemd install reloads the daemon before enabling, and does not restart a stopped unit", () => {
     // Without the reload the manager serves the cached previous unit and an
     // "upgrade" silently changes nothing.
+    //
+    // And NO restart on a first install: `enable --now` has just started it, and a second start
+    // milliseconds later eats half of systemd's five-in-ten-seconds start limit for nothing.
     const { run, calls } = recorder();
     createSystemdBackend(run, home).install(spec());
     expect(calls).toEqual([
       ["systemctl", "--user", "daemon-reload"],
       ["systemctl", "--user", "enable", "--now", "managers.service"],
     ]);
+  });
+
+  /**
+   * The reinstall-over-a-running-service case, which is the one that bit.
+   *
+   * `systemctl --user enable --now` does NOTHING to a unit that is already active, so a reinstall
+   * wrote a new unit and left the old process serving — and reported success. That is exactly the
+   * state `managers update`'s rollback is in: it runs `service install --refresh` while the FAILED
+   * version is still up, so without the restart the "restored" service was the broken one, and a
+   * clean exit 6 became an exit 7. Found end to end by scripts/update-registry.mjs; a unit test of
+   * the call sequence could not see it, because the call sequence was right.
+   */
+  it("systemd install RESTARTS a unit that was already active", () => {
+    const h = fs.mkdtempSync(path.join(os.tmpdir(), "managers-reinstall-"));
+    try {
+      const target = buildSpec({ ...BASE, dataDir: path.join(h, ".managers") });
+      createSystemdBackend(recorder().run, h).install(target);
+      // Now it is running, as far as the manager is concerned.
+      const calls: string[][] = [];
+      const run: Runner = (cmd, args) => {
+        calls.push([cmd, ...args]);
+        if (args[1] === "is-active") return { status: 0, stdout: "active\n", stderr: "" };
+        return { status: 0, stdout: "", stderr: "" };
+      };
+      createSystemdBackend(run, h).install(target);
+      expect(calls).toEqual([
+        ["systemctl", "--user", "is-active", "managers.service"],
+        ["systemctl", "--user", "daemon-reload"],
+        ["systemctl", "--user", "enable", "--now", "managers.service"],
+        ["systemctl", "--user", "restart", "managers.service"],
+      ]);
+    } finally {
+      fs.rmSync(h, { recursive: true, force: true });
+    }
   });
 
   it("status reports the port recorded in the INSTALLED unit, not today's default", () => {
@@ -574,7 +664,12 @@ describe("managers service: install / uninstall / status flows", () => {
       registered: true,
       running: true,
       pid: "99",
-      argv: ["start", "--port", "7299"],
+      argv: ["serve", "--port", "7299"],
+      // Reported separately so `status` can say "the Node it runs has gone"
+      // (SPEC §7) — only answerable from the paths in the FILE.
+      nodePath: BASE.nodePath,
+      cliPath: BASE.scriptPath,
+      logPath: path.join(home, ".managers", "logs", "service.log"),
       keepsAlive: true,
     });
   });
@@ -692,9 +787,9 @@ describe("managers service: install / uninstall / status flows", () => {
     const backend = createLaunchdBackend(run, home);
     const s = spec();
     backend.install(s);
-    fs.writeFileSync(s.stdoutPath, "boom\n");
+    fs.writeFileSync(s.logPath, "boom\n");
     backend.uninstall();
-    expect(fs.readFileSync(s.stdoutPath, "utf8")).toBe("boom\n");
+    expect(fs.readFileSync(s.logPath, "utf8")).toBe("boom\n");
   });
 });
 
@@ -720,14 +815,14 @@ describe("managers service: start / stop / restart (#873)", () => {
     // a request to the supervisor. Dispatch is on argv[0] alone, so the shared
     // word is never ambiguous — but it is exactly the kind of thing that breaks
     // silently, so it is pinned.
-    for (const action of ["start", "stop", "restart"] as const) {
+    for (const action of ["start", "stop", "restart", "logs"] as const) {
       expect(parseCommand(["service", action])).toEqual({
         verb: "service",
         action,
         opts: parseArgs([]),
       });
     }
-    expect(parseCommand(["start"])).toEqual({ verb: "start", opts: parseArgs([]) });
+    expect(parseCommand(["start"])).toEqual({ verb: "serve", opts: parseArgs([]) });
     expect(SERVICE_USAGE).toContain("managers service restart");
   });
 
@@ -773,9 +868,119 @@ describe("managers service: start / stop / restart (#873)", () => {
     backend.restart();
     expect(calls.map((c) => c.slice(1))).toEqual([
       ["bootout", `gui/${process.getuid?.() ?? 0}/${LAUNCHD_LABEL}`],
+      // The bootout poll: see launchd.ts's race note, and the tests below.
+      ["print", `gui/${process.getuid?.() ?? 0}/${LAUNCHD_LABEL}`],
       ["bootstrap", `gui/${process.getuid?.() ?? 0}`, plistPath(home)],
       ["kickstart", "-k", `gui/${process.getuid?.() ?? 0}/${LAUNCHD_LABEL}`],
     ]);
+  });
+
+  // -------------------------------------------------------------------------
+  // The bootout/bootstrap race. This is the bug that failed Managers 0.80.0's
+  // first release run: CI's real-launchd job ran `managers service restart`, and
+  // `bootstrap` landed inside launchd's unfinished bootout and came back
+  // `exit 5: Input/output error`. It had passed on the PR, because it is a
+  // race. Both halves are pinned here, and each is asserted to be LOAD-BEARING
+  // by a case the other half cannot rescue.
+  // -------------------------------------------------------------------------
+
+  /**
+   * A fake launchd whose bootout takes `lingerFor` polls to take effect, and
+   * whose bootstrap fails while the job is still there.
+   *
+   * That is the real failure mode in miniature: a bootstrap issued too early
+   * does not queue, it errors.
+   */
+  function lingeringLaunchd(lingerFor: number): { run: Runner; calls: string[][] } {
+    const calls: string[][] = [];
+    let loaded = true;
+    let polls = 0;
+    const run: Runner = (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (args[0] === "print") {
+        if (loaded && ++polls >= lingerFor) loaded = false;
+        return loaded
+          ? { status: 0, stdout: "\tstate = running\n\tpid = 42\n", stderr: "" }
+          : { status: 3, stdout: "", stderr: "Could not find service" };
+      }
+      if (args[0] === "bootstrap" && loaded)
+        return { status: 5, stdout: "", stderr: "Bootstrap failed: 5: Input/output error" };
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    return { run, calls };
+  }
+
+  it("restart waits for the bootout to take effect before bootstrapping", () => {
+    // Three polls' worth of teardown. Without the wait, the bootstrap would be
+    // the first thing after the bootout and would fail with 5.
+    const { run, calls } = lingeringLaunchd(3);
+    const backend = createLaunchdBackend(run, home, noSleep);
+    fs.mkdirSync(path.dirname(plistPath(home)), { recursive: true });
+    fs.writeFileSync(plistPath(home), "<plist/>");
+
+    expect(() => backend.restart()).not.toThrow();
+
+    const verbs = calls.map((c) => c[1]);
+    expect(verbs).toEqual(["bootout", "print", "print", "print", "bootstrap", "kickstart"]);
+    // The assertion that makes this a test of the FIX and not of the fake: the
+    // bootstrap happened after the last poll, not before it.
+    expect(verbs.lastIndexOf("print")).toBeLessThan(verbs.indexOf("bootstrap"));
+  });
+
+  it("a bootstrap that loses the race anyway is retried, not reported", () => {
+    // The half the poll cannot cover: a bootout this process never issued is
+    // still in flight — `service start` after another process's `service stop`.
+    // There is nothing to poll for, because from here the job is already gone.
+    const calls: string[][] = [];
+    let attempts = 0;
+    const run: Runner = (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (args[0] === "print") return { status: 3, stdout: "", stderr: "" };
+      if (args[0] === "bootstrap" && ++attempts < 3)
+        return { status: 5, stdout: "", stderr: "Bootstrap failed: 5: Input/output error" };
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    fs.mkdirSync(path.dirname(plistPath(home)), { recursive: true });
+    fs.writeFileSync(plistPath(home), "<plist/>");
+
+    expect(() => createLaunchdBackend(run, home, noSleep).start()).not.toThrow();
+    expect(calls.filter((c) => c[1] === "bootstrap")).toHaveLength(3);
+    // It still kicks it afterwards: a retried bootstrap is a successful one.
+    expect(calls.at(-1)?.[1]).toBe("kickstart");
+  });
+
+  it("a bootstrap failure that is NOT the race is reported at once", () => {
+    // The control. Retrying a malformed plist only delays the message, so only
+    // launchd's two race codes are retried — and this proves 112 is not one.
+    const calls: string[][] = [];
+    const run: Runner = (cmd, args) => {
+      calls.push([cmd, ...args]);
+      if (args[0] === "print") return { status: 3, stdout: "", stderr: "" };
+      if (args[0] === "bootstrap")
+        return { status: 112, stdout: "", stderr: "Bootstrap failed: 112: Could not find domain" };
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    fs.mkdirSync(path.dirname(plistPath(home)), { recursive: true });
+    fs.writeFileSync(plistPath(home), "<plist/>");
+
+    expect(() => createLaunchdBackend(run, home, noSleep).start()).toThrow(/Could not find domain/);
+    expect(calls.filter((c) => c[1] === "bootstrap")).toHaveLength(1);
+  });
+
+  it("a job that never goes is reported by the bootstrap, not by a hang", () => {
+    // The poll times out rather than throwing: the bootstrap is the thing that
+    // knows what went wrong, and it says so in launchd's own words. What must
+    // not happen is an unbounded wait.
+    const { run, calls } = lingeringLaunchd(Number.POSITIVE_INFINITY);
+    fs.mkdirSync(path.dirname(plistPath(home)), { recursive: true });
+    fs.writeFileSync(plistPath(home), "<plist/>");
+
+    expect(() => createLaunchdBackend(run, home, noSleep).restart()).toThrow(
+      /Input\/output error/,
+    );
+    // It gave up polling, and it gave up retrying: neither loop is unbounded.
+    expect(calls.filter((c) => c[1] === "print").length).toBeLessThan(100);
+    expect(calls.filter((c) => c[1] === "bootstrap")).toHaveLength(6);
   });
 
   it("systemd start/stop/restart use the verbs, and never touch enable/disable", () => {
@@ -1073,7 +1278,7 @@ describe("managers service: refusals", () => {
     platform: "darwin" as NodeJS.Platform,
     nodePath: BASE.nodePath,
     scriptPath: BASE.scriptPath,
-    packageRoot: "/usr/local/lib/node_modules/@edspencer/paddock",
+    packageRoot: "/usr/local/lib/node_modules/@edspencer/managers",
     homeDir: "/Users/ed",
     run: recorder().run,
   };

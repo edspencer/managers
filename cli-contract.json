@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/@edspencer/cli-conformance/schemas/cli-contract.schema.json",
+  "name": "Managers",
+  "serve": {
+    "args": [
+      "serve",
+      "--port",
+      "{port}",
+      "--host",
+      "127.0.0.1",
+      "--data-dir",
+      "{home}/managers"
+    ],
+    "timeoutMs": 60000
+  },
+  "env": {
+    "MANAGERS_DATA_DIR": "{home}/managers",
+    "MANAGERS_DRIVE_MODE": "batch",
+    "MANAGERS_ALLOW_BATCH_DRIVE": "1",
+    "MANAGERS_AUTH_MODE": "none",
+    "MANAGERS_DANGEROUSLY_ALLOW_NO_AUTH": null,
+    "MANAGERS_PROJECTS_DIR": null,
+    "MANAGERS_AUTH_JWKS_URL": null,
+    "MANAGERS_AUTH_JWT_HEADER": null,
+    "MANAGERS_SELF_MCP": null,
+    "MANAGERS_SELF_MCP_WRITE": null,
+    "MANAGERS_SELF_MCP_PROJECTS": null,
+    "CLAUDE_CODE_OAUTH_TOKEN": null,
+    "ANTHROPIC_API_KEY": null,
+    "CLAUDE_CONFIG_DIR": null,
+    "HOST": null,
+    "PORT": null,
+    "NODE_ENV": null
+  },
+  "checks": {
+    "version": true,
+    "help": true,
+    "unknown-flag": true,
+    "service-status": true,
+    "service-status-json": true,
+    "busy": {
+      "skip": "no `managers busy` until wave F2 of the CLI-contract rollout"
+    },
+    "busy-json": {
+      "skip": "no `managers busy` until wave F2 of the CLI-contract rollout"
+    },
+    "serve-banner": true,
+    "serve-health": true
+  }
+}

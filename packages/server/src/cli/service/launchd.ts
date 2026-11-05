@@ -37,7 +37,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { LAUNCHD_LABEL, type ServiceSpec } from "./spec.js";
-import type { Runner, ServiceBackend, ServiceState } from "./backend.js";
+import type { LingerState, Runner, ServiceBackend, ServiceState } from "./backend.js";
 
 /** `~/Library/LaunchAgents/net.edspencer.managers.plist`. */
 export function plistPath(homeDir: string = os.homedir()): string {
@@ -81,6 +81,12 @@ function xmlEscape(s: string): string {
  *
  * No `MANAGERS_DATA_DIR`: see `buildSpec`. One `~/.managers` instance, reachable
  * from the service and from a terminal.
+ *
+ * `StandardOutPath` and `StandardErrorPath` name the SAME file (SPEC §7).
+ * launchd opens both in append mode, so interleaving is what a reader wants
+ * anyway — a warning and the stack trace that followed it used to land in two
+ * separate files, in an order nothing recorded. One file is also what makes
+ * `managers service logs` one implementation across platforms.
  */
 export function renderPlist(spec: ServiceSpec): string {
   const argv = [spec.nodePath, spec.scriptPath, ...spec.args];
@@ -104,9 +110,9 @@ ${strings}
     <key>WorkingDirectory</key>
     <string>${xmlEscape(spec.workingDirectory)}</string>
     <key>StandardOutPath</key>
-    <string>${xmlEscape(spec.stdoutPath)}</string>
+    <string>${xmlEscape(spec.logPath)}</string>
     <key>StandardErrorPath</key>
-    <string>${xmlEscape(spec.stderrPath)}</string>
+    <string>${xmlEscape(spec.logPath)}</string>
     <key>EnvironmentVariables</key>
     <dict>
       <key>PATH</key>
@@ -153,6 +159,17 @@ export function plistKeepsAlive(xml: string): boolean {
   return /<key>KeepAlive<\/key>\s*<true\s*\/>/.test(xml);
 }
 
+/** The log file an installed plist appends to, read back from `StandardOutPath`. */
+export function parsePlistLogPath(xml: string): string | undefined {
+  const m = /<key>StandardOutPath<\/key>\s*<string>([\s\S]*?)<\/string>/.exec(xml);
+  if (m === null) return undefined;
+  return m[1]
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, "<")
+    .replace(/&amp;/g, "&");
+}
+
 /**
  * Read liveness out of `launchctl print gui/<uid>/<label>`.
  *
@@ -185,8 +202,113 @@ function domain(): string {
   return `gui/${process.getuid?.() ?? 0}`;
 }
 
-export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()): ServiceBackend {
+/**
+ * ## The bootout/bootstrap race (#984)
+ *
+ * `launchctl bootout` returns as soon as launchd has ACCEPTED the request, not
+ * once the job has gone. Every sequence below that boots out and then
+ * bootstraps the same label therefore races launchd's own teardown, and when it
+ * loses, `bootstrap` fails with:
+ *
+ * ```
+ * launchctl bootstrap failed (exit 5): Input/output error
+ * ```
+ *
+ * Exit 5 is `EIO`, which is launchd's generic "I cannot do that right now" and
+ * the classic symptom of this race. It is timing-dependent, so it passes
+ * locally and on a PR and then fails on a release: Managers 0.80.0's first
+ * release run failed exactly here, in CI's real-launchd job, on
+ * `managers service restart`.
+ *
+ * Both halves of the fix are needed, and neither is sufficient:
+ *
+ *  - **Wait for the job to go.** After a bootout, poll `launchctl print` until
+ *    it reports the label gone (a non-zero exit), up to {@link BOOTOUT_POLLS}
+ *    times. That removes the race in the case we caused it.
+ *  - **Retry the bootstrap.** A bootout we did NOT issue can still be in
+ *    flight — `service start` after a separate process's `service stop`, or a
+ *    login racing a logout — and there is nothing to poll for there, because
+ *    from this process's point of view the job was already gone. So a
+ *    bootstrap that fails with a race code is retried with a short backoff.
+ *
+ * Timing out the poll is not an error: the retry is the backstop, and a job
+ * that will not go is a real failure the bootstrap reports in its own words.
+ */
+const BOOTOUT_POLLS = 40;
+const BOOTOUT_POLL_MS = 250; // 40 × 250ms = 10s
+const BOOTSTRAP_ATTEMPTS = 6;
+const BOOTSTRAP_BACKOFF_MS = 500;
+
+/**
+ * launchctl exits that mean "try again", as opposed to "no".
+ *
+ * `5` is `EIO`, what the release failure printed. `37` is launchd's "operation
+ * already in progress", which is the same race seen from the other side: the
+ * bootout is still being processed. Anything else — a malformed plist, a label
+ * genuinely already loaded, a permission problem — is reported, not retried,
+ * because retrying it only delays the message by three seconds.
+ */
+const BOOTSTRAP_RACE_CODES = new Set([5, 37]);
+
+/**
+ * Block this thread for `ms`.
+ *
+ * The backend's {@link Runner} is synchronous (`execFileSync`) and so is every
+ * `ServiceBackend` method, so the wait has to be too — making `install` async
+ * would ripple through the whole service CLI for a sleep. `Atomics.wait` on a
+ * throwaway buffer is the built-in way to do it; `setTimeout` cannot help here
+ * and spinning on `Date.now()` would burn a core.
+ *
+ * Injectable because the unit tests drive the retry path with a fake runner
+ * that fails every attempt: with the real sleep, pinning the retry count would
+ * cost three seconds per case.
+ */
+export function sleepSync(ms: number): void {
+  if (ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+export function createLaunchdBackend(
+  run: Runner,
+  homeDir: string = os.homedir(),
+  sleep: (ms: number) => void = sleepSync,
+): ServiceBackend {
   const file = plistPath(homeDir);
+
+  /**
+   * Boot the job out and wait until launchd agrees it has gone — see the race
+   * note above. The bootout's own result is deliberately not inspected: "there
+   * was no previous service" is the expected case on a first install, and a
+   * bootout that genuinely failed shows up as a job that is still there, which
+   * is what the poll below is looking at anyway.
+   */
+  const bootoutAndWait = (): void => {
+    run("launchctl", ["bootout", target()]);
+    // Counted, not timed: an injected no-op sleep has to terminate the loop
+    // too, and a wall-clock deadline with a no-op sleep is a ten-second spin.
+    for (let poll = 1; poll <= BOOTOUT_POLLS; poll++) {
+      // A non-zero `print` is launchd saying it has never heard of the label,
+      // which is precisely the state `bootstrap` needs.
+      if (run("launchctl", ["print", target()]).status !== 0) return;
+      if (poll < BOOTOUT_POLLS) sleep(BOOTOUT_POLL_MS);
+    }
+  };
+
+  /** Bootstrap the plist, retrying the race codes. Throws with launchctl's own words. */
+  const bootstrapOrThrow = (): void => {
+    for (let attempt = 1; ; attempt++) {
+      // NOT `load`/`unload`: those are the legacy API, and on a modern macOS
+      // they are shims over this one that report success in cases where it
+      // reports the actual error.
+      const boot = run("launchctl", ["bootstrap", domain(), file]);
+      if (boot.status === 0) return;
+      if (attempt >= BOOTSTRAP_ATTEMPTS || !BOOTSTRAP_RACE_CODES.has(boot.status ?? -1)) {
+        throw new Error(launchctlFailure("bootstrap", boot));
+      }
+      sleep(BOOTSTRAP_BACKOFF_MS);
+    }
+  };
+
   return {
     platform: "darwin",
     unitPath: file,
@@ -195,19 +317,18 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
     install(spec: ServiceSpec): void {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.mkdirSync(spec.workingDirectory, { recursive: true });
+      // launchd creates neither the log file's directory nor, reliably, a log
+      // file whose parent is missing — the job just fails to spawn.
+      fs.mkdirSync(path.dirname(spec.logPath), { recursive: true });
       fs.writeFileSync(file, renderPlist(spec), "utf8");
 
       // `bootstrap` fails outright if the label is already loaded, so a
-      // reinstall has to unload first. A first install has nothing to unload,
-      // and says so on stderr — ignored rather than reported, because "there
-      // was no previous service" is the expected case, not a problem.
-      run("launchctl", ["bootout", target()]);
-
-      // NOT `load`/`unload`: those are the legacy API, and on a modern macOS
-      // they are shims over this one that report success in cases where it
-      // reports the actual error.
-      const boot = run("launchctl", ["bootstrap", domain(), file]);
-      if (boot.status !== 0) throw new Error(launchctlFailure("bootstrap", boot));
+      // reinstall has to unload first — and has to WAIT for that, which is what
+      // `bootoutAndWait` is for (see the race note). A first install has
+      // nothing to unload, and says so on stderr: ignored rather than reported,
+      // because "there was no previous service" is the expected case.
+      bootoutAndWait();
+      bootstrapOrThrow();
       // `RunAtLoad` should already have started it; `kickstart -k` makes that
       // true rather than probable, and is the same command a later restart uses.
       run("launchctl", ["kickstart", "-k", target()]);
@@ -227,10 +348,13 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
      * Managers is not merely idle, it is absent from the domain — and `start` on
      * a label launchd has never heard of fails. Bootstrapping is also what a
      * login does, so `service start` and the next login take the same path.
+     *
+     * No bootout to wait on here, but the retry in `bootstrapOrThrow` still
+     * earns its keep: the `stop` that booted it out may have been a different
+     * `managers` process seconds ago, and launchd may not have finished with it.
      */
     start(): void {
-      const boot = run("launchctl", ["bootstrap", domain(), file]);
-      if (boot.status !== 0) throw new Error(launchctlFailure("bootstrap", boot));
+      bootstrapOrThrow();
       run("launchctl", ["kickstart", target()]);
     },
 
@@ -261,11 +385,13 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
      * service that is stopped. This sequence is identical to `install`'s minus
      * writing the plist, which also gives `restart` the property the issue asks
      * for — the unit is re-read on the way up, so an edited plist takes effect.
+     *
+     * This is the sequence that failed Managers 0.80.0's release run: bootout
+     * and bootstrap back to back, with nothing between them. See the race note.
      */
     restart(): void {
-      run("launchctl", ["bootout", target()]);
-      const boot = run("launchctl", ["bootstrap", domain(), file]);
-      if (boot.status !== 0) throw new Error(launchctlFailure("bootstrap", boot));
+      bootoutAndWait();
+      bootstrapOrThrow();
       run("launchctl", ["kickstart", "-k", target()]);
     },
 
@@ -279,6 +405,7 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
         printed.status === 0
           ? parseLaunchctlPrint(printed.stdout)
           : { running: false, pid: undefined };
+      const logPath = parsePlistLogPath(xml);
       return {
         registered: true,
         running: parsed.running,
@@ -286,16 +413,16 @@ export function createLaunchdBackend(run: Runner, homeDir: string = os.homedir()
         // Strip the interpreter and script: what a reader wants from `status`
         // is the Managers invocation, not the absolute path to node twice.
         argv: argv.slice(2),
+        ...(argv[0] !== undefined ? { nodePath: argv[0] } : {}),
+        ...(argv[1] !== undefined ? { cliPath: argv[1] } : {}),
+        ...(logPath !== undefined ? { logPath } : {}),
         keepsAlive: plistKeepsAlive(xml),
       };
     },
 
-    logsHint(spec: ServiceSpec): string {
-      return `  Logs: ${spec.stdoutPath}\n        ${spec.stderrPath}`;
-    },
-
-    lingerNote(): string | undefined {
-      return undefined;
+    /** launchd has no linger: a LaunchAgent's lifetime IS the login session. */
+    linger(): LingerState {
+      return { applies: false };
     },
   };
 }
