@@ -118,6 +118,9 @@ function baseEnv() {
     XDG_CONFIG_HOME: path.join(fakeHome, ".config"),
     MANAGERS_DATA_DIR: data,
     MANAGERS_DRIVE_MODE: "batch",
+    // Managers refuses batch drive at boot without this (M14.5), and the SERVICE inherits this
+    // env through the stand-in systemctl, so it has to be here, not only on a foreground serve.
+    MANAGERS_ALLOW_BATCH_DRIVE: "1",
     MANAGERS_AUTH_MODE: "none",
     STANDIN_SYSTEMD_DIR: standinDir,
     npm_config_prefix: prefix,

@@ -28,7 +28,7 @@ export const MANAGERS_SERVICE: ServiceIdentity = {
   tool: "managers",
   label: LAUNCHD_LABEL,
   unit: SYSTEMD_UNIT,
-  description: "Managers — persistent, resumable Claude Code sessions, by project",
+  description: "Managers — scheduled manager agents for long-running objectives",
   documentation: "https://github.com/edspencer/managers",
 };
 
