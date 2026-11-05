@@ -13,7 +13,7 @@ to the exceptions file AND a row to the table below, with the reason it cannot
 be reached. An exception the check reports as unmatched should be removed from
 both.
 
-Last triaged: 2026-10-17 (task t-260930-a6xx).
+Last triaged: 2026-11-05. On 2026-11-05 `zod` went to ^4.6.6 (GHSA-mrhx-c7xc-m3w5, memory exhaustion validating oversized constrained collections — reachable, since every state write goes through a strict zod schema) and `body-parser` to 2.4.0 in the lockfile (GHSA-27r3-jxmh-p828, via the MCP SDK's express); nodejs-whisper and one more vite advisory were triaged below, and the braces exception, which no longer matches anything, was removed. Before that: 2026-10-17 (task t-260930-a6xx).
 
 **Audit with dev dependencies included.** `npm audit` omits devDependencies
 when `NODE_ENV=production` is set (as it is on some dev boxes), which silently
@@ -43,7 +43,7 @@ two hardenings marked with a test.
 | `overrides: dockerode → uuid ^11.1.1` | GHSA-w5hq-g745-h8pq (and with it the dockerode / `@herdctl/core` / `@herdctl/chat` entries, which only carried it). Unreachable anyway: dockerode only calls `uuid.v4()` with no buffer. Root `overrides` apply to this lockfile, not to the published `@edspencer/managers` npm package, whose installs resolve dockerode's own `uuid` ^10. |
 | `tsx` 4.19.1 → 4.23.15 (dev) | GHSA-67mh-4wv8-2f99 for tsx's own esbuild (vite 5's copy remains, below) |
 | `vite` 5.4.6 → 5.4.21 (dev) | the vite advisories fixed within 5.4 (`server.fs` bypasses, `launch-editor` injection) |
-| `npm audit fix` (lockfile only), dev | `@changesets/*` chain (`@changesets/pre`, `read-yaml-file`, `js-yaml`, `argparse`), which closed every advisory of the `@changesets` packages' own. They stay listed only as dependents of `braces` and `sprintf-js`, below |
+| `npm audit fix` (lockfile only), dev | `@changesets/*` chain (`@changesets/pre`, `read-yaml-file`, `js-yaml`, `argparse`), which closed every advisory of the `@changesets` packages' own. They stay listed only as dependents of `sprintf-js`, below |
 | `npm audit fix` (lockfile only) | `@fastify/busboy`, `@grpc/grpc-js`, `@hono/node-server`, `hono`, `@modelcontextprotocol/sdk`, `brace-expansion`, `dompurify`, `fast-uri` (both lines), `ip-address`, `qs` |
 
 ## Still open
@@ -64,7 +64,7 @@ left as a follow-up; it would close every fastify row below.
 | [GHSA-p68q-wchp-6fh7](https://github.com/advisories/GHSA-p68q-wchp-6fh7) | fastify 4.28.1 | high | Accept (fastify 5) | Needs encapsulated `setNotFoundHandler`s with their own `preHandler`. There is one root not-found handler (SPA shell / 404) and auth is a global `onRequest` hook, so no guard can be skipped. |
 | [GHSA-c96f-x56v-gq3h](https://github.com/advisories/GHSA-c96f-x56v-gq3h) | find-my-way 8.2.2 | high | Accept (fastify 5) | HTTP/2 only; the server never sets `http2`. |
 | [GHSA-83w8-p2f5-377r](https://github.com/advisories/GHSA-83w8-p2f5-377r) | @fastify/static 7.0.4 | high | Accept (fastify 5) | A bypass of route guards in front of static files. Nothing guards a static route specifically (auth is global), it is registered with `wildcard: false`, and it serves only the compiled web bundle, which holds no secrets (`/assets/` is already auth-exempt). |
-| [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) | braces 3.0.3 (via micromatch, fast-glob, shelljs, nodejs-whisper; and dev-only via `@changesets/cli`) | high | Accept (no fix) | No fixed braces release exists. The chain is the OPTIONAL `nodejs-whisper` dependency, used only when dictation is set to `local` (default `off`), and the paths it handles are server-built (`mkdtemp` dir + `audio.wav`), never user text. The dev-only path is `@changesets/cli` globbing this repo's own package files in the release workflow. Also flags micromatch, fast-glob, shelljs and nodejs-whisper themselves, which carry only this advisory. |
+| [GHSA-2f48-3555-fpx6](https://github.com/advisories/GHSA-2f48-3555-fpx6) | nodejs-whisper 0.2.9 | critical | Accept (fix is 0.4, a major) | Command injection through a crafted audio file PATH interpolated into a shell `ffmpeg` call. The dependency is OPTIONAL and used only when dictation is set to `local` (default `off`). The only path it is ever given is server-built: `whisper-local.ts` writes `<os.tmpdir()>/paddock-whisper-XXXXXX/audio.wav` (an `mkdtemp` dir), never anything from the upload's name, and transcodes to WAV with ffmpeg itself first. 0.4 adds a native addon (`node-addon-api`) and is a separate change. |
 | [GHSA-w2qp-rph6-63g4](https://github.com/advisories/GHSA-w2qp-rph6-63g4) | fastify 4.28.1 | moderate | Accept (fastify 5) | Needs a root-level primitive body schema on a Fastify route; the only ones are MCP tool input schemas, which Fastify never compiles. |
 | [GHSA-444r-cwp2-x5xf](https://github.com/advisories/GHSA-444r-cwp2-x5xf) | fastify 4.28.1 | moderate | Accept (fastify 5) | Needs `trustProxy` set; it never is. The `/mcp` guard reads the socket, not `req.protocol` (`routes/mcp.ts`). |
 | [GHSA-4mh8-r7rc-xpvc](https://github.com/advisories/GHSA-4mh8-r7rc-xpvc) | fastify 4.28.1 | moderate | Accept (fastify 5) | HTTP/2 plus `reply.trailer()`; neither is used. |
@@ -77,6 +77,7 @@ left as a follow-up; it would close every fastify row below.
 | [GHSA-5gmw-xhrv-c9v3](https://github.com/advisories/GHSA-5gmw-xhrv-c9v3) | tinypool 1.1.1 (via vitest) | critical | Accept, dev-only (vitest 5) | A prototype-pollution gadget: needs attacker-controlled data polluting `Object.prototype` inside the test process, which only runs this repo's own tests. No tinypool 1.x fix; vitest 2–4 require 1.x. |
 | [GHSA-85c8-ppgw-ccpr](https://github.com/advisories/GHSA-85c8-ppgw-ccpr) | tinypool 1.1.1 (via vitest) | critical | Accept, dev-only (vitest 5) | As GHSA-5gmw-xhrv-c9v3. |
 | [GHSA-fx2h-pf6j-xcff](https://github.com/advisories/GHSA-fx2h-pf6j-xcff) | vite 5.4.21 | high | Accept, dev-only (vite 6) | Windows-only `server.fs.deny` bypass in the vite DEV server. Production serves the built bundle through Fastify; vite never runs there. |
+| [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm) | vite 5.4.21 | high | Accept, dev-only (vite 6) | Windows-only `launch-editor` existence-check bypass in the vite DEV server. Production serves the built bundle through Fastify; vite never runs there. Vite 5's other new advisories (GHSA-r825-w8mm-5pxw, GHSA-698v-4r3x-3vcv, GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22) are dev-server only too and don't gate CI. |
 | [GHSA-4w7w-66w2-5vf9](https://github.com/advisories/GHSA-4w7w-66w2-5vf9) | vite 5.4.21 | moderate | Accept, dev-only (vite 6) | Dev-server path traversal in optimized-deps `.map` handling; the dev server binds loopback by default and never runs in production. |
 | [GHSA-v6wh-96g9-6wx3](https://github.com/advisories/GHSA-v6wh-96g9-6wx3) | vite 5.4.21 | moderate | Accept, dev-only (vite 6) | Windows-only (`launch-editor` UNC paths), dev server only. |
 | [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99) | esbuild 0.21.5 (via vite 5) | moderate | Accept, dev-only (vite 6) | esbuild's own serve mode accepting cross-origin requests; vite uses esbuild as a transformer, and the dev server never runs in production. |
@@ -85,5 +86,5 @@ left as a follow-up; it would close every fastify row below.
 
 npm's "vulnerable packages" count is larger than the number of distinct
 problems: `@fastify/swagger-ui`, `mermaid`, `react-router-dom`, `micromatch`,
-`fast-glob`, `shelljs`, `nodejs-whisper`, `@vitest/coverage-v8`, `@vitejs/plugin-react`, `vite-node`, `@changesets/*`, `@manypkg/get-packages`, `globby`, `argparse`, `js-yaml` and `read-yaml-file` are listed only because they depend
+`fast-glob`, `shelljs`, `@vitest/coverage-v8`, `@vitejs/plugin-react`, `vite-node`, `@changesets/*`, `@manypkg/get-packages`, `globby`, `argparse`, `js-yaml` and `read-yaml-file` are listed only because they depend
 on a package above.
