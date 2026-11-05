@@ -436,9 +436,30 @@ jobs:
       - name: Stage the npm package
         run: node scripts/make-npm-package.mjs
 
+      # Safe to re-run. An npm version can never be published twice, so a re-run
+      # after a LATER step failed used to die with "You cannot publish over the
+      # previously published versions" — which is why the comment below told you
+      # never to re-run this job. Skipping a version that is already on the
+      # registry makes "Re-run failed jobs" the recovery path instead. Paddock,
+      # Localidraw, Hallway, Local Review, cli-contract and BragDoc all do this.
+      #
+      # Asks the registry directly with caching off, the way the step below does:
+      # `npm view` can answer from a cached packument that predates the publish,
+      # and a false "not on npm" here is the very failure this guards against.
+      # Only a 200 skips: anything else (404, or a registry having a bad day)
+      # publishes, which is what this step did unconditionally before.
       - name: Publish
-        run: npm publish
         working-directory: dist-npm
+        run: |
+          set -euo pipefail
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Cache-Control: no-cache' \
+            "https://registry.npmjs.org/@edspencer%2fmanagers/${VERSION}" || true)"
+          if [ "${code}" = "200" ]; then
+            echo "@edspencer/managers@${VERSION} is already on the registry; not publishing it again"
+          else
+            echo "registry answered ${code} for ${VERSION} — publishing"
+            npm publish
+          fi
 
       # A successful `npm publish` can still say "Your package is being processed
       # and may take a few minutes to become available": v0.2.0 published (and
@@ -447,8 +468,10 @@ jobs:
       # metadata took ~9 min and its tarball ~14). Wait up to 30 minutes, reading
       # the version document straight from the registry
       # with caching off rather than through `npm view`. A failure here does NOT
-      # mean the publish failed — check the Publish step's log first, and never
-      # re-run this job (npm refuses to republish an existing version).
+      # mean the publish failed — check the Publish step's log first: if it
+      # printed `+ @edspencer/managers@<version>`, the version is out. Re-running
+      # the job is now the right move; the Publish step above skips a version
+      # already on the registry and this step simply polls again.
       - name: Verify provenance landed
         run: |
           set -euo pipefail
