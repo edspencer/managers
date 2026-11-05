@@ -41,6 +41,27 @@
     "busy": true,
     "busy-json": true,
     "serve-banner": true,
-    "serve-health": true
+    "serve-health": true,
+    "update-up-to-date": true,
+    "update-check-json": true,
+    "update-no-tty": true,
+    "update-busy": true,
+    "update-npx": true,
+    "update-checkout": true,
+    "update-not-writable": true,
+    "update": true,
+    "update-to-lower": true,
+    "update-service": true,
+    "update-rollback": true
+  },
+  "update": {
+    "runtimeFile": "{home}/managers/runtime.json",
+    "serviceInstall": [
+      "service",
+      "install",
+      "--port",
+      "{port}"
+    ],
+    "timeoutMs": 600000
   }
 }

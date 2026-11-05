@@ -15,7 +15,7 @@ import { describeSequester, sequesterMcpSecrets } from "./managers/mcp-secret-en
 import { startServiceLogRotation } from "./service-log.js";
 import { removeRuntimeFile, writeRuntimeFile } from "./runtime-file.js";
 import { MANAGERS_VERSION } from "./version.js";
-import { describeShutdown, drainInFlight, recordInterruptedRuns } from "./shutdown-drain.js";
+import { describeShutdown, describeShutdownStart, drainInFlight, recordInterruptedRuns } from "./shutdown-drain.js";
 import { INTERRUPTED_BY_SHUTDOWN } from "./managers/trigger-runs.js";
 
 /**
@@ -146,10 +146,12 @@ export async function start(opts: StartOptions = {}): Promise<void> {
     // even if they overrun the deadline below.
     removeRuntimeFile(cfg.dataDir);
     // Finish, then record (shutdown-drain.ts). An idle instance skips the wait.
-    const drained = await drainInFlight(() => ({
-      turns: hub.runningSessions().length,
-      runs: managers.liveRuns.size,
-    }));
+    // What is in flight is logged first, so a supervisor that kills sooner than
+    // the wait still leaves the record.
+    const inFlight = () => ({ turns: hub.runningSessions().length, runs: managers.liveRuns.size });
+    const starting = describeShutdownStart(signal, inFlight());
+    if (starting !== undefined) app.log.warn(starting);
+    const drained = await drainInFlight(inFlight);
     const recorded = await recordInterruptedRuns(managers.liveRuns, INTERRUPTED_BY_SHUTDOWN);
     app.log.warn(describeShutdown(signal, drained, recorded));
     // Bounded: see SHUTDOWN_DEADLINE_MS, which the wait above counts against.

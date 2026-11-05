@@ -121,7 +121,10 @@ unit; a bad command, flag or value exits **2**. `managers busy` exits **75** whi
 a chat turn or trigger run is in flight (0 when idle, 3 when nothing is running),
 and `service stop`/`restart` refuse with 75 unless given `--force`. A SIGTERM
 waits briefly for in-flight work, then records what it cut short; under Docker,
-give the container a `stop_grace_period` of 20 s or more. The CLI follows the shared
+give the container a `stop_grace_period` of 20 s or more. `managers update` installs
+a newer release and puts the service back up, rolling back if the new version
+doesn't answer ([UPDATING.md](UPDATING.md)); `managers doctor` checks the install,
+the service, the configuration and the security posture. The CLI follows the shared
 [CLI contract](https://github.com/edspencer/cli-contract) (`cli-contract.json`
 says which of its checks apply).
 

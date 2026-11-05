@@ -10,6 +10,7 @@
  */
 import os from "node:os";
 import path from "node:path";
+import type { ServiceIdentity, ServiceSpec } from "./manager.js";
 import { servicePath } from "./path-env.js";
 
 /**
@@ -21,42 +22,22 @@ import { servicePath } from "./path-env.js";
 export const LAUNCHD_LABEL = "net.edspencer.managers";
 export const SYSTEMD_UNIT = "managers.service";
 
+/** Who the reference's launchd and systemd writers are writing for. */
+export const MANAGERS_SERVICE: ServiceIdentity = {
+  name: "Managers",
+  tool: "managers",
+  label: LAUNCHD_LABEL,
+  unit: SYSTEMD_UNIT,
+  description: "Managers — scheduled manager agents for long-running objectives",
+  documentation: "https://github.com/edspencer/managers",
+};
+
 /** Default port, matching the server's own (#741). Kept here so the generated
  * unit can name a port even when the user passed no flag — a unit that relies
  * on a default is a unit whose port changes under it on upgrade. */
 export const DEFAULT_PORT = "7234";
 
-export interface ServiceSpec {
-  /** Absolute path to the `node` that will run us — `process.execPath`. */
-  nodePath: string;
-  /**
-   * Absolute path to `dist/cli/managers.js`.
-   *
-   * NOT the `bin` shim. npm installs a bin as a symlink whose `#!/usr/bin/env
-   * node` shebang has to find `node` on PATH, and launchd's PATH is a stub —
-   * under a version manager there is no `node` on it at all. Invoking the
-   * interpreter explicitly removes the lookup entirely.
-   */
-  scriptPath: string;
-  /** Arguments after the script: always starts with the `serve` verb. */
-  args: string[];
-  /** A directory the service can sit in that it certainly owns. */
-  workingDirectory: string;
-  /**
-   * The one file both streams append to, on every OS (SPEC §7).
-   *
-   * launchd names it twice (`StandardOutPath` and `StandardErrorPath`); systemd
-   * names it twice as well (`StandardOutput=append:` / `StandardError=append:`)
-   * rather than using the journal. That is what makes `managers service logs`
-   * one Node implementation instead of two, and it is also what makes the
-   * Linux logs survive a journal that is volatile or rate-limited — the default
-   * on plenty of distributions, where `journalctl --user` after a reboot showed
-   * nothing at all.
-   */
-  logPath: string;
-  /** PATH for the service: Node's bin, the usable inherited entries, the system dirs. */
-  pathEnv: string;
-}
+export type { ServiceSpec } from "./manager.js";
 
 export interface SpecInput {
   nodePath: string;

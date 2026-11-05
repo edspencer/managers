@@ -114,6 +114,22 @@ export async function recordInterruptedRuns(
   return recorded;
 }
 
+/**
+ * The line logged the moment a stop begins, when something is in flight — before
+ * the wait, so a supervisor whose kill timeout is shorter than the wait (PM2's
+ * is 1.6 s) still leaves a record of what it cut short. Undefined when idle.
+ */
+export function describeShutdownStart(signal: string, f: InFlight, drainMs: number = SHUTDOWN_DRAIN_MS): string | undefined {
+  if (idle(f)) return undefined;
+  const what = [
+    f.turns > 0 ? `${f.turns} chat turn${f.turns === 1 ? "" : "s"}` : "",
+    f.runs > 0 ? `${f.runs} trigger run${f.runs === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" and ");
+  return `${signal}: ${what} in flight; waiting up to ${Math.round(drainMs / 1000)}s for ${f.turns + f.runs === 1 ? "it" : "them"} to finish.`;
+}
+
 /** The log line for a stop, from what was in flight before and after the wait. */
 export function describeShutdown(signal: string, d: DrainResult, recorded: number): string {
   if (idle(d.before)) return `${signal}: shutting down, nothing in flight.`;
