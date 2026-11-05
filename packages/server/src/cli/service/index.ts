@@ -759,6 +759,14 @@ async function startOrRestart(
     if (refused !== null) return refused;
   }
 
+  // A restart stops the instance first, so it asks the same question `stop`
+  // asks (SPEC §1): refuse with 75 unless `--force`. `start` does not — there
+  // is nothing running for it to cut short, and asking would be theatre.
+  if (action === "restart") {
+    const refused = await busyCheck(action, opts, ctx, before);
+    if (refused !== null) return refused;
+  }
+
   console.log(`\n  ${action === "start" ? "Starting" : "Restarting"} Managers…`);
   if (action === "start") backend.start();
   else backend.restart();
@@ -785,6 +793,30 @@ async function startOrRestart(
   // A start that never answered is a failure, not a success with a caveat: the
   // caller — often an Ansible task — has no other way to find out.
   return readiness === "ready" ? EXIT.OK : EXIT.FAILED;
+}
+
+/**
+ * The busy check, asked of the instance the UNIT describes (SPEC §1, §4).
+ *
+ * `home` is `dataDirOf(state, ctx)` — the unit's own data dir, not whatever
+ * `--data-dir` this invocation carries. Same rule as `status` and `logs`
+ * (#824): the instance about to be stopped is the one the unit points at, and
+ * reading `runtime.json` from somewhere else would ask a different Managers
+ * whether this one is busy.
+ *
+ * Returns null to go ahead, or the code to return (75).
+ */
+async function busyCheck(
+  action: "stop" | "restart",
+  opts: CliOptions,
+  ctx: ServiceContext,
+  state: ServiceState,
+): Promise<number | null> {
+  const guard = ctx.guardBusy ?? (await import("../busy-command.js")).guardServiceBusy;
+  return guard(action, dataDirOf(state, ctx), {
+    ...(opts.force === true ? { force: true } : {}),
+    ...(opts.json === true ? { json: true } : {}),
+  });
 }
 
 /**
