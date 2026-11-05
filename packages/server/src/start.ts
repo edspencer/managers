@@ -11,6 +11,7 @@ import { buildApp } from "./app.js";
 import { describeScrub, scrubInheritedEnv } from "./env-scrub.js";
 import { applyRuntimeEnv } from "./managers/claude-overlay.js";
 import { describeSequester, sequesterMcpSecrets } from "./managers/mcp-secret-env.js";
+import { startServiceLogRotation } from "./service-log.js";
 
 export interface StartOptions {
   /**
@@ -42,7 +43,18 @@ export async function start(opts: StartOptions = {}): Promise<void> {
   else app.log.info({ scrubbedEnvVars: 0 }, describeScrub(0));
   app.log.info({ sequesteredMcpVars: sequestered }, describeSequester(sequestered));
 
+  // Nothing else rotates the service log: the supervisor appends to it through
+  // its own descriptor, a `systemd --user` unit writing to a file gets no
+  // journal rotation, and macOS has nothing that would (SPEC §7). A no-op on a
+  // foreground run, where that file does not exist — see service-log.ts.
+  const stopRotation = startServiceLogRotation(cfg.dataDir, {
+    warn: (message) => {
+      app.log.warn(message);
+    },
+  });
+
   const shutdown = async () => {
+    stopRotation();
     await close();
     process.exit(0);
   };

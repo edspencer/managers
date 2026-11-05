@@ -16,7 +16,6 @@ import fastifyStatic from "@fastify/static";
 import fastifyMultipart from "@fastify/multipart";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
-import { createRequire } from "node:module";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { loadPaddockConfig, type PaddockConfig } from "./config.js";
@@ -67,17 +66,10 @@ import { ensureDataRepo, dataGitInitEnabled } from "./managers/data-repo.js";
 import { ManagersState } from "./managers/state.js";
 import { Autocommitter } from "./managers/autocommit.js";
 import { DataSync } from "./managers/data-sync.js";
+// One source of truth for "which Managers is this?" — the OpenAPI document,
+// /api/health and the management MCP handshake all read it (version.ts).
+import { MANAGERS_VERSION } from "./version.js";
 
-// Resolve the package version at runtime (dist/app.js → ../package.json) so the
-// generated OpenAPI document's info.version tracks the release without a build step.
-const pkgVersion: string = (() => {
-  try {
-    const require = createRequire(import.meta.url);
-    return (require("../package.json") as { version?: string }).version ?? "0.0.0";
-  } catch {
-    return "0.0.0";
-  }
-})();
 
 export interface BuiltApp {
   app: FastifyInstance;
@@ -160,7 +152,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
   installHerdctlBridgeLoopbackBind();
 
   const app = Fastify({
-    logger: { level: cfg.logLevel },
+    // **Logs go to stderr, not stdout**, and that is load-bearing rather than
+    // tidy. SPEC §3 of the CLI contract requires `serve`'s FIRST stdout line to
+    // be `Managers <version>: <url>` — the line a script reads to find the URL —
+    // and boot logging is emitted before the server can know it has bound. With
+    // pino on stdout, a machine with no Claude login (every CI runner, every
+    // fresh install) put `{"level":40,…,"msg":"no Claude credentials found…"}`
+    // there first, so the first line was a JSON log record. The conformance
+    // runner caught it; nothing else would have.
+    //
+    // Nothing loses the logs: Docker and Kubernetes collect both streams, and
+    // the service units send stdout and stderr to the same file (SPEC §7). A log
+    // shipper configured for stdout ALONE is the one thing that changes, which
+    // is why the changeset says so.
+    logger: { level: cfg.logLevel, stream: process.stderr },
   });
 
   // --- safe-by-default bind guard (#435) --------------------------------
@@ -497,7 +502,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<BuiltApp> {
       readImage(path.join("icons", "icon-192.png"), "image/png"),
       readImage(path.join("icons", "favicon-32.png"), "image/png"),
     ]);
-    await app.register(fastifySwagger, buildSwaggerOptions(pkgVersion, cfg.auth));
+    await app.register(fastifySwagger, buildSwaggerOptions(MANAGERS_VERSION, cfg.auth));
     await app.register(
       fastifySwaggerUi,
       buildSwaggerUiOptions({

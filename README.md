@@ -111,6 +111,16 @@ docker run -d --name managers -p 127.0.0.1:7234:7234 -v /srv/managers-data:/data
 
 Each GitHub Release also carries a self-contained tarball.
 
+**Commands.** Bare `managers` runs the server; `managers serve` is the same thing
+said out loud (`managers start` is a permanent alias). `managers service install`
+runs it in the background from login (a launchd LaunchAgent on macOS, a
+`systemd --user` unit on Linux), with `uninstall`, `start`, `stop`, `restart`,
+`status [--json]` and `logs [-f] [-n <lines>]`. `service status` exits **0** when
+it is up and answering, **3** when installed but not, and **4** when there is no
+unit; a bad command, flag or value exits **2**. The CLI follows the shared
+[CLI contract](https://github.com/edspencer/cli-contract) (`cli-contract.json`
+says which of its checks apply).
+
 ## Quick start from a checkout
 
 You need **Node 22+**. Build once:
