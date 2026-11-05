@@ -74,6 +74,16 @@ export interface CliOptions {
   follow?: boolean;
   /** `service logs`: how many lines to print first (`-n`, default 50). */
   lines?: number;
+  /**
+   * `service stop` / `service restart`: go ahead even though the instance is
+   * busy (SPEC §1, §4).
+   *
+   * The refusal it skips is the only thing it skips. It does not change what the
+   * busy check printed — a forced stop prints the same sentence, prefixed
+   * `Overriding:` — and in wave C2 it will not skip `update`'s health check or
+   * its rollback either.
+   */
+  force?: boolean;
 }
 
 /**
@@ -144,10 +154,10 @@ export type ConfigAction = (typeof CONFIG_ACTIONS)[number];
  *
  * `serve` is the contract's name for running in the foreground (SPEC §1), and
  * `start` is kept as an alias **for good** — the spec says so explicitly for
- * Managers and Managers, every existing service unit's `ExecStart` names it, and
+ * Paddock and Managers, every existing service unit's `ExecStart` names it, and
  * it is in two years of other people's scripts. They parse to the same command.
  */
-export const VERBS = ["serve", "start", "service", "config"] as const;
+export const VERBS = ["serve", "start", "service", "config", "busy"] as const;
 
 /**
  * A parsed invocation: which verb, plus the flags that followed it.
@@ -159,7 +169,9 @@ export const VERBS = ["serve", "start", "service", "config"] as const;
 export type Command =
   | { verb: "serve"; opts: CliOptions }
   | { verb: "service"; action: ServiceAction | undefined; opts: CliOptions }
-  | { verb: "config"; action: ConfigAction | undefined; opts: CliOptions };
+  | { verb: "config"; action: ConfigAction | undefined; opts: CliOptions }
+  /** `busy` takes no action — it is one question with one answer (SPEC §1). */
+  | { verb: "busy"; opts: CliOptions };
 
 /**
  * Split an action off a verb's argv, then parse what follows as flags.
@@ -223,6 +235,36 @@ function parseAction<T extends string>(
  * and load-bearing; it was only the example's error that was misdescribed.
  */
 export function parseCommand(argv: string[]): Command {
+  const command = dispatch(argv);
+  // `--force` overrides the busy check (SPEC §1, §4) and nothing else, so it
+  // only means anything on the two commands that run one. Rejecting it
+  // everywhere else, rather than parsing and dropping it, is the difference
+  // between being told and guessing: the two readings of a quiet
+  // `service uninstall --force` are "it overrode something" and "it did
+  // nothing", and the exit code is 0 either way.
+  //
+  // Checked here, once, rather than in each command: a second copy of this rule
+  // is a second chance for the two to drift apart about what `--force` means.
+  if (
+    command.opts.force === true &&
+    // `--help` wins, the same way it wins over a missing action above: asking
+    // for the usage is not a usage error.
+    !command.opts.help &&
+    !(command.verb === "service" && (command.action === "stop" || command.action === "restart"))
+  ) {
+    const what =
+      command.verb === "service" && command.action !== undefined
+        ? `\`service ${command.action}\``
+        : `\`${command.verb}\``;
+    throw new UsageError(
+      `--force applies to \`service stop\` and \`service restart\` only, not ${what}.\n` +
+        "It overrides the busy check, and those are the two commands that run one.",
+    );
+  }
+  return command;
+}
+
+function dispatch(argv: string[]): Command {
   const [first, ...rest] = argv;
 
   if (first === "service") {
@@ -232,6 +274,11 @@ export function parseCommand(argv: string[]): Command {
   if (first === "config") {
     return { verb: "config", ...parseAction("config", CONFIG_ACTIONS, rest) };
   }
+
+  // `busy` (SPEC §1, §4). A top-level verb rather than a `service` action
+  // because its whole point is to be askable where there is no service to ask:
+  // a Docker container, a Watchtower pre-update hook, an Ansible task.
+  if (first === "busy") return { verb: "busy", opts: parseArgs(rest) };
 
   // `serve` and `start` are one command: see VERBS.
   if (first === "serve" || first === "start") return { verb: "serve", opts: parseArgs(rest) };
@@ -303,6 +350,10 @@ export function parseArgs(argv: string[]): CliOptions {
         break;
       case "--include-env":
         opts.includeEnv = true;
+        break;
+      // `service stop` / `service restart`: override the busy check (SPEC §4).
+      case "--force":
+        opts.force = true;
         break;
       // `service logs` flags, the names `tail`, `journalctl` and every other
       // log reader uses — this is not the place to be original.
@@ -385,6 +436,7 @@ export function explainListenError(err: unknown, host: string, port: string): st
 export const USAGE_SYNOPSIS = `Usage
   managers [serve] [options]               run the server in this terminal
   managers service <action> [options]      install|uninstall|status|start|stop|restart|logs
+  managers busy [--json]                   is the running instance busy?
   managers config <show|eject> [options]   what this instance's config resolved to
   managers -v | --version                  print the version and exit
   managers -h | --help                     the full help`;
@@ -399,10 +451,13 @@ Usage
   managers service uninstall               stop it and remove the unit
   managers service status [--json]         installed? running? which version?
   managers service start                   start an installed service
-  managers service stop                    stop it, leave it installed
-  managers service restart                 stop it and start it again
+  managers service stop [--force]          stop it, leave it installed
+  managers service restart [--force]       stop it and start it again
   managers service logs [-f] [-n <lines>]  the service's log
                                           (\`managers service --help\`)
+  managers busy [--json]                   is it busy? exit 0 no, 75 yes, 3
+                                          nothing answering
+                                          (\`managers busy --help\`)
   managers config show [--resolved]        what this instance's config resolved
                                           to, and where each value came from
   managers config eject [--write]          freeze that resolution into
@@ -419,11 +474,12 @@ Options
   -h, --help              Show this help
 
 Exit codes
-  0   done; running and answering
+  0   done; running and answering; not busy
   1   failed
   2   usage: an unknown command or flag, or a bad value
-  3   not running: installed, but not running or not answering
+  3   not running: installed, but not running or not answering; nothing answers
   4   not installed: there is no service unit
+  75  busy: refused, and why was printed. Try later, or use --force
 
 Opening your own directories
   Where you run this from does not matter — the instance is decided by its data
@@ -536,13 +592,27 @@ Usage
   managers service status [--json]     is it registered, is it running, which
                                       version, where are the logs
   managers service start               start an installed service that is stopped
-  managers service stop                stop it, and leave it installed
-  managers service restart             stop it and start it again, re-reading config
+  managers service stop [--force]      stop it, and leave it installed
+  managers service restart [--force]   stop it and start it again, re-reading config
   managers service logs [-f] [-n <n>]  the service's log (the last 50 lines)
 
 Options (logs)
   -f, --follow            keep printing what gets appended, until Ctrl-C
   -n, --lines <n>         how many lines to print first (default 50)
+
+Options (stop, restart)
+      --force             stop it even though it is busy
+
+Busy
+  \`stop\` and \`restart\` ask the running instance whether it is busy first, and
+  refuse with exit 75 if it is — a chat turn in flight, a background task, a
+  scheduled job. \`managers busy\` asks the same question on its own.
+
+  Being refused is the useful case: a restart kills a chat turn mid-sentence,
+  and the turn cannot be resumed from where it was. Wait, or --force.
+
+  \`uninstall\` does not ask. Removing the service is an explicit act, and
+  someone uninstalling it has already decided.
 
 Options (install only — recorded in the generated unit)
   -p, --port <port>       HTTP/WS port (default 7234)
@@ -588,6 +658,7 @@ Exit codes
   4   not installed: there is no unit  (status, logs, start, stop, restart)
   1   something failed
   2   usage: an unknown action or flag, or a bad value
+  75  busy, and --force was not given  (stop, restart)
 
 Installed from npx?
   \`service install\` refuses. An npx cache path is hash-keyed and npm may prune
@@ -603,6 +674,67 @@ A note on access
   runs on this host can act as you over its API: the UI shows a banner saying so.
   Use MANAGERS_AUTH_MODE=jwt to close that (see AUTH.md). A service is up for as long as
   you are logged in rather than as long as a terminal tab.
+
+Docs: https://github.com/edspencer/managers`;
+
+export const BUSY_USAGE = `managers busy — is the running instance in the middle of something?
+
+Usage
+  managers busy                        ask, and say so in a sentence
+  managers busy --json                 the same answer as one JSON document
+  managers busy -d <path>              ask a particular instance
+
+Exit codes — this command is FOR its exit code
+  0   not busy. Nothing a restart would cut short.
+  75  busy. What is running was printed.
+  3   nothing answered. No instance is running, so there is nothing to wait for.
+  1   something answered, but not as Managers' busy check.
+
+Options
+  -d, --data-dir <path>   Which instance to ask (default ~/.managers, or
+                          \$MANAGERS_DATA_DIR) — the same rule \`managers serve\`
+                          uses, so the two always mean the same instance
+      --json              One JSON document on stdout: running, busy, url,
+                          version, counts. Prose goes to stderr
+  -h, --help              Show this help
+
+What counts as busy
+  Only work a restart would LOSE or cut short:
+
+    chat         a chat turn running — a human turn, a fired trigger, a cron
+                 fire. A turn is a live claude subprocess writing a transcript,
+                 and it cannot be resumed from where it was interrupted.
+    background   a background task a live session is still holding after its
+                 turn ended: a background shell, a sub-agent, a Monitor.
+    job          a scheduled job herdctl is running.
+
+  Not busy: an idle session (it resumes), an open browser tab (it reconnects),
+  a pending curation sweep (it re-runs from its watermark).
+
+Where to run it from
+  From a terminal. A Managers chat that runs this is itself one of the chat turns
+  it counts, so it will always see itself as busy — and \`service stop --force\`
+  from inside a chat stops the service that is running the chat, which does not
+  come back with an explanation. That is why the refusal says so.
+
+For scripts, containers and Watchtower
+  \`busy\` is there for callers with no service to ask. 75 is EX_TEMPFAIL, which
+  is the code Watchtower's pre-update hook reads as "skip this one":
+
+    labels:
+      com.centurylinklabs.watchtower.lifecycle.pre-update: managers busy
+
+  An Ansible task does the same thing with a retry. Nothing here contacts the
+  network or the npm registry, and the question is answered from memory — it is
+  cheap enough to ask in a loop.
+
+How it finds the instance
+  \`<data-dir>/runtime.json\`, written 0600 when the server starts listening and
+  removed when it stops. There is no fallback to a default port: guessing one
+  would ask whatever else happened to be listening there, and get an answer.
+
+  A Managers from before this feature shipped writes no such file, so it reads as
+  not running (exit 3). Upgrade it and restart it once.
 
 Docs: https://github.com/edspencer/managers`;
 
